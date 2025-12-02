@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>The Last Gallery</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+
+<body>
+
+<div class="control-panel">
+    <div class="logo">THE LAST GALLERY</div>
+    <div class="controls">
+        <label>Wall Color: <input type="color" id="wallColorPicker" value="#202325"></label>
+        <button id="shuffleBtn">Shuffle</button>
+    </div>
+</div>
+
+<main id="wall" class="wall"></main>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
