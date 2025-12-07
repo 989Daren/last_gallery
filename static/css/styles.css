@@ -1,48 +1,69 @@
+/* ===== Global Layout ===== */
 body {
-    background: #111;
-    color: #fff;
-    margin: 0;
-    font-family: sans-serif;
+  margin: 0;
+  background: #111;
+  color: #fff;
+  font-family: Arial, sans-serif;
 }
 
-.control-panel {
-    display: flex;
-    justify-content: space-between;
-    padding: 12px 20px;
-    background: #141414;
-    border-bottom: 1px solid #222;
+/* ===== Controls Bar ===== */
+.controls {
+  padding: 12px;
+  background: #222;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  border-bottom: 1px solid #444;
 }
 
-.wall {
-    background: #202325;
-    padding: 40px;
-    min-height: 100vh;
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    grid-auto-rows: 70px;
-    gap: 14px;
+label {
+  font-size: 14px;
 }
 
+/* ===== The scrollable area that contains the tile wall ===== */
+.gallery-wall-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;         /* Horizontal scroll enabled */
+  overflow-y: visible;
+  border-top: 1px solid #333;
+  background: #000;
+}
+
+/* ===== The actual wall of tiles (absolute layout) ===== */
+.gallery-wall {
+  position: relative;
+}
+
+/* ===== Tiles ===== */
 .tile {
-    border-radius: 10px;
-    background: #333;
-    box-shadow:
-        0 12px 22px rgba(0,0,0,0.3),
-        0 4px 8px rgba(0,0,0,0.25);
+  position: absolute;
+  background: #b84c27;     /* Default reddish-brown */
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #fff;
 }
 
-.tile-xl { grid-column: span 4; grid-row: span 4; }
-.tile-l  { grid-column: span 3; grid-row: span 3; }
-.tile-m  { grid-column: span 2; grid-row: span 2; }
-.tile-s  { grid-column: span 2; grid-row: span 1; }
-.tile-xs { grid-column: span 1; grid-row: span 1; }
+.tiles-no-outline .tile {
+  border: none !important;
+}
 
-.tile::after {
-    content: attr(data-size);
-    position: absolute;
-    bottom: 6px;
-    right: 10px;
-    color: rgba(255,255,255,0.4);
-    font-size: 0.7rem;
-    font-weight: 300;
+/* ===== Label inside each tile ===== */
+.tile-label {
+  pointer-events: none;
+  opacity: 0.65;
+  font-weight: bold;
+}
+
+/* Optional: subtle hover effect, easy on the eyes */
+.tile:hover {
+  filter: brightness(1.2);
+  cursor: pointer;
 }
