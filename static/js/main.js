@@ -1,289 +1,235 @@
-const tiles = [
-  { id: "S1", size: "s", x: 850, y: 425 },
-  { id: "M1", size: "m", x: 765, y: 0 },
-  { id: "S2", size: "s", x: 1190, y: 0 },
-  { id: "X1", size: "xs", x: 935, y: 340 },
-  { id: "X2", size: "xs", x: 850, y: 340 },
-  { id: "X3", size: "xs", x: 1105, y: 85 },
-  { id: "X4", size: "xs", x: 1020, y: 85 },
-  { id: "X5", size: "xs", x: 1105, y: 170 },
-  { id: "X6", size: "xs", x: 1020, y: 170 },
-  { id: "X7", size: "xs", x: 0, y: 85 },
-  { id: "S3", size: "s", x: 85, y: 0 },
-  { id: "X8", size: "xs", x: 1020, y: 510 },
-  { id: "S4", size: "s", x: 1105, y: 425 },
-  { id: "X9", size: "xs", x: 1020, y: 425 },
-  { id: "X10", size: "xs", x: 1275, y: 425 },
-  { id: "X11", size: "xs", x: 1275, y: 510 },
-  { id: "X12", size: "xs", x: 1190, y: 340 },
-  { id: "X13", size: "xs", x: 1275, y: 340 },
-  { id: "X14", size: "xs", x: 510, y: 0 },
-  { id: "X15", size: "xs", x: 680, y: 0 },
-  { id: "X16", size: "xs", x: 595, y: 0 },
-  { id: "S5", size: "s", x: 340, y: 425 },
-  { id: "S6", size: "s", x: 340, y: 0 },
-  { id: "X17", size: "xs", x: 425, y: 340 },
-  { id: "X18", size: "xs", x: 340, y: 340 },
-  { id: "X19", size: "xs", x: 0, y: 0 },
-  { id: "X20", size: "xs", x: 1190, y: 170 },
-  { id: "X21", size: "xs", x: 1275, y: 170 },
-  { id: "X22", size: "xs", x: 1020, y: 0 },
-  { id: "X23", size: "xs", x: 1105, y: 0 },
-  { id: "X24", size: "xs", x: 510, y: 85 },
-  { id: "X25", size: "xs", x: 595, y: 85 },
-  { id: "X26", size: "xs", x: 680, y: 85 },
-  { id: "X27", size: "xs", x: 765, y: 510 },
-  { id: "X28", size: "xs", x: 765, y: 425 },
-  { id: "X29", size: "xs", x: 765, y: 340 },
-  { id: "X30", size: "xs", x: 0, y: 170 },
-  { id: "X31", size: "xs", x: 510, y: 170 },
-  { id: "X32", size: "xs", x: 425, y: 170 },
-  { id: "X33", size: "xs", x: 340, y: 170 },
-  { id: "X34", size: "xs", x: 680, y: 170 },
-  { id: "X35", size: "xs", x: 595, y: 170 },
-  { id: "X36", size: "xs", x: 85, y: 170 },
-  { id: "X37", size: "xs", x: 170, y: 170 },
-  { id: "X38", size: "xs", x: 0, y: 510 },
-  { id: "X39", size: "xs", x: 170, y: 510 },
-  { id: "X40", size: "xs", x: 85, y: 510 },
-  { id: "X41", size: "xs", x: 510, y: 510 },
-  { id: "S7", size: "s", x: 595, y: 425 },
-  { id: "X42", size: "xs", x: 510, y: 425 },
-  { id: "X43", size: "xs", x: 510, y: 340 },
-  { id: "X44", size: "xs", x: 680, y: 340 },
-  { id: "X45", size: "xs", x: 595, y: 340 },
-  { id: "M2", size: "m", x: 0, y: 255 },
-  { id: "S8", size: "s", x: 1020, y: 255 },
-  { id: "X46", size: "xs", x: 1190, y: 255 },
-  { id: "X47", size: "xs", x: 1275, y: 255 },
-  { id: "X48", size: "xs", x: 510, y: 255 },
-  { id: "X49", size: "xs", x: 680, y: 255 },
-  { id: "X50", size: "xs", x: 595, y: 255 },
-  { id: "X51", size: "xs", x: 340, y: 255 },
-  { id: "X52", size: "xs", x: 425, y: 255 },
-  { id: "X53", size: "xs", x: 850, y: 255 },
-  { id: "X54", size: "xs", x: 935, y: 255 },
-  { id: "X55", size: "xs", x: 765, y: 255 },
-  { id: "X56", size: "xs", x: 255, y: 425 },
-  { id: "X57", size: "xs", x: 255, y: 340 },
-  { id: "X58", size: "xs", x: 255, y: 85 },
-  { id: "X59", size: "xs", x: 255, y: 0 },
-  { id: "X60", size: "xs", x: 255, y: 170 },
-  { id: "X61", size: "xs", x: 255, y: 510 },
-  { id: "X62", size: "xs", x: 255, y: 255 },
-];
+// main.js
+// Runtime SVG → Grid Wall Renderer
+// Pipeline (per guide):
+// SVG → Parse → Scale → Normalize → Snap → Classify → Assign IDs → Render (with vertical flip)
 
-const BASE_UNIT = 85;
+(function () {
+  "use strict";
 
-// Map size string → units (case-insensitive)
-function sizeToUnits(size) {
-  if (!size) return 1;
-  const s = size.toLowerCase();
-  switch (s) {
-    case "xs":  return 1;
-    case "s":   return 2;
-    case "m":   return 3;
-    case "lg":  return 4;
-    case "xlg": return 6;
-    default:    return 1;
-  }
-}
-
-// Build a clean layout from the raw tiles
-function buildLayout(rawTiles) {
-  const annotated = rawTiles.map((t, idx) => {
-    const sizeNorm = t.size.toLowerCase();
-    const units = sizeToUnits(sizeNorm);
-    const col = Math.round(t.x / BASE_UNIT);
-    const row = Math.round(t.y / BASE_UNIT);
-    return {
-      ...t,
-      index: idx,
-      size: sizeNorm,
-      units,
-      col,
-      row
-    };
-  });
-
-  // Largest tiles first so they claim space
-  annotated.sort((a, b) => b.units - a.units);
-
-  // Determine grid size
-  let maxCol = 0;
-  let maxRow = 0;
-  annotated.forEach(t => {
-    maxCol = Math.max(maxCol, t.col + t.units);
-    maxRow = Math.max(maxRow, t.row + t.units);
-  });
-
-  const grid = Array.from({ length: maxRow }, () =>
-    Array(maxCol).fill(null)
-  );
-
-  const finalTiles = [];
-
-  // Place tiles, skipping overlaps
-  annotated.forEach(t => {
-    let canPlace = true;
-
-    for (let r = t.row; r < t.row + t.units && canPlace; r++) {
-      for (let c = t.col; c < t.col + t.units; c++) {
-        if (grid[r]?.[c] !== null) {
-          canPlace = false;
-          break;
-        }
-      }
-    }
-
-    if (!canPlace) return;
-
-    const index = finalTiles.length;
-
-    for (let r = t.row; r < t.row + t.units; r++) {
-      for (let c = t.col; c < t.col + t.units; c++) {
-        grid[r][c] = index;
-      }
-    }
-
-    finalTiles.push({
-      id: t.id,
-      size: t.size,
-      x: t.col * BASE_UNIT,
-      y: t.row * BASE_UNIT
-    });
-  });
-
-  // Fill remaining cells with XS tiles
-  for (let r = 0; r < maxRow; r++) {
-    for (let c = 0; c < maxCol; c++) {
-      if (grid[r][c] === null) {
-        const index = finalTiles.length;
-        grid[r][c] = index;
-        finalTiles.push({
-          id: `FILL_${r}_${c}`,
-          size: "xs",
-          x: c * BASE_UNIT,
-          y: r * BASE_UNIT
-        });
-      }
-    }
-  }
-
-  // Compute wall width/height
-  let maxRight = 0;
-  let maxBottom = 0;
-
-  finalTiles.forEach(tile => {
-    const units = sizeToUnits(tile.size);
-    const w = units * BASE_UNIT;
-    const h = units * BASE_UNIT;
-    maxRight = Math.max(maxRight, tile.x + w);
-    maxBottom = Math.max(maxBottom, tile.y + h);
-  });
-
-  return {
-    tiles: finalTiles,
-    width: maxRight,
-    height: maxBottom
+  const DESIGN_STEP = 85; // canonical grid step
+  const SIZE_MAP = {
+    xs: DESIGN_STEP,
+    s: DESIGN_STEP * 2,
+    m: DESIGN_STEP * 3,
+    lg: DESIGN_STEP * 4,
+    xlg: DESIGN_STEP * 6
   };
-}
 
-// Apply the global grid color via CSS variable
-function applyGridColor(color) {
-  document.documentElement.style.setProperty("--grid-color", color);
-}
+  const SIZE_THRESHOLDS = [
+    { key: "xs", min: 60,  max: 127 },
+    { key: "s",  min: 128, max: 212 },
+    { key: "m",  min: 213, max: 297 },
+    { key: "lg", min: 298, max: 424 },
+    { key: "xlg",min: 425, max: 600 }
+  ];
 
-document.addEventListener("DOMContentLoaded", () => {
-  const wall = document.getElementById("galleryWall");
-  const colorPicker = document.getElementById("gridColorPicker");
-  const outlineToggle = document.getElementById("outlineToggle");
+  const ID_PREFIX = {
+    xs: "X",
+    s: "S",
+    m: "M",
+    lg: "L",
+    xlg: "XL"
+  };
 
-  if (!wall) {
-    console.error("galleryWall element not found");
-    return;
-  }
-
-  // Build layout from parsed tiles
-  const layout = buildLayout(tiles);
-
-  // Flip vertically: y' = totalHeight - tileHeight - y
-  const totalHeight = layout.height;
-  const layoutTiles = layout.tiles.map(tile => {
-    const units = sizeToUnits(tile.size);
-    const h = units * BASE_UNIT;
-    return {
-      ...tile,
-      y: totalHeight - h - tile.y
-    };
-  });
-
-  wall.style.width = layout.width + "px";
-  wall.style.height = layout.height + "px";
-
-  layoutTiles.forEach((tile, index) => {
-    const units = sizeToUnits(tile.size);
-    const width = units * BASE_UNIT;
-    const height = units * BASE_UNIT;
-
-    const el = document.createElement("div");
-    el.classList.add("tile");
-    el.dataset.size = tile.size;
-    el.dataset.id = tile.id;
-
-    el.style.left = tile.x + "px";
-    el.style.top = tile.y + "px";
-    el.style.width = width + "px";
-    el.style.height = height + "px";
-
-    const label = document.createElement("span");
-    label.classList.add("tile-label");
-    label.textContent = `${tile.size.toUpperCase()} ${tile.id || "#" + (index + 1)}`;
-    el.appendChild(label);
-
-    wall.appendChild(el);
-  });
-
-  // ---- Global color handling (owner-controlled) ----
-  const serverColor = window.SERVER_GRID_COLOR || "#b84c27";
-
-  // Ensure the CSS variable matches whatever the server says
-  applyGridColor(serverColor);
-
-  if (colorPicker) {
-    // Sync picker UI to current server color
-    colorPicker.value = serverColor;
-
-    // When you change the picker, update global color for everyone
-    colorPicker.addEventListener("input", (e) => {
-      const newColor = e.target.value;
-
-      // Instant visual update
-      applyGridColor(newColor);
-
-      // Persist globally via Flask API
-      fetch("/api/grid-color", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ color: newColor }),
-      }).catch(() => {
-        console.warn("Grid color save failed (server unreachable)");
-      });
-    });
-  }
-
-  // ---- Outline handling (per-view toggle) ----
-  function updateOutlineState() {
-    if (!outlineToggle) return;
-    if (outlineToggle.checked) {
-      wall.classList.remove("tiles-no-outline");
-    } else {
-      wall.classList.add("tiles-no-outline");
+  function classifySize(designWidth, designHeight) {
+    const avg = (designWidth + designHeight) / 2;
+    for (const t of SIZE_THRESHOLDS) {
+      if (avg >= t.min && avg <= t.max) {
+        return t.key;
+      }
     }
+    return null; // invalid
   }
 
-  if (outlineToggle) {
-    outlineToggle.addEventListener("change", updateOutlineState);
-    updateOutlineState();
+  function parseTranslate(transformValue) {
+    if (!transformValue) return null;
+    const match = transformValue.match(/translate\s*\(([^,\s]+)[,\s]+([^\)\s]+)\)/i);
+    if (!match) return null;
+    const x = parseFloat(match[1]);
+    const y = parseFloat(match[2]);
+    if (Number.isNaN(x) || Number.isNaN(y)) return null;
+    return { x, y };
   }
-});
+
+  function getScaleFactor(rects) {
+    const widths = [];
+    rects.forEach(rect => {
+      const w = parseFloat(rect.getAttribute("width"));
+      if (!Number.isNaN(w) && w >= 40 && w <= 90) {
+        widths.push(w);
+      }
+    });
+
+    if (!widths.length) {
+      console.warn("[grid] No widths in 40–90 range found; defaulting scale factor to 1");
+      return 1;
+    }
+
+    const sum = widths.reduce((acc, v) => acc + v, 0);
+    const avg = sum / widths.length;
+    const scale = avg / DESIGN_STEP;
+
+    if (!scale || !Number.isFinite(scale)) {
+      console.warn("[grid] Invalid computed scale; defaulting to 1");
+      return 1;
+    }
+
+    return scale;
+  }
+
+  function initGrid() {
+    const container =
+      document.getElementById("grid-container") ||
+      document.getElementById("grid") ||
+      document.body;
+
+    if (!container) {
+      console.error("[grid] No container element found for grid wall.");
+      return;
+    }
+
+    container.style.position = container === document.body ? "relative" : (container.style.position || "relative");
+
+    fetch("/static/grid_full.svg")
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("Failed to load SVG: " + response.status);
+        }
+        return response.text();
+      })
+      .then(svgText => {
+        const parser = new DOMParser();
+        const svgDoc = parser.parseFromString(svgText, "image/svg+xml");
+        const rects = Array.from(svgDoc.querySelectorAll("rect"));
+
+        if (!rects.length) {
+          console.error("[grid] No <rect> elements found in SVG.");
+          return;
+        }
+
+        console.log("[grid] Rect count (authoritative tile count):", rects.length);
+
+        // 1) Automatic scale detection (SVG space → design space)
+        const scaleFactor = getScaleFactor(rects);
+        console.log("[grid] Detected scale factor:", scaleFactor);
+
+        // 2) First geometric pass: compute design-space bounds
+        const rawTiles = [];
+        let minDesignLeft = Infinity;
+        let minDesignTop = Infinity;
+
+        rects.forEach(rect => {
+          const rawWidth = parseFloat(rect.getAttribute("width")) || 0;
+          const rawHeight = parseFloat(rect.getAttribute("height")) || 0;
+
+          let left, top;
+
+          const transform = rect.getAttribute("transform");
+          const translated = parseTranslate(transform);
+
+          if (translated) {
+            // Xara center-based encoding: translate(cx, cy)
+            const cx = translated.x;
+            const cy = translated.y;
+            left = cx - rawWidth / 2;
+            top = cy - rawHeight / 2;
+          } else {
+            // Fallback: x/y as top-left
+            left = parseFloat(rect.getAttribute("x")) || 0;
+            top = parseFloat(rect.getAttribute("y")) || 0;
+          }
+
+          const designLeft = left / scaleFactor;
+          const designTop = top / scaleFactor;
+          const designWidth = rawWidth / scaleFactor;
+          const designHeight = rawHeight / scaleFactor;
+
+          if (designLeft < minDesignLeft) minDesignLeft = designLeft;
+          if (designTop < minDesignTop) minDesignTop = designTop;
+
+          rawTiles.push({
+            designLeft,
+            designTop,
+            designWidth,
+            designHeight
+          });
+        });
+
+        // 3) Second pass: normalize, snap, classify, assign IDs
+        const counters = { xs: 0, s: 0, m: 0, lg: 0, xlg: 0 };
+        const tiles = [];
+        let totalHeight = 0;
+
+        rawTiles.forEach(info => {
+          const normLeft = info.designLeft - minDesignLeft;
+          const normTop = info.designTop - minDesignTop;
+
+          const col = Math.round(normLeft / DESIGN_STEP);
+          const row = Math.round(normTop / DESIGN_STEP);
+
+          const gridX = col * DESIGN_STEP;
+          const gridY = row * DESIGN_STEP;
+
+          const sizeKey = classifySize(info.designWidth, info.designHeight);
+          if (!sizeKey) {
+            console.warn("[grid] Skipping rect with invalid size:", info);
+            return;
+          }
+
+          const tileSize = SIZE_MAP[sizeKey];
+          const prefix = ID_PREFIX[sizeKey];
+          counters[sizeKey] += 1;
+          const id = prefix + counters[sizeKey];
+
+          totalHeight = Math.max(totalHeight, gridY + tileSize);
+
+          tiles.push({
+            id,
+            size: sizeKey,
+            x: gridX,
+            y: gridY,
+            width: tileSize,
+            height: tileSize
+          });
+        });
+
+        console.log("[grid] Classified tile counts:", counters);
+        console.log("[grid] Computed total design-space height:", totalHeight);
+
+        // 4) Renderer-side vertical flip + DOM render
+        container.innerHTML = "";
+
+        tiles.forEach(tile => {
+          const yRendered = totalHeight - tile.height - tile.y; // vertical flip at render time
+
+          const el = document.createElement("div");
+          el.className = "tile tile-" + tile.size;
+          el.textContent = tile.id;
+          el.dataset.tileId = tile.id;
+          el.dataset.size = tile.size;
+
+          el.style.position = "absolute";
+          el.style.left = tile.x + "px";
+          el.style.top = yRendered + "px";
+          el.style.width = tile.width + "px";
+          el.style.height = tile.height + "px";
+          el.style.boxSizing = "border-box";
+
+          container.appendChild(el);
+        });
+
+        container.style.height = totalHeight + "px";
+
+        console.log("[grid] Render complete. Tiles rendered:", tiles.length);
+      })
+      .catch(err => {
+        console.error("[grid] Error initializing grid:", err);
+      });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initGrid);
+  } else {
+    initGrid();
+  }
+})();
