@@ -60,12 +60,13 @@ label {
 /* ===== The actual wall of tiles (absolute layout) ===== */
 .gallery-wall {
   position: relative;
+  margin: 0 auto;   /* ← centers the entire grid */
 }
 
 /* ===== Tiles ===== */
 .tile {
   position: absolute;
-  background: var(--grid-color);  /* Server-controlled color */
+  background: var(--grid-color);
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.3);
   display: flex;
@@ -73,6 +74,7 @@ label {
   justify-content: center;
   font-size: 12px;
   color: #fff;
+  cursor: pointer !important;
 }
 
 .tiles-no-outline .tile {
