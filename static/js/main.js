@@ -1,3 +1,5 @@
+// === DRILL: debug toggle (safe to delete) ===
+const DEBUG = true;
 // main.js
 // SVG → grid renderer using runtime parsing guide.
 // Preserves existing header (color picker, outline toggle, site title) defined in HTML.
@@ -177,11 +179,60 @@ document.addEventListener("DOMContentLoaded", () => {
     .then(resp => resp.text())
     .then(svgText => {
       const tiles = parseSvgToTiles(svgText);
+      console.log("Tiles parsed from SVG:", tiles.length);
 
       if (!tiles.length) {
         console.error("No tiles generated from SVG.");
+        wall.innerHTML = `
+          <div style="color:#fff; padding:16px; font-family:system-ui;">
+            No tiles generated from SVG. Check that <code>${SVG_GRID_PATH}</code> exists
+            and contains &lt;rect&gt; elements.
+          </div>
+        `;
         return;
       }
+
+      // --- Assign test artwork URLs to a RANDOM subset of tiles (no duplicates) ---
+      const testArt = [
+        "/static/artwork/coffee thumb.png",
+        "/static/artwork/doom scroll.png",
+        "/static/artwork/sun dress final low.png",
+        "/static/artwork/heart girl low.png",
+        "/static/artwork/fire clown low.png",
+        "/static/artwork/Mackinaw Island Arch xara.png",
+        "/static/artwork/the dream.png",
+        "/static/artwork/twilight circus.jpg",
+        "/static/artwork/dark cloud girl.png",
+        "/static/artwork/girl in window.jpg",
+        "/static/artwork/I Need the Money.png",
+        "/static/artwork/stranger 1.png"
+      ];
+
+      const tileCount = tiles.length;
+      const artCount  = testArt.length;
+      const assignCount = Math.min(tileCount, artCount);
+
+      // Build array of tile indices [0, 1, 2, ..., tileCount-1]
+      const tileIndices = [];
+      for (let i = 0; i < tileCount; i++) {
+        tileIndices.push(i);
+      }
+
+      // Fisher–Yates shuffle to randomize tile order
+      for (let i = tileIndices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = tileIndices[i];
+        tileIndices[i] = tileIndices[j];
+        tileIndices[j] = tmp;
+      }
+
+      // Assign each artwork to a different random tile
+      for (let k = 0; k < assignCount; k++) {
+        const tileIndex = tileIndices[k];
+        tiles[tileIndex].artUrl = testArt[k];
+      }
+      // All other tiles remain without artUrl → empty until they get art later.
+      // ---------------------------------------------------------------------
 
       const { width, height } = computeWallDimensions(tiles);
       wall.style.position = "relative";
@@ -213,12 +264,26 @@ document.addEventListener("DOMContentLoaded", () => {
         el.dataset.size = tile.size;
         el.dataset.id   = tile.id;
 
+        // store art url on the element for popup / later logic
+        if (tile.artUrl) {
+          el.dataset.artUrl = tile.artUrl;
+        }
+
         el.style.position = "absolute";
         el.style.left   = tile.x + "px";
         el.style.top    = tile.y + "px";
         el.style.width  = w + "px";
         el.style.height = h + "px";
 
+        // Artwork image inside tile (only if assigned)
+        if (tile.artUrl) {
+          const img = document.createElement("img");
+          img.src = tile.artUrl;
+          img.classList.add("tile-art");
+          el.appendChild(img);
+        }
+
+        // Tile label overlay
         const label = document.createElement("span");
         label.classList.add("tile-label");
         label.textContent = tile.id;
@@ -265,5 +330,11 @@ document.addEventListener("DOMContentLoaded", () => {
     })
     .catch(err => {
       console.error("Failed to load SVG grid:", err);
+      wall.innerHTML = `
+        <div style="color:#fff; padding:16px; font-family:system-ui;">
+          Error loading grid from <code>${SVG_GRID_PATH}</code>.<br>
+          Check that the file exists and Flask can serve it.
+        </div>
+      `;
     });
 });

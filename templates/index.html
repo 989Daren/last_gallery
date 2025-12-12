@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Last Gallery</title>
 
-  <!-- External stylesheet (THIS now controls all tile styling & pointer) -->
+  <!-- Main stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 
   <!-- Server-driven grid color -->
   <style>
     :root {
-      /* Fallback to #b84c27 if grid_color isn't passed for some reason */
+      /* Fallback to #b84c27 if grid_color isn't passed */
       --grid-color: {{ grid_color|default("#b84c27") }};
     }
   </style>
@@ -23,7 +23,6 @@
 </head>
 
 <body>
-
   <!-- Top bar: title (left) + controls (right) -->
   <div class="controls">
     <div id="siteTitle">The Last Gallery</div>
@@ -50,9 +49,16 @@
     <div id="galleryWall" class="gallery-wall"></div>
   </div>
 
-  <!-- JS -->
-  <script src="/static/js/main.js"></script>
-  <script src="/static/js/tile_popup.js"></script>
+  <!-- Artwork popup viewer (single, image-only lightbox) -->
+  <div id="artPopup" class="art-popup hidden">
+    <div class="art-popup-backdrop"></div>
+    <div class="art-popup-inner">
+      <img id="artPopupImage" src="" alt="Artwork preview">
+    </div>
+  </div>
 
+  <!-- JS -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/tile_popup.js') }}"></script>
 </body>
 </html>

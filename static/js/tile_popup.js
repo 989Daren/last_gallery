@@ -1,118 +1,68 @@
 // static/js/tile_popup.js
-// Makes all .tile elements clickable via event delegation on #galleryWall.
-// Clicking a tile shows a centered 800x800 grey popup with that tile's ID.
+// Clicking a tile with data-art-url shows the full artwork
+// in the #artPopup lightbox defined in index.html.
 
 (function () {
-  const popupState = {
-    overlay: null,
-    box: null,
-    textEl: null,
-    closeBtn: null,
-    isOpen: false,
-  };
+  let popup, popupImg, backdrop;
+  let isOpen = false;
 
-  function createPopupElements() {
-    if (popupState.overlay) return;
+  function cacheElements() {
+    if (popup && popupImg && backdrop) return;
 
-    const overlay = document.createElement("div");
-    const box = document.createElement("div");
-    const textEl = document.createElement("div");
-    const closeBtn = document.createElement("button");
+    popup    = document.getElementById("artPopup");
+    popupImg = document.getElementById("artPopupImage");
+    backdrop = popup ? popup.querySelector(".art-popup-backdrop") : null;
 
-    // Full-screen dim background
-    overlay.style.position = "fixed";
-    overlay.style.top = "0";
-    overlay.style.left = "0";
-    overlay.style.right = "0";
-    overlay.style.bottom = "0";
-    overlay.style.display = "none"; // hidden until used
-    overlay.style.alignItems = "center";
-    overlay.style.justifyContent = "center";
-    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.4)";
-    overlay.style.zIndex = "2000";
-
-    // 800x800 grey square
-    box.style.width = "500px";
-    box.style.height = "500px";
-    box.style.backgroundColor = "#666666";
-    box.style.display = "flex";
-    box.style.flexDirection = "column";
-    box.style.alignItems = "center";
-    box.style.justifyContent = "center";
-    box.style.position = "relative";
-    box.style.boxShadow = "0 12px 48px rgba(0, 0, 0, 0.6)";
-    box.style.borderRadius = "8px";
-
-    // Tile ID text
-    textEl.style.color = "#ffffff";
-    textEl.style.fontSize = "3rem";
-    textEl.style.fontFamily =
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    textEl.style.textAlign = "center";
-    textEl.textContent = "";
-
-    // Close button
-    closeBtn.textContent = "×";
-    closeBtn.setAttribute("aria-label", "Close popup");
-    closeBtn.style.position = "absolute";
-    closeBtn.style.top = "10px";
-    closeBtn.style.right = "14px";
-    closeBtn.style.border = "none";
-    closeBtn.style.background = "transparent";
-    closeBtn.style.color = "#ffffff";
-    closeBtn.style.fontSize = "2rem";
-    closeBtn.style.cursor = "pointer";
-    closeBtn.style.lineHeight = "1";
-
-    closeBtn.addEventListener("click", closePopup);
-
-    // Click outside the box closes popup
-    overlay.addEventListener("click", function (e) {
-      if (e.target === overlay) {
-        closePopup();
-      }
-    });
-
-    box.appendChild(closeBtn);
-    box.appendChild(textEl);
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-
-    popupState.overlay = overlay;
-    popupState.box = box;
-    popupState.textEl = textEl;
-    popupState.closeBtn = closeBtn;
+    if (!popup || !popupImg || !backdrop) {
+      console.error("tile_popup.js: popup elements not found.");
+    }
   }
 
-  function openPopup(tileId) {
-    createPopupElements();
-    popupState.textEl.textContent = tileId || "(no tile ID)";
-    popupState.overlay.style.display = "flex";
-    popupState.isOpen = true;
+  function openPopup(artUrl) {
+    cacheElements();
+    if (!popup || !popupImg || !artUrl) return;
+
+    popupImg.src = artUrl;
+    popup.classList.add("visible");
+    popup.classList.remove("hidden");
+    isOpen = true;
   }
 
   function closePopup() {
-    if (!popupState.overlay || !popupState.isOpen) return;
-    popupState.overlay.style.display = "none";
-    popupState.isOpen = false;
+    if (!popup || !popupImg || !isOpen) return;
+
+    popup.classList.remove("visible");
+    popup.classList.add("hidden");
+    popupImg.src = "";
+    isOpen = false;
   }
 
   function handleWallClick(event) {
-    // Look for the closest .tile ancestor from the actual click target
     const tile = event.target.closest(".tile");
     if (!tile) return;
 
-    const tileId =
-      tile.dataset.id ||
-      tile.getAttribute("data-id") ||
-      tile.id ||
-      "Unknown tile";
+    // We only open the popup if the tile has an artwork URL
+    const artUrl = tile.dataset.artUrl || tile.getAttribute("data-art-url");
+    if (!artUrl) return;
 
-    openPopup(tileId);
+    openPopup(artUrl);
+  }
+
+  function handleBackdropClick(event) {
+    if (!popup || !backdrop) return;
+    if (event.target === backdrop) {
+      closePopup();
+    }
+  }
+
+  function handleKeydown(event) {
+    if (event.key === "Escape" && isOpen) {
+      closePopup();
+    }
   }
 
   function initPopupSystem() {
-    createPopupElements();
+    cacheElements();
 
     const wall = document.getElementById("galleryWall");
     if (!wall) {
@@ -120,8 +70,19 @@
       return;
     }
 
-    // Event delegation: one listener for all current and future tiles
+    // One listener for all tiles
     wall.addEventListener("click", handleWallClick);
+
+    if (backdrop) {
+      backdrop.addEventListener("click", handleBackdropClick);
+    }
+
+    if (popupImg) {
+      // Click on the image itself to close
+      popupImg.addEventListener("click", closePopup);
+    }
+
+    document.addEventListener("keydown", handleKeydown);
   }
 
   document.addEventListener("DOMContentLoaded", initPopupSystem);
