@@ -112,10 +112,33 @@ label {
   height: 100%;
   object-fit: cover;          /* fill frame, crop if needed */
   object-position: center;    /* center contained artwork */
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55); /* slightly darker shadow */
-  outline: 1px solid rgba(255, 255, 255, 0.10); /* faint light edge */
-  outline-offset: -1px;
+  box-shadow: 0 0 14px rgba(255,255,255,0.42), 0 0 32px rgba(255,255,255,0.22); /* backlight glow only */
   display: block;
+}
+
+/* Wrapper for artwork image so outline draws reliably over image */
+.art-imgwrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.art-imgwrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+
+.art-imgwrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  border: 1px solid rgba(0,0,0,0.7);
 }
 
 /* Size-specific internal mat padding */
@@ -136,6 +159,7 @@ label {
   display: none;
 }
 
+/* ===== Label inside each tile ===== */
 /* ===== Label inside each tile ===== */
 .tile-label {
   position: absolute;
