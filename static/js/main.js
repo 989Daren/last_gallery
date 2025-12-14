@@ -295,14 +295,22 @@ document.addEventListener("DOMContentLoaded", () => {
           img.src = tile.artUrl;
           img.classList.add("tile-art");
 
+          // Wrap the image in an overlay wrapper so we can draw
+          // a consistent outline independent of image load timing.
+          const wrap = document.createElement("div");
+          wrap.classList.add("art-imgwrap");
+          wrap.appendChild(img);
+
           const frame = document.createElement("div");
           frame.classList.add("art-frame");
-          frame.appendChild(img);
+          frame.appendChild(wrap);
 
           el.appendChild(frame);
         }
 
         // Tile label overlay
+        // NOTE: This is the element that displays tile IDs like "X2", "M3", etc.
+        // Class: `tile-label`
         const label = document.createElement("span");
         label.classList.add("tile-label");
         label.textContent = tile.id;
