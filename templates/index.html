@@ -20,6 +20,10 @@
   <script>
     window.SERVER_GRID_COLOR = "{{ grid_color|default('#b84c27') }}";
   </script>
+  <!-- Expose server placement to JS -->
+  <script>
+    window.SERVER_PLACEMENT = {{ placement|tojson }};
+  </script>
 </head>
 
 <body>
@@ -41,6 +45,7 @@
         <input type="checkbox" id="outlineToggle" checked>
         Show tile outlines
       </label>
+      <button id="shuffleButton" type="button">Shuffle</button>
     </div>
   </div>
 

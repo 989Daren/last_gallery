@@ -1,4 +1,8 @@
 /* ===== Global Layout ===== */
+:root {
+  --tileColor: #5a3b33;
+  --matColor: #111;
+}
 body {
   margin: 0;
   background: #111;
@@ -66,7 +70,7 @@ label {
 /* ===== Tiles ===== */
 .tile {
   position: absolute;
-  background: var(--grid-color);
+  background: var(--tileColor);
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.3);
   display: flex;
@@ -90,6 +94,41 @@ label {
   object-fit: cover;          /* Fill tile, crop edges */
   object-position: center;
   display: block;
+}
+
+/* ===== Art frame (internal mat/padding + drop shadow) ===== */
+.art-frame {
+  width: 100%;
+  height: 100%;
+  padding: 6px;               /* internal margin between mat and image */
+  box-sizing: border-box;     /* include padding in sizing so it fills tile */
+  background: transparent;
+  overflow: visible;          /* allow inner image shadow to render inside padding */
+  display: block;
+}
+
+.art-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;          /* fill frame, crop if needed */
+  object-position: center;    /* center contained artwork */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55); /* slightly darker shadow */
+  outline: 1px solid rgba(255, 255, 255, 0.10); /* faint light edge */
+  outline-offset: -1px;
+  display: block;
+}
+
+/* Size-specific internal mat padding */
+.tile.xs .art-frame { padding: 4px; }
+.tile.s  .art-frame { padding: 6px; }
+.tile.m  .art-frame { padding: 8px; }
+.tile.lg .art-frame { padding: 10px; }
+.tile.xlg .art-frame { padding: 14px; }
+
+/* Defensive: hide any empty art-frame (no img) so empty tiles don't show mat/shadow */
+.art-frame:empty {
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Hide label when the tile has artwork assigned */

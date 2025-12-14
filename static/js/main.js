@@ -161,7 +161,7 @@ function computeWallDimensions(tiles) {
 
 // Apply the global grid color via CSS variable
 function applyGridColor(color) {
-  document.documentElement.style.setProperty("--grid-color", color);
+  document.documentElement.style.setProperty("--tileColor", color);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -192,44 +192,58 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // --- Assign test artwork URLs to a RANDOM subset of tiles (no duplicates) ---
-      const testArt = [
-        "/static/artwork/coffee thumb.png",
-        "/static/artwork/doom scroll.png",
-        "/static/artwork/sun dress final low.png",
-        "/static/artwork/heart girl low.png",
-        "/static/artwork/fire clown low.png",
-        "/static/artwork/Mackinaw Island Arch xara.png",
-        "/static/artwork/the dream.png",
-        "/static/artwork/twilight circus.jpg",
-        "/static/artwork/dark cloud girl.png",
-        "/static/artwork/girl in window.jpg",
-        "/static/artwork/I Need the Money.png",
-        "/static/artwork/stranger 1.png"
-      ];
+      // --- Assign artwork URLs ---
+      // If the server provided an explicit placement mapping, use it
+      // (mapping of tile id -> art URL). Otherwise fall back to the
+      // existing randomized test-art assignment used for development.
+      const serverPlacement = window.SERVER_PLACEMENT || {};
+      const hasServerPlacement = serverPlacement && Object.keys(serverPlacement).length > 0;
 
-      const tileCount = tiles.length;
-      const artCount  = testArt.length;
-      const assignCount = Math.min(tileCount, artCount);
+      if (hasServerPlacement) {
+        // Apply server-provided placements (do not randomize)
+        tiles.forEach(tile => {
+          const art = serverPlacement[tile.id] || serverPlacement[String(tile.id)];
+          if (art) tile.artUrl = art;
+        });
+      } else {
+        const testArt = [
+          "/static/artwork/coffee thumb.png",
+          "/static/artwork/doom scroll.png",
+          "/static/artwork/sun dress final low.png",
+          "/static/artwork/heart girl low.png",
+          "/static/artwork/fire clown low.png",
+          "/static/artwork/Mackinaw Island Arch xara.png",
+          "/static/artwork/the dream.png",
+          "/static/artwork/twilight circus.jpg",
+          "/static/artwork/dark cloud girl.png",
+          "/static/artwork/girl in window.jpg",
+          "/static/artwork/I Need the Money.png",
+          "/static/artwork/stranger 1.png"
+        ];
 
-      // Build array of tile indices [0, 1, 2, ..., tileCount-1]
-      const tileIndices = [];
-      for (let i = 0; i < tileCount; i++) {
-        tileIndices.push(i);
-      }
+        const tileCount = tiles.length;
+        const artCount  = testArt.length;
+        const assignCount = Math.min(tileCount, artCount);
 
-      // Fisher–Yates shuffle to randomize tile order
-      for (let i = tileIndices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const tmp = tileIndices[i];
-        tileIndices[i] = tileIndices[j];
-        tileIndices[j] = tmp;
-      }
+        // Build array of tile indices [0, 1, 2, ..., tileCount-1]
+        const tileIndices = [];
+        for (let i = 0; i < tileCount; i++) {
+          tileIndices.push(i);
+        }
 
-      // Assign each artwork to a different random tile
-      for (let k = 0; k < assignCount; k++) {
-        const tileIndex = tileIndices[k];
-        tiles[tileIndex].artUrl = testArt[k];
+        // Fisher–Yates shuffle to randomize tile order
+        for (let i = tileIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = tileIndices[i];
+          tileIndices[i] = tileIndices[j];
+          tileIndices[j] = tmp;
+        }
+
+        // Assign each artwork to a different random tile
+        for (let k = 0; k < assignCount; k++) {
+          const tileIndex = tileIndices[k];
+          tiles[tileIndex].artUrl = testArt[k];
+        }
       }
       // All other tiles remain without artUrl → empty until they get art later.
       // ---------------------------------------------------------------------
@@ -280,7 +294,12 @@ document.addEventListener("DOMContentLoaded", () => {
           const img = document.createElement("img");
           img.src = tile.artUrl;
           img.classList.add("tile-art");
-          el.appendChild(img);
+
+          const frame = document.createElement("div");
+          frame.classList.add("art-frame");
+          frame.appendChild(img);
+
+          el.appendChild(frame);
         }
 
         // Tile label overlay
@@ -327,6 +346,43 @@ document.addEventListener("DOMContentLoaded", () => {
         outlineToggle.addEventListener("change", updateOutlineState);
         updateOutlineState();
       }
+
+          // ---- Shuffle handling (owner-only) ----
+          const shuffleButton = document.getElementById("shuffleButton");
+          if (shuffleButton) {
+            shuffleButton.addEventListener("click", async () => {
+              const pin = window.prompt("Enter 4-digit PIN to shuffle:");
+              if (pin === null) return; // user cancelled
+              if (!/^\d{4}$/.test(pin)) {
+                alert("Invalid PIN format");
+                return;
+              }
+
+              try {
+                const resp = await fetch("/shuffle", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ pin }),
+                });
+
+                if (resp.status === 401) {
+                  alert("Incorrect PIN");
+                  return;
+                }
+
+                if (resp.ok) {
+                  // success — reload to pick up new placement
+                  window.location.reload();
+                  return;
+                }
+
+                alert("Shuffle failed");
+              } catch (err) {
+                console.error("Shuffle request failed", err);
+                alert("Shuffle failed");
+              }
+            });
+          }
     })
     .catch(err => {
       console.error("Failed to load SVG grid:", err);
