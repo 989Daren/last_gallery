@@ -32,20 +32,16 @@
     <div id="siteTitle">The Last Gallery</div>
 
     <div id="gridControls">
-      <label>
-        Tile Color:
-        <input
-          type="color"
-          id="gridColorPicker"
-          value="{{ grid_color|default('#b84c27') }}"
-        >
-      </label>
-
-      <label>
-        <input type="checkbox" id="outlineToggle" checked>
-        Show tile outlines
-      </label>
-      <button id="shuffleButton" type="button">Shuffle</button>
+      <!-- Admin icon (opens PIN modal) -->
+      <!-- The ONLY button remaining on control bar -->
+<button id="addArtworkBtn" type="button">Add Your Artwork</button>
+<!-- Admin icon (opens PIN modal) -->
+<button id="adminBtn" class="iconBtn" type="button" aria-label="Admin">
+  <!-- simple gear icon (inline SVG, no dependency) -->
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.1 7.1 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 1h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.58.23-1.12.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 7.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.8c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.12-.54 1.63-.94l2.39.96c.22.09.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/>
+  </svg>
+</button>
     </div>
   </div>
 
@@ -62,8 +58,99 @@
     </div>
   </div>
 
+  <!-- Add Artwork modal (hidden by default) -->
+  <div id="uploadModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="uploadModalTitle">
+    <div class="modalCard" role="document">
+      <h2 id="uploadModalTitle">Add Your Artwork</h2>
+
+      <div class="upload-help">
+        <p>Choose an image from your device. Supported formats: JPG, PNG.</p>
+        <ul>
+          <li><strong>Tip:</strong> Upload any image dimensions. (The closer to square, the better.)</li>
+          <li><strong>Tip:</strong> Use the tool within the preview window to crop any rectangular artwork to fit the square tile.
+        Choose the crop that best displays your artwork within the tile.</li>
+        </ul>
+      </div>
+
+      <div class="upload-controls">
+        <label for="uploadFile">Choose image</label>
+        <input id="uploadFile" type="file" accept="image/*">
+      </div>
+
+      <div class="cropPreviewBox" id="cropPreviewBox">
+        <img id="cropImage" src="" alt="Preview" class="hidden">
+      </div>
+
+      <div class="crop-instructions">
+        We will optimize your image to load faster in the gallery. (It will not affect your original image.)
+      </div>
+
+      <div class="upload-actions">
+        <button id="cancelUploadBtn" type="button">Cancel</button>
+        <button id="uploadContinue" type="button" disabled>Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin modal (PIN gated) -->
+  <div id="adminModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="adminModalTitle">
+    <div class="modalCard" role="document">
+      <h2 id="adminModalTitle">Admin</h2>
+
+      <!-- PIN gate -->
+      <div id="adminPinGate">
+        <p class="modalSubtext">Enter PIN to unlock admin controls.</p>
+
+        <div class="pinRow">
+          <input
+            id="adminPinInput"
+            type="password"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="4"
+            placeholder="••••"
+            aria-label="Admin PIN"
+          >
+          <button id="adminPinSubmit" type="button">Unlock</button>
+        </div>
+
+        <div id="adminPinError" class="pinError hidden" role="alert">
+          Incorrect PIN
+        </div>
+      </div>
+
+      <!-- Admin controls (hidden until unlocked) -->
+      <div id="adminControlsPanel" class="hidden">
+        <div class="adminRow">
+          <label for="gridColorPicker">Tile Color:</label>
+          <input
+            type="color"
+            id="gridColorPicker"
+            value="{{ grid_color|default('#b84c27') }}"
+          >
+        </div>
+
+        <div class="adminRow">
+          <label>
+            <input type="checkbox" id="outlineToggle" checked>
+            Show tile outlines
+          </label>
+        </div>
+
+        <div class="adminRow">
+          <button id="shuffleButton" type="button">Shuffle Tiles</button>
+        </div>
+      </div>
+
+      <div class="upload-actions">
+        <button id="adminCloseBtn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- JS -->
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   <script src="{{ url_for('static', filename='js/tile_popup.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/upload_modal.js') }}"></script>
 </body>
 </html>
