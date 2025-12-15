@@ -1,8 +1,9 @@
 // === DRILL: debug toggle (safe to delete) ===
 const DEBUG = true;
+
 // main.js
 // SVG → grid renderer using runtime parsing guide.
-// Preserves existing header (color picker, outline toggle, site title) defined in HTML.
+// Preserves existing header defined in HTML.
 // No redundant UI creation; this file only wires behavior and renders tiles into #galleryWall.
 
 const SVG_GRID_PATH = "/static/grid_full.svg";
@@ -169,6 +170,110 @@ document.addEventListener("DOMContentLoaded", () => {
   const colorPicker   = document.getElementById("gridColorPicker");
   const outlineToggle = document.getElementById("outlineToggle");
 
+  // --- Admin modal wiring (PIN-gated) ---
+  const adminBtn           = document.getElementById("adminBtn");
+  const adminModal         = document.getElementById("adminModal");
+  const adminCloseBtn      = document.getElementById("adminCloseBtn");
+  const adminPinGate       = document.getElementById("adminPinGate");
+  const adminPinInput      = document.getElementById("adminPinInput");
+  const adminPinSubmit     = document.getElementById("adminPinSubmit");
+  const adminPinError      = document.getElementById("adminPinError");
+  const adminControlsPanel = document.getElementById("adminControlsPanel");
+
+  let adminUnlocked = false;
+  let adminPinValue = ""; // store what was entered (used for shuffle)
+
+  function openAdminModal() {
+    if (!adminModal) return;
+    adminModal.classList.remove("hidden");
+
+    // Reset gate UI each open unless already unlocked
+    if (!adminUnlocked) {
+      if (adminPinGate) adminPinGate.classList.remove("hidden");
+      if (adminControlsPanel) adminControlsPanel.classList.add("hidden");
+      if (adminPinError) adminPinError.classList.add("hidden");
+      if (adminPinInput) {
+        adminPinInput.value = "";
+        adminPinInput.focus();
+      }
+    } else {
+      if (adminPinGate) adminPinGate.classList.add("hidden");
+      if (adminControlsPanel) adminControlsPanel.classList.remove("hidden");
+    }
+  }
+
+  function closeAdminModal() {
+    if (!adminModal) return;
+    adminModal.classList.add("hidden");
+  }
+
+  function showPinError(msg = "Incorrect PIN") {
+    if (!adminPinError) return;
+    adminPinError.textContent = msg;
+    adminPinError.classList.remove("hidden");
+  }
+
+  function hidePinError() {
+    if (!adminPinError) return;
+    adminPinError.classList.add("hidden");
+  }
+
+  function tryUnlockAdmin() {
+    const pin = (adminPinInput?.value || "").trim();
+
+    // hard requirement: 4 digits
+    if (!/^\d{4}$/.test(pin)) {
+      showPinError("Enter 4 digits");
+      return;
+    }
+
+    // local PIN gate
+    if (pin !== "8375") {
+      showPinError("Incorrect PIN");
+      return;
+    }
+
+    // success
+    adminUnlocked = true;
+    adminPinValue = pin;
+    hidePinError();
+
+    if (adminPinGate) adminPinGate.classList.add("hidden");
+    if (adminControlsPanel) adminControlsPanel.classList.remove("hidden");
+
+    // Once unlocked, keep keyboard focus useful
+    if (colorPicker) colorPicker.focus();
+  }
+
+  if (adminBtn) {
+    adminBtn.addEventListener("click", openAdminModal);
+  }
+  if (adminCloseBtn) {
+    adminCloseBtn.addEventListener("click", closeAdminModal);
+  }
+  if (adminModal) {
+    // click backdrop to close (but don't close when clicking inside card)
+    adminModal.addEventListener("click", (e) => {
+      if (e.target === adminModal) closeAdminModal();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && adminModal && !adminModal.classList.contains("hidden")) {
+      closeAdminModal();
+    }
+  });
+
+  if (adminPinSubmit) {
+    adminPinSubmit.addEventListener("click", tryUnlockAdmin);
+  }
+  if (adminPinInput) {
+    adminPinInput.addEventListener("input", hidePinError);
+    adminPinInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") tryUnlockAdmin();
+    });
+  }
+  // --- End admin modal wiring ---
+
   if (!wall) {
     console.error("galleryWall element not found");
     return;
@@ -193,9 +298,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // --- Assign artwork URLs ---
-      // If the server provided an explicit placement mapping, use it
-      // (mapping of tile id -> art URL). Otherwise fall back to the
-      // existing randomized test-art assignment used for development.
       const serverPlacement = window.SERVER_PLACEMENT || {};
       const hasServerPlacement = serverPlacement && Object.keys(serverPlacement).length > 0;
 
@@ -225,11 +327,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const artCount  = testArt.length;
         const assignCount = Math.min(tileCount, artCount);
 
-        // Build array of tile indices [0, 1, 2, ..., tileCount-1]
         const tileIndices = [];
-        for (let i = 0; i < tileCount; i++) {
-          tileIndices.push(i);
-        }
+        for (let i = 0; i < tileCount; i++) tileIndices.push(i);
 
         // Fisher–Yates shuffle to randomize tile order
         for (let i = tileIndices.length - 1; i > 0; i--) {
@@ -245,7 +344,6 @@ document.addEventListener("DOMContentLoaded", () => {
           tiles[tileIndex].artUrl = testArt[k];
         }
       }
-      // All other tiles remain without artUrl → empty until they get art later.
       // ---------------------------------------------------------------------
 
       const { width, height } = computeWallDimensions(tiles);
@@ -278,10 +376,7 @@ document.addEventListener("DOMContentLoaded", () => {
         el.dataset.size = tile.size;
         el.dataset.id   = tile.id;
 
-        // store art url on the element for popup / later logic
-        if (tile.artUrl) {
-          el.dataset.artUrl = tile.artUrl;
-        }
+        if (tile.artUrl) el.dataset.artUrl = tile.artUrl;
 
         el.style.position = "absolute";
         el.style.left   = tile.x + "px";
@@ -289,14 +384,11 @@ document.addEventListener("DOMContentLoaded", () => {
         el.style.width  = w + "px";
         el.style.height = h + "px";
 
-        // Artwork image inside tile (only if assigned)
         if (tile.artUrl) {
           const img = document.createElement("img");
           img.src = tile.artUrl;
           img.classList.add("tile-art");
 
-          // Wrap the image in an overlay wrapper so we can draw
-          // a consistent outline independent of image load timing.
           const wrap = document.createElement("div");
           wrap.classList.add("art-imgwrap");
           wrap.appendChild(img);
@@ -308,9 +400,6 @@ document.addEventListener("DOMContentLoaded", () => {
           el.appendChild(frame);
         }
 
-        // Tile label overlay
-        // NOTE: This is the element that displays tile IDs like "X2", "M3", etc.
-        // Class: `tile-label`
         const label = document.createElement("span");
         label.classList.add("tile-label");
         label.textContent = tile.id;
@@ -327,6 +416,9 @@ document.addEventListener("DOMContentLoaded", () => {
         colorPicker.value = serverColor;
 
         colorPicker.addEventListener("input", (e) => {
+          // Optional: if you want to force PIN before allowing changes, uncomment:
+          // if (!adminUnlocked) return;
+
           const newColor = e.target.value;
           applyGridColor(newColor);
 
@@ -355,42 +447,41 @@ document.addEventListener("DOMContentLoaded", () => {
         updateOutlineState();
       }
 
-          // ---- Shuffle handling (owner-only) ----
-          const shuffleButton = document.getElementById("shuffleButton");
-          if (shuffleButton) {
-            shuffleButton.addEventListener("click", async () => {
-              const pin = window.prompt("Enter 4-digit PIN to shuffle:");
-              if (pin === null) return; // user cancelled
-              if (!/^\d{4}$/.test(pin)) {
-                alert("Invalid PIN format");
-                return;
-              }
-
-              try {
-                const resp = await fetch("/shuffle", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ pin }),
-                });
-
-                if (resp.status === 401) {
-                  alert("Incorrect PIN");
-                  return;
-                }
-
-                if (resp.ok) {
-                  // success — reload to pick up new placement
-                  window.location.reload();
-                  return;
-                }
-
-                alert("Shuffle failed");
-              } catch (err) {
-                console.error("Shuffle request failed", err);
-                alert("Shuffle failed");
-              }
-            });
+      // ---- Shuffle handling (admin modal button) ----
+      const shuffleButton = document.getElementById("shuffleButton");
+      if (shuffleButton) {
+        shuffleButton.addEventListener("click", async () => {
+          // Button should only be reachable when unlocked, but keep a guard anyway:
+          if (!adminUnlocked) {
+            openAdminModal();
+            showPinError("Enter PIN to use admin controls");
+            return;
           }
+
+          try {
+            const resp = await fetch("/shuffle", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pin: adminPinValue || "8375" }),
+            });
+
+            if (resp.status === 401) {
+              alert("Incorrect PIN");
+              return;
+            }
+
+            if (resp.ok) {
+              window.location.reload();
+              return;
+            }
+
+            alert("Shuffle failed");
+          } catch (err) {
+            console.error("Shuffle request failed", err);
+            alert("Shuffle failed");
+          }
+        });
+      }
     })
     .catch(err => {
       console.error("Failed to load SVG grid:", err);
