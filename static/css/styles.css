@@ -1,10 +1,31 @@
-/* ===== Global Layout ===== */
+/* =====================================================
+   THE LAST GALLERY — styles.css (refactored + cleaned)
+   ===================================================== */
+
+/* ===== Global Layout / Theme ===== */
 :root {
   --tileColor: #5a3b33;
   --matColor: #111;
+
+  /* Theme helpers (safe refactor; no aesthetic intent change) */
+  --page-bg: #111;
+  --bar-bg: #222;
+  --bar-border: #444;
+  --wall-bg: #000;
+  --wall-border: #333;
+
+  --overlay-bg: rgba(0,0,0,0.6);
+  --popup-backdrop: rgba(0, 0, 0, 0.85);
+
+  --focus-ring: rgba(200,220,255,0.7);
+  --btn-border: rgba(255,255,255,0.18);
+  --btn-bg: rgba(0,0,0,0.20);
+  --btn-bg-2: rgba(255,255,255,0.08);
+  --input-bg: rgba(0,0,0,0.35);
 }
 
-/* ✅ Mobile overflow hard-stop (prevents the "black strip to the right") */
+/* ✅ Page must never scroll horizontally.
+   Horizontal scrolling (when needed) is handled ONLY by .gallery-wall-wrapper. */
 html, body {
   width: 100%;
   max-width: 100%;
@@ -13,22 +34,27 @@ html, body {
 
 body {
   margin: 0;
-  background: #111;
+  background: var(--page-bg);
   color: #fff;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
 
-/* ===== Top Control Bar (Title Left, Controls Right) ===== */
+/* =====================================================
+   TOP CONTROL BAR
+   ===================================================== */
+
 .controls {
   padding: 12px 16px;
-  background: #222;
+  background: var(--bar-bg);
   position: sticky;
   top: 0;
   z-index: 10;
+
   display: flex;
   align-items: center;
   justify-content: space-between;  /* LEFT / RIGHT LOCK */
-  border-bottom: 1px solid #444;
+
+  border-bottom: 1px solid var(--bar-border);
 
   /* ✅ Constrain to viewport */
   width: 100%;
@@ -37,19 +63,20 @@ body {
   overflow-x: hidden;
 }
 
-/* ===== Site Title (Left) ===== */
-
+/* Site Title (Left) */
 #siteTitle {
-  font-family: system-ui;
-  font-weight: 400;
-  letter-spacing: 0.1em;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+
   /* ✅ Prevent title from forcing overflow */
   max-width: 45vw;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* ===== Control Group (Right) ===== */
+/* Control Group (Right) */
 #gridControls {
   display: flex;
   align-items: center;
@@ -77,19 +104,22 @@ label {
   font-size: 14px;
 }
 
-/* ✅ NEW: Admin icon button */
+/* Admin icon button */
 .iconBtn {
   appearance: none;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(0,0,0,0.20);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
   color: #fff;
+
   width: 38px;
   height: 34px;
   padding: 0;
   border-radius: 6px;
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
+
   cursor: pointer;
   flex: 0 0 auto;
 }
@@ -104,16 +134,16 @@ label {
 }
 
 .iconBtn:focus-visible {
-  outline: 2px solid rgba(200,220,255,0.7);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-/* ✅ Make sure "Add Your Artwork" never crowds the title */
+/* Ensure "Add Your Artwork" doesn’t crowd the title */
 #addArtworkBtn {
   flex: 0 0 auto;
 }
 
-/* ✅ Mobile: stack controls more gracefully so nothing forces horizontal scroll */
+/* Mobile: stack controls gracefully */
 @media (max-width: 600px) {
   .controls {
     gap: 10px;
@@ -132,90 +162,94 @@ label {
     gap: 10px;
   }
 
-  /* keep gear + button aligned and tappable */
   .iconBtn {
     width: 40px;
     height: 36px;
   }
 }
 
-/* ===== The scrollable area that contains the tile wall ===== */
+/* =====================================================
+   GALLERY WALL
+   ===================================================== */
+
 .gallery-wall-wrapper {
   width: 100%;
   max-width: 100%;
 
-  /* IMPORTANT:
-     Keep horizontal scrolling available for the wall itself (if grid wider than viewport).
-     This is separate from the page overflow issue. */
+  /* Keep horizontal scrolling available for the wall itself (if grid wider than viewport). */
   overflow-x: auto;
   overflow-y: visible;
 
-  /* ✅ Prevent wrapper from accidentally exceeding viewport */
   box-sizing: border-box;
 
-  border-top: 1px solid #333;
-  background: #000;
+  border-top: 1px solid var(--wall-border);
+  background: var(--wall-bg);
 }
 
-/* ===== The actual wall of tiles (absolute layout) ===== */
 .gallery-wall {
   position: relative;
-  margin: 0 auto;   /* ← centers the entire grid */
-
-  /* ✅ Safety: don't allow the wall element itself to create page overflow */
+  margin: 0 auto;   /* centers the entire grid */
   max-width: 100%;
 }
 
-/* ===== Tiles ===== */
+/* =====================================================
+   TILES + ARTWORK
+   ===================================================== */
+
 .tile {
   position: absolute;
   background: var(--tileColor);
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.3);
+
   display: flex;
   align-items: center;
   justify-content: center;
+
   font-size: 12px;
   color: #fff;
+
   cursor: pointer !important;
-  overflow: hidden;           /* Prevent artwork from spilling outside tile */
+  overflow: hidden; /* Prevent artwork from spilling outside tile */
 }
 
 .tiles-no-outline .tile {
   border: none !important;
 }
 
-/* ===== Artwork inside each tile ===== */
+/* Artwork inside each tile */
 .tile img,
 .tile-art {
   width: 100%;
   height: 100%;
-  object-fit: cover;          /* Fill tile, crop edges */
+  object-fit: cover;
   object-position: center;
   display: block;
 }
 
-/* ===== Art frame (internal mat/padding + drop shadow) ===== */
+/* Art frame (internal mat/padding + glow) */
 .art-frame {
   width: 100%;
   height: 100%;
-  padding: 6px;               /* internal margin between mat and image */
-  box-sizing: border-box;     /* include padding in sizing so it fills tile */
+  padding: 6px;
+  box-sizing: border-box;
   background: transparent;
-  overflow: visible;          /* allow inner image shadow to render inside padding */
+  overflow: visible;
   display: block;
 }
 
 .art-frame img {
   width: 100%;
   height: 100%;
-  object-fit: cover;          /* fill frame, crop if needed */
-  object-position: center;    /* center contained artwork */
-  box-shadow: 0 0 6px rgba(200,220,255,0.90), 0 0 20px rgba(200,220,255,0.10); /* inner glow exaggerated for testing; outer unchanged (bluer tint) */
+  object-fit: cover;
+  object-position: center;
+
+  /* inner glow exaggerated for testing; outer unchanged (bluer tint) */
+  box-shadow: 0 0 6px rgba(200,220,255,0.90), 0 0 20px rgba(200,220,255,0.10);
   display: block;
 }
 
-/* Wrapper for artwork image so outline draws reliably over image */
+/* Wrapper so outline draws reliably over image */
 .art-imgwrap {
   position: relative;
   width: 100%;
@@ -240,12 +274,12 @@ label {
   border: 1px solid rgba(0,0,0,0.7);
 }
 
-/* Size-specific internal mat padding */
-.tile.xs .art-frame { padding: 4px; }
-.tile.s  .art-frame { padding: 6px; }
-.tile.m  .art-frame { padding: 8px; }
-.tile.lg .art-frame { padding: 10px; }
-.tile.xlg .art-frame { padding: 14px; }
+/* ✅ FIX: size-specific padding must match your JS (data-size), not .tile.xs etc. */
+.tile[data-size="xs"] .art-frame { padding: 4px; }
+.tile[data-size="s"]  .art-frame { padding: 6px; }
+.tile[data-size="m"]  .art-frame { padding: 8px; }
+.tile[data-size="lg"] .art-frame { padding: 10px; }
+.tile[data-size="xlg"] .art-frame { padding: 14px; }
 
 /* Defensive: hide any empty art-frame (no img) so empty tiles don't show mat/shadow */
 .art-frame:empty {
@@ -258,26 +292,29 @@ label {
   display: none;
 }
 
-/* ===== Label inside each tile ===== */
+/* Label inside each tile */
 .tile-label {
   position: absolute;
   bottom: 4px;
   left: 4px;
   padding: 2px 4px;
-  color: rgba(255,255,255,0.60);
+
+  /* Keep only one color rule (cleaned). */
   color: color-mix(in srgb, var(--tileColor) 85%, white);
+
   font-size: 10px;
   font-weight: bold;
   pointer-events: none;
 }
 
-/* ===== Subtle Hover Effect ===== */
+/* Subtle hover effect */
 .tile:hover {
   filter: brightness(1.2);
-  cursor: pointer;
 }
 
-/* ===== Upload modal (UI shell only) ===== */
+/* =====================================================
+   MODALS — shared shell
+   ===================================================== */
 
 /* Generic hidden utility */
 .hidden {
@@ -292,7 +329,7 @@ label {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.6);
+  background: var(--overlay-bg);
 }
 
 /* Critical: hide modal when .hidden is applied */
@@ -304,20 +341,98 @@ label {
 .modalCard {
   position: relative;
   z-index: 2;
+
   width: min(680px, 94%);
   max-width: 720px;
+
   background: #111;
   color: #fff;
+
   padding: 18px;
   border-radius: 6px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.6);
 
-  /* Mobile-safe: never exceed viewport height */
   max-height: 90vh;
   overflow-y: auto;
 }
 
-/* ✅ NEW: Admin modal helpers */
+/* Action buttons (shared) */
+.upload-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+/* =====================================================
+   UPLOAD MODAL — specifics
+   ===================================================== */
+
+/* The preview area — shows selected image */
+.previewBox {
+  width: 100%;
+  max-width: 520px;
+  height: 520px;
+
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(255,255,255,0.10);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin: 14px 0;
+  box-sizing: border-box;
+}
+
+/* The preview image */
+#previewImage {
+  max-width: 100%;
+  max-height: 100%;
+  display: none; /* hidden until a file loads */
+  object-fit: contain;
+}
+
+/* When JS removes .hidden, allow it to render */
+#previewImage:not(.hidden) {
+  display: block;
+}
+
+/* Upload modal — mobile responsiveness */
+@media (max-width: 768px) {
+  .modalCard {
+    width: 94%;
+    padding: 14px;
+  }
+
+  .previewBox {
+    max-width: 320px;
+    height: 320px;
+    margin: 10px auto;
+  }
+
+  .upload-instructions {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .upload-help p,
+  .upload-help li {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 420px) {
+  .previewBox {
+    max-width: 260px;
+    height: 260px;
+  }
+}
+
+/* =====================================================
+   ADMIN MODAL — PIN gate + controls
+   ===================================================== */
+
 .modalSubtext {
   margin: 6px 0 12px;
   color: rgba(255,255,255,0.75);
@@ -335,9 +450,11 @@ label {
   width: 140px;
   padding: 10px 12px;
   border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(0,0,0,0.35);
+
+  border: 1px solid var(--btn-border);
+  background: var(--input-bg);
   color: #fff;
+
   font-size: 16px;
   letter-spacing: 0.25em;
 }
@@ -345,9 +462,11 @@ label {
 #adminPinSubmit {
   padding: 10px 12px;
   border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.08);
+
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg-2);
   color: #fff;
+
   cursor: pointer;
 }
 
@@ -366,6 +485,7 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+
   padding: 10px 0;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
@@ -383,142 +503,308 @@ label {
   width: 56px;
   height: 34px;
   padding: 0;
-  border: 1px solid rgba(255,255,255,0.18);
+
+  border: 1px solid var(--btn-border);
   border-radius: 6px;
   background: transparent;
 }
 
-/* Crop preview area */
-.cropPreviewBox {
-  width: 100%;
-  max-width: 420px;
-  height: 420px;
-  background: rgba(255,255,255,0.03);
-  border: 1px dashed rgba(255,255,255,0.06);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 14px 0;
-}
-
-.cropPreviewBox img {
-  max-width: 100%;
-  max-height: 100%;
-}
-
-/* Action buttons */
-.upload-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-
-/* =====================================================
-   Upload modal — mobile responsiveness
-   ===================================================== */
-
+/* Admin modal — narrow screens */
 @media (max-width: 768px) {
-  .modalCard {
-    width: 94%;
-    padding: 14px;
-  }
-
-  /* Shrink crop preview for phones */
-  .cropPreviewBox {
-    max-width: 300px;
-    height: 300px;
-    margin: 10px auto;
-  }
-
-  .crop-instructions {
-    font-size: 12px;
-    line-height: 1.35;
-  }
-
-  .upload-help p,
-  .upload-help li {
-    font-size: 13px;
-  }
-
-  /* Admin rows stack a bit better on narrow screens */
   .adminRow {
     flex-direction: column;
     align-items: flex-start;
   }
 }
 
-/* Extra-tight screens (very small phones) */
 @media (max-width: 420px) {
-  .cropPreviewBox {
-    max-width: 240px;
-    height: 240px;
-  }
-
   #adminPinInput {
     width: 100%;
   }
 }
 
 /* =====================================================
-   POPUP VIEWER — click tile → see full artwork
+   POPUP VIEWER — NEW animated popup system
+   Sequence: image pops → title/artist fades → ribbon slides → text pops
+   ===================================================== */
+
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: none;
+
+  /* background layer */
+  background: rgba(0,0,0,0.65);
+
+  /* center the popup */
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.popup-overlay.is-open {
+  display: grid;
+}
+
+/* Popup shell */
+.popup {
+  position: relative;
+  max-width: min(92vw, 1100px);
+  box-sizing: border-box;
+}
+
+/* Title block (does not cover image) */
+.popup-title {
+  margin: 0 0 12px 0;
+
+  opacity: 0;
+  transform: translateY(6px);
+
+  /* ✅ change: title fade duration to 1.5s */
+  transition: opacity 1500ms ease, transform 1500ms ease;
+}
+
+.popup-overlay.show-title .popup-title {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Title + artist typography (consistent across all popups) */
+.art-title {
+  font-size: clamp(20px, 3.2vw, 36px);
+  line-height: 1.15;
+  text-align: left;
+  color: rgba(255,255,255,0.95);
+}
+
+.art-artist {
+  margin-top: 4px;
+  font-size: clamp(13px, 1.6vw, 16px);
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-align: left;
+  color: rgba(255,255,255,0.80);
+}
+
+/* Media container shrink-wraps to image width */
+.popup-media {
+  position: relative;
+  display: inline-block; /* critical: makes ribbon max-width never exceed image width */
+}
+
+/* Large image */
+.popup-img {
+  display: block;
+  max-width: 100%;
+  max-height: 72vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+
+  box-shadow: 0 0 30px rgba(0,0,0,0.9);
+  border-radius: 4px;
+}
+
+/* Info ribbon container — FIXED SIZE, detached from image width */
+.popup-info {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+
+  /* ✅ fixed system size */
+  width: 600px;
+  aspect-ratio: 16 / 9;
+
+  /* safety on very small screens */
+  max-width: calc(100vw - 48px);
+
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Sliding black rectangle w/ transparent gradient on leading end (right side) */
+.popup-info-bg {
+  position: absolute;
+  inset: 0;
+
+  /* Leading edge = right side; gradient occupies ~1/6 width */
+  background: linear-gradient(
+    to left,
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,0.65) 16.666%,  /* ✅ darker (~10%) */
+    rgba(0,0,0,0.99) 40%,      /* ✅ darker (~10%) */
+    rgba(0,0,0,0.99) 100%      /* ✅ darker (~10%) */
+  );
+
+  opacity: 0;
+
+  /* ✅ change: slide IN from left (negative X) */
+  transform: translateX(-70px);
+
+  /* ✅ change: slide duration matches title (1.5s) */
+  transition: transform 1500ms ease, opacity 220ms ease;
+}
+
+.popup-overlay.stage-info-bg .popup-info-bg {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* White text pops after background arrives */
+.popup-info-text {
+  position: relative;
+  height: 100%;
+  padding: 14px 16px;
+  color: #fff;
+
+  display: grid;
+  align-content: center;
+
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+  transition: opacity 90ms ease, transform 90ms ease;
+
+  /* required for spaced header-only demo text */
+  white-space: pre-line;
+}
+
+.popup-overlay.stage-info-text .popup-info-text {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Dismiss ribbon only */
+.popup-overlay.hide-info .popup-info-bg,
+.popup-overlay.hide-info .popup-info-text {
+  opacity: 0;
+
+  /* ✅ match direction: slide OUT to the left */
+  transform: translateX(-40px);
+
+  pointer-events: none;
+}
+
+/* X close inside gradient (top-right) */
+.popup-info-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+
+  /* ✅ change: more prominent X with solid round black background */
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.90);
+
+  border: 1px solid rgba(255,255,255,0.22);
+  color: rgba(255,255,255,0.98);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+
+  cursor: pointer;
+
+  opacity: 0.92;
+  transition: opacity 120ms ease, transform 120ms ease;
+
+  pointer-events: auto; /* allow clicks */
+}
+
+.popup-info-close:hover {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.popup-info-close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Mobile tweaks: reduce max image height a touch */
+@media (max-width: 600px) {
+  .popup-overlay {
+    padding: 16px;
+  }
+
+  .popup-img {
+    max-height: 68vh;
+  }
+
+  .popup-info {
+    /* ✅ keep the same clamp; just allow more room on tiny screens */
+    width: min(600px, 100%);
+  }
+}
+
+/* =====================================================
+   POPUP VIEWER — legacy (kept for now, but not used by new JS)
    ===================================================== */
 
 .art-popup {
   position: fixed;
   inset: 0;
-  display: none;              /* hidden by default */
+  display: none;
   z-index: 2000;
+
   align-items: center;
   justify-content: center;
-  padding: 24px;              /* breathing room from viewport edges */
+
+  padding: 24px;
   box-sizing: border-box;
 }
 
 .art-popup.visible {
-  display: flex;              /* flex to center inner container */
+  display: flex;
 }
 
 .art-popup-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--popup-backdrop);
 }
 
-/* Constrains the lightbox to a reasonable size inside the viewport */
 .art-popup-inner {
   position: relative;
-  display: flex;              /* center the image inside this box */
+  display: flex;
+
   align-items: center;
   justify-content: center;
+
   max-width: min(80vw, 1100px);
   max-height: min(80vh, 900px);
-  pointer-events: none;       /* clicks pass through, img itself is clickable */
+
+  pointer-events: none;
   box-sizing: border-box;
 }
 
-/* Image scales down to fit, but never overflows the inner box */
 .art-popup-inner img {
-  /* Limit the popup image height but keep its aspect ratio intact. */
-  max-height: 700px;          /* increased vertical constraint per request */
+  max-height: 700px;
   max-width: 100%;
   width: auto;
   height: auto;
-  object-fit: contain;        /* preserve aspect ratio, no cropping */
+
+  object-fit: contain;
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
   border-radius: 4px;
-  pointer-events: auto;       /* allow click-to-close on the image */
+
+  pointer-events: auto;
   cursor: zoom-out;
 }
 
 /* =====================================================
-   LEGACY POPUP KILL SWITCH — hide any old modal/popups
+   LEGACY POPUP KILL SWITCH — hide known old modal/popups only
+   (IMPORTANT: do NOT nuke generic .popup/.modal anymore)
    ===================================================== */
 
 #tilePopup,
 #tileModal,
-.popup,
-.modal,
 .tile-popup,
 .tile-modal {
   display: none !important;

@@ -157,18 +157,18 @@ def generate_initial_placement():
         return {}
 
     test_art = [
-        "/static/artwork/coffee thumb.png",
-        "/static/artwork/doom scroll.png",
-        "/static/artwork/sun dress final low.png",
-        "/static/artwork/heart girl low.png",
-        "/static/artwork/fire clown low.png",
-        "/static/artwork/Mackinaw Island Arch xara.png",
-        "/static/artwork/the dream.png",
-        "/static/artwork/twilight circus.jpg",
-        "/static/artwork/dark cloud girl.png",
-        "/static/artwork/girl in window.jpg",
-        "/static/artwork/I Need the Money.png",
-        "/static/artwork/stranger 1.png"
+        "/static/artwork/Timing.png",
+        "/static/artwork/Doom Scrolling.png",
+        "/static/artwork/Izzy in Spring.png",
+        "/static/artwork/Path to Your Heart.png",
+        "/static/artwork/Class Clown.png",
+        "/static/artwork/Andrea's Arch.png",
+        "/static/artwork/Daren's Dream.png",
+        "/static/artwork/Twilight Circus.jpg",
+        "/static/artwork/Caught in the Storm.png",
+        "/static/artwork/Perspective.jpg",
+        "/static/artwork/I'll Pay You Back.png",
+        "/static/artwork/The Stranger.png"
     ]
 
     tile_ids = [t['id'] for t in tiles]
