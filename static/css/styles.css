@@ -624,19 +624,12 @@ label {
   z-index: 2;
 }
 
-/* Sliding black rectangle w/ transparent gradient on leading end (right side) */
+/* Sliding black rectangle with uniform opacity */
 .popup-info-bg {
   position: absolute;
   inset: 0;
 
-  /* Leading edge = right side; gradient occupies ~1/6 width */
-  background: linear-gradient(
-    to left,
-    rgba(0,0,0,0) 0%,
-    rgba(0,0,0,0.65) 16.666%,  /* ✅ darker (~10%) */
-    rgba(0,0,0,0.99) 40%,      /* ✅ darker (~10%) */
-    rgba(0,0,0,0.99) 100%      /* ✅ darker (~10%) */
-  );
+  background-color: rgba(0, 0, 0, 0.7);
 
   opacity: 0;
 
