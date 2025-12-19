@@ -1,5 +1,5 @@
-// === DRILL: debug toggle (safe to delete) ===
-const DEBUG = true;
+// === Debug toggle ===
+const DEBUG = false;
 const log  = (...args) => DEBUG && console.log(...args);
 const warn = (...args) => DEBUG && console.warn(...args);
 const error = (...args) => console.error(...args);
@@ -414,6 +414,41 @@ function applyAssetToTile(tileEl, asset) {
 window.applyAssetToTile = applyAssetToTile;
 window.resetTileToEmpty = resetTileToEmpty;
 
+/**
+ * Select a random empty XS tile from the gallery.
+ * 
+ * @returns {HTMLElement|null} - The selected tile element, or null if none available
+ */
+function selectRandomEmptyXSTile() {
+  const wall = document.getElementById("galleryWall");
+  if (!wall) {
+    console.warn("[selectRandomEmptyXSTile] Gallery wall not found");
+    return null;
+  }
+
+  // Find all XS tiles that are NOT occupied
+  const emptyXSTiles = Array.from(wall.querySelectorAll('.tile[data-size="xs"]'))
+    .filter(tile => tile.dataset.occupied !== "1");
+
+  if (emptyXSTiles.length === 0) {
+    console.warn("[selectRandomEmptyXSTile] No empty XS tiles available");
+    alert("No empty XS tiles available. Please clear some space first.");
+    return null;
+  }
+
+  // Select randomly
+  const randomIndex = Math.floor(Math.random() * emptyXSTiles.length);
+  const selectedTile = emptyXSTiles[randomIndex];
+  
+  const tileId = selectedTile.dataset.id;
+  if (DEBUG) console.log("[selectRandomEmptyXSTile] Selected tile:", tileId);
+  
+  return selectedTile;
+}
+
+// Export for use by other scripts
+window.selectRandomEmptyXSTile = selectRandomEmptyXSTile;
+
 function renderTiles(wall, layoutTiles) {
   wall.innerHTML = "";
 
@@ -553,6 +588,333 @@ document.addEventListener("DOMContentLoaded", () => {
       if (e.key === "Enter") tryUnlockAdmin();
     });
   }
+
+  // --- Track selected tile for admin operations ---
+  window.selectedTileId = null;
+
+  // --- Admin action handlers ---
+  const clearTileBtn = $("clearTileBtn");
+  const clearAllTilesBtn = $("clearAllTilesBtn");
+  const undoBtn = $("undoBtn");
+  const moveArtworkBtn = $("moveArtworkBtn");
+  const adminStatus = $("adminStatus");
+
+  const adminClearTileIdInput = $("adminClearTileIdInput");
+  const adminMoveFromInput = $("adminMoveFromInput");
+  const adminMoveToInput = $("adminMoveToInput");
+
+  // Helper to show status message in admin modal
+  function showAdminStatus(message, type = "info") {
+    if (!adminStatus) return;
+    
+    adminStatus.textContent = message;
+    adminStatus.classList.remove("hidden", "error", "success");
+    
+    if (type === "error") {
+      adminStatus.classList.add("error");
+    } else if (type === "success") {
+      adminStatus.classList.add("success");
+    }
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      adminStatus.classList.add("hidden");
+    }, 5000);
+  }
+
+  // Helper to re-render wall from server
+  async function refreshWallFromServer() {
+    try {
+      // Clear all tiles first
+      const allTiles = wall.querySelectorAll(".tile");
+      allTiles.forEach(tile => resetTileToEmpty(tile));
+      
+      // Fetch current state
+      const response = await fetch('/api/wall_state');
+      if (!response.ok) throw new Error(`Failed to fetch wall_state: ${response.status}`);
+      
+      const data = await response.json();
+      const assignments = data.assignments || [];
+      
+      if (DEBUG) console.log('Refreshed wall state, assignments:', assignments.length);
+      
+      // Apply assignments
+      assignments.forEach(assignment => {
+        const tileEl = wall.querySelector(`.tile[data-id="${assignment.tile_id}"]`);
+        if (tileEl) {
+          applyAssetToTile(tileEl, assignment);
+        }
+      });
+    } catch (err) {
+      console.error('Failed to refresh wall from server:', err);
+    }
+  }
+
+  // Helper to update undo button state
+  function updateUndoButton(historyCount) {
+    if (undoBtn) {
+      undoBtn.disabled = historyCount === 0;
+      if (DEBUG) console.log('Undo button state:', historyCount > 0 ? 'enabled' : 'disabled');
+    }
+  }
+
+  // Helper to fetch history status and update undo button
+  async function fetchHistoryStatus() {
+    if (!adminUnlocked) return;
+    
+    try {
+      const response = await fetch('/api/admin/history_status', {
+        headers: { 'X-Admin-Pin': ADMIN_PIN }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        updateUndoButton(data.history_count);
+      }
+    } catch (err) {
+      if (DEBUG) console.warn('Failed to fetch history status:', err);
+    }
+  }
+
+  // Clear Single Tile (with tile_info lookup and confirmation)
+  clearTileBtn?.addEventListener("click", async () => {
+    const tileId = (adminClearTileIdInput?.value || "").trim().toUpperCase();
+    
+    if (!tileId) {
+      showAdminStatus("Enter a tile ID", "error");
+      return;
+    }
+
+    // Validate tile exists in DOM
+    const tileEl = wall.querySelector(`.tile[data-id="${tileId}"]`);
+    if (!tileEl) {
+      showAdminStatus("Tile ID not found", "error");
+      return;
+    }
+
+    try {
+      // Fetch tile info
+      const infoResponse = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(tileId)}`, {
+        headers: { 'X-Admin-Pin': ADMIN_PIN }
+      });
+
+      if (!infoResponse.ok) {
+        throw new Error(`Failed to fetch tile info: ${infoResponse.status}`);
+      }
+
+      const tileInfo = await infoResponse.json();
+
+      if (!tileInfo.occupied) {
+        showAdminStatus("Tile is empty", "error");
+        return;
+      }
+
+      // Confirm with artwork details
+      const confirmMsg = `Remove "${tileInfo.artwork_name}" by ${tileInfo.artist_name} from ${tileId}?`;
+      if (!confirm(confirmMsg)) return;
+
+      // Clear the tile
+      const response = await fetch('/api/admin/clear_tile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Pin': ADMIN_PIN
+        },
+        body: JSON.stringify({ tile_id: tileId })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Clear tile failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (DEBUG) console.log('Cleared tile:', tileId);
+      
+      updateUndoButton(result.history_count);
+      await refreshWallFromServer();
+      
+      showAdminStatus(`Cleared ${tileId}`, "success");
+      if (adminClearTileIdInput) adminClearTileIdInput.value = "";
+    } catch (err) {
+      console.error('Failed to clear tile:', err);
+      showAdminStatus('Failed to clear tile', "error");
+    }
+  });
+
+  // Clear All Tiles
+  clearAllTilesBtn?.addEventListener("click", async () => {
+    if (!confirm("Clear all tiles? This can be undone.")) return;
+
+    try {
+      const response = await fetch('/api/admin/clear_all_tiles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Pin': ADMIN_PIN
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Clear all failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (DEBUG) console.log('Cleared all tiles');
+      
+      updateUndoButton(result.history_count);
+      await refreshWallFromServer();
+      
+      showAdminStatus("Cleared all tiles", "success");
+    } catch (err) {
+      console.error('Failed to clear all tiles:', err);
+      showAdminStatus('Failed to clear all tiles', "error");
+    }
+  });
+
+  // Move Artwork (with size validation and confirmation)
+  moveArtworkBtn?.addEventListener("click", async () => {
+    const fromId = (adminMoveFromInput?.value || "").trim().toUpperCase();
+    const toId = (adminMoveToInput?.value || "").trim().toUpperCase();
+
+    if (!fromId || !toId) {
+      showAdminStatus("Enter both tile IDs", "error");
+      return;
+    }
+
+    // Validate both tiles exist in DOM
+    const fromTileEl = wall.querySelector(`.tile[data-id="${fromId}"]`);
+    const toTileEl = wall.querySelector(`.tile[data-id="${toId}"]`);
+
+    if (!fromTileEl || !toTileEl) {
+      showAdminStatus("Tile ID not found", "error");
+      return;
+    }
+
+    // Validate size match using getBoundingClientRect
+    const fromRect = fromTileEl.getBoundingClientRect();
+    const toRect = toTileEl.getBoundingClientRect();
+    const TOLERANCE = 2;
+
+    const widthMatch = Math.abs(fromRect.width - toRect.width) <= TOLERANCE;
+    const heightMatch = Math.abs(fromRect.height - toRect.height) <= TOLERANCE;
+
+    if (!widthMatch || !heightMatch) {
+      showAdminStatus("Tiles must be the same size", "error");
+      return;
+    }
+
+    try {
+      // Fetch source tile info
+      const fromInfoResponse = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(fromId)}`, {
+        headers: { 'X-Admin-Pin': ADMIN_PIN }
+      });
+
+      if (!fromInfoResponse.ok) {
+        throw new Error(`Failed to fetch source tile info: ${fromInfoResponse.status}`);
+      }
+
+      const fromInfo = await fromInfoResponse.json();
+
+      if (!fromInfo.occupied) {
+        showAdminStatus("Source tile is empty", "error");
+        return;
+      }
+
+      // Fetch destination tile info
+      const toInfoResponse = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(toId)}`, {
+        headers: { 'X-Admin-Pin': ADMIN_PIN }
+      });
+
+      if (!toInfoResponse.ok) {
+        throw new Error(`Failed to fetch destination tile info: ${toInfoResponse.status}`);
+      }
+
+      const toInfo = await toInfoResponse.json();
+
+      if (toInfo.occupied) {
+        showAdminStatus("Destination tile is occupied", "error");
+        return;
+      }
+
+      // Confirm move
+      const confirmMsg = `Move "${fromInfo.artwork_name}" by ${fromInfo.artist_name} from ${fromId} to ${toId}?`;
+      if (!confirm(confirmMsg)) return;
+
+      // Execute move
+      const response = await fetch('/api/admin/move_tile_asset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Pin': ADMIN_PIN
+        },
+        body: JSON.stringify({
+          from_tile_id: fromId,
+          to_tile_id: toId
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Move failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (DEBUG) console.log('Moved artwork:', fromId, '→', toId);
+      
+      updateUndoButton(result.history_count);
+      await refreshWallFromServer();
+      
+      showAdminStatus(`Moved ${fromId} → ${toId}`, "success");
+      if (adminMoveFromInput) adminMoveFromInput.value = "";
+      if (adminMoveToInput) adminMoveToInput.value = "";
+    } catch (err) {
+      console.error('Failed to move artwork:', err);
+      showAdminStatus(err.message || 'Failed to move artwork', "error");
+    }
+  });
+
+  // Undo
+  undoBtn?.addEventListener("click", async () => {
+    try {
+      const response = await fetch('/api/admin/undo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Pin': ADMIN_PIN
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Undo failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.ok) {
+        showAdminStatus(result.error || "Nothing to undo", "error");
+        return;
+      }
+
+      if (DEBUG) console.log('Undo successful');
+      
+      updateUndoButton(result.history_count);
+      await refreshWallFromServer();
+      showAdminStatus("Undo successful", "success");
+    } catch (err) {
+      console.error('Failed to undo:', err);
+      showAdminStatus('Failed to undo', 'error');
+    }
+  });
+
+  // Fetch history status when admin is unlocked
+  const originalTryUnlockAdmin = tryUnlockAdmin;
+  tryUnlockAdmin = function() {
+    originalTryUnlockAdmin();
+    if (adminUnlocked) {
+      fetchHistoryStatus();
+    }
+  };
+
   // --- End admin modal wiring ---
 
   if (!wall) {
@@ -601,10 +963,10 @@ document.addEventListener("DOMContentLoaded", () => {
       fetch('/api/wall_state')
         .then(response => response.json())
         .then(data => {
-          console.log('wall_state response:', data);
+          if (DEBUG) console.log('wall_state response:', data);
           
           const assignments = data.assignments || [];
-          console.log('wall_state assignments:', assignments.length);
+          if (DEBUG) console.log('wall_state assignments:', assignments.length);
           
           assignments.forEach(assignment => {
             const tileEl = wall.querySelector(`.tile[data-id="${assignment.tile_id}"]`);
@@ -623,6 +985,10 @@ document.addEventListener("DOMContentLoaded", () => {
       wall.addEventListener("click", (e) => {
         const tileEl = e.target.closest(".tile");
         if (!tileEl) return;
+
+        // Track selected tile for admin operations
+        window.selectedTileId = tileEl.dataset.id;
+        if (DEBUG) console.log('Selected tile:', window.selectedTileId);
 
         // Check for uploaded asset with metadata (from database hydration)
         const popupUrl = tileEl.dataset.popupUrl;

@@ -67,6 +67,14 @@
         <img id="previewImage" src="" alt="Preview" class="hidden">
       </div>
 
+      <div class="upload-metadata">
+        <label for="artworkName">Artwork Title</label>
+        <input id="artworkName" type="text" placeholder="Untitled" maxlength="100">
+        
+        <label for="artistName">Artist Name</label>
+        <input id="artistName" type="text" placeholder="Anonymous" maxlength="100">
+      </div>
+
       <div class="upload-instructions">
         We will optimize your image to load faster in the gallery.
       </div>
@@ -104,6 +112,9 @@
 
       <!-- Admin controls (hidden until unlocked) -->
       <div id="adminControlsPanel" class="hidden">
+        <!-- Status message -->
+        <div id="adminStatus" class="adminStatus hidden" role="status" aria-live="polite"></div>
+
         <div class="adminRow">
           <label for="gridColorPicker">Tile Color</label>
           <input
@@ -118,6 +129,52 @@
             <input type="checkbox" id="outlineToggle" checked>
             Show tile outlines
           </label>
+        </div>
+
+        <!-- Clear single tile -->
+        <div class="adminSection">
+          <h3>Clear Tile</h3>
+          <div class="adminRow">
+            <input
+              type="text"
+              id="adminClearTileIdInput"
+              placeholder="Tile ID (e.g., X99)"
+              maxlength="10"
+            >
+            <button id="clearTileBtn" type="button">Clear Tile</button>
+          </div>
+        </div>
+
+        <!-- Move artwork -->
+        <div class="adminSection">
+          <h3>Move Artwork</h3>
+          <div class="adminRow">
+            <input
+              type="text"
+              id="adminMoveFromInput"
+              placeholder="From: X99"
+              maxlength="10"
+            >
+          </div>
+          <div class="adminRow">
+            <input
+              type="text"
+              id="adminMoveToInput"
+              placeholder="To: X12"
+              maxlength="10"
+            >
+          </div>
+          <div class="adminRow">
+            <button id="moveArtworkBtn" type="button">Move Artwork</button>
+          </div>
+        </div>
+
+        <div class="adminRow">
+          <button id="clearAllTilesBtn" type="button">Clear All Tiles</button>
+        </div>
+
+        <div class="adminRow">
+          <button id="undoBtn" type="button" disabled>Undo</button>
         </div>
 
         <div class="adminRow">

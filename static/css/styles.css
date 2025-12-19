@@ -373,6 +373,37 @@ label {
    UPLOAD MODAL — specifics
    ===================================================== */
 
+/* Upload metadata inputs */
+.upload-metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.upload-metadata label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 2px;
+}
+
+.upload-metadata input {
+  padding: 8px 10px;
+  background: var(--input-bg);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.upload-metadata input:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px rgba(200, 220, 255, 0.2);
+}
+
 /* The preview area — shows selected image */
 .previewBox {
   width: 100%;
@@ -502,6 +533,65 @@ label {
 .adminRow label {
   font-size: 14px;
   color: rgba(255,255,255,0.85);
+}
+
+.adminSection {
+  margin: 16px 0;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+}
+
+.adminSection h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+}
+
+.adminSection .adminRow {
+  border-top: none;
+  padding: 6px 0;
+}
+
+.adminSection input[type="text"] {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--input-bg);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 13px;
+  font-family: monospace;
+  text-transform: uppercase;
+}
+
+.adminSection input[type="text"]:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px rgba(200, 220, 255, 0.2);
+}
+
+.adminStatus {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: rgba(100, 150, 255, 0.15);
+  border: 1px solid rgba(100, 150, 255, 0.3);
+  border-radius: 4px;
+  font-size: 13px;
+  color: rgba(200, 220, 255, 0.95);
+}
+
+.adminStatus.error {
+  background: rgba(255, 100, 100, 0.15);
+  border-color: rgba(255, 100, 100, 0.3);
+  color: rgba(255, 150, 150, 0.95);
+}
+
+.adminStatus.success {
+  background: rgba(100, 255, 150, 0.15);
+  border-color: rgba(100, 255, 150, 0.3);
+  color: rgba(150, 255, 180, 0.95);
 }
 
 #gridColorPicker {

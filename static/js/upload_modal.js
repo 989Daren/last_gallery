@@ -7,6 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("uploadFile");
   const previewImg = document.getElementById("previewImage");
   const continueBtn = document.getElementById("uploadContinue");
+  const artworkNameInput = document.getElementById("artworkName");
+  const artistNameInput = document.getElementById("artistName");
 
   // ===== State =====
   let selectedFile = null;
@@ -16,15 +18,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===== Constants =====
   const LOG_PREFIX = "[upload_modal]";
   const SUPPORTED_TYPES_RE = /^image\/(png|jpeg)$/;
-  const OUTPUT_SIZE = 1024;
+  const TILE_SIZE = 1024;        // Square tile image (cropped)
+  const POPUP_MAX_SIZE = 1792;   // Popup image max long edge (uncropped)
   const OUTPUT_MIME = "image/jpeg";
   const OUTPUT_QUALITY = 0.9;
 
   // Toggle this if you want quieter console output
-  const DEBUG = true;
+  const DEBUG = false;
 
   // ===== Guard =====
-  if (!modal || !openBtn || !cancelBtn || !fileInput || !previewImg || !continueBtn) {
+  if (!modal || !openBtn || !cancelBtn || !fileInput || !previewImg || !continueBtn || !artworkNameInput || !artistNameInput) {
     console.warn(`${LOG_PREFIX} Missing required DOM elements.`);
     return;
   }
@@ -71,6 +74,8 @@ document.addEventListener("DOMContentLoaded", () => {
     previewImg.classList.add("hidden");
 
     fileInput.value = "";
+    artworkNameInput.value = "";
+    artistNameInput.value = "";
     selectedFile = null;
     continueBtn.disabled = true;
   }
@@ -85,8 +90,36 @@ document.addEventListener("DOMContentLoaded", () => {
     resetModalState();
   }
 
-  // ===== Resize/optimize image =====
-  async function resizeImage(file) {
+  // ===== Generate tile image (square crop from Cropper) =====
+  async function getTileImage() {
+    if (!cropper) {
+      throw new Error("Cropper not initialized");
+    }
+
+    return new Promise((resolve, reject) => {
+      const canvas = cropper.getCroppedCanvas({
+        width: TILE_SIZE,
+        height: TILE_SIZE,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: "high"
+      });
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("Failed to create tile image blob"));
+          }
+        },
+        OUTPUT_MIME,
+        OUTPUT_QUALITY
+      );
+    });
+  }
+
+  // ===== Generate popup image (uncropped, max 1792 long edge) =====
+  async function getPopupImage(file) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       
@@ -94,18 +127,17 @@ document.addEventListener("DOMContentLoaded", () => {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
 
-        // Calculate dimensions maintaining aspect ratio
         let width = img.width;
         let height = img.height;
         
-        // If image is larger than OUTPUT_SIZE, scale it down
-        if (width > OUTPUT_SIZE || height > OUTPUT_SIZE) {
+        // Scale down if larger than POPUP_MAX_SIZE on either dimension
+        if (width > POPUP_MAX_SIZE || height > POPUP_MAX_SIZE) {
           if (width > height) {
-            height = (height / width) * OUTPUT_SIZE;
-            width = OUTPUT_SIZE;
+            height = (height / width) * POPUP_MAX_SIZE;
+            width = POPUP_MAX_SIZE;
           } else {
-            width = (width / height) * OUTPUT_SIZE;
-            height = OUTPUT_SIZE;
+            width = (width / height) * POPUP_MAX_SIZE;
+            height = POPUP_MAX_SIZE;
           }
         }
 
@@ -122,7 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (blob) {
               resolve(blob);
             } else {
-              reject(new Error("Failed to create blob from canvas"));
+              reject(new Error("Failed to create popup image blob"));
             }
           },
           OUTPUT_MIME,
@@ -132,7 +164,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       img.onerror = () => {
         URL.revokeObjectURL(img.src);
-        reject(new Error("Failed to load image"));
+        reject(new Error("Failed to load image for popup"));
       };
 
       img.src = URL.createObjectURL(file);
@@ -184,33 +216,158 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   continueBtn.addEventListener("click", async () => {
+    if (DEBUG) console.log("UPLOAD CLICKED: about to POST /api/upload_assets");
+    
     if (!selectedFile) {
-      console.warn(`${LOG_PREFIX} Continue clicked but no file selected.`);
+      console.warn("Upload blocked: no file selected");
+      return;
+    }
+
+    if (!cropper) {
+      console.warn("Upload blocked: cropper not initialized");
       return;
     }
 
     try {
-      const resizedBlob = await resizeImage(selectedFile);
+      continueBtn.disabled = true;
+      continueBtn.textContent = "Uploading...";
+
+      // Generate both images
+      log("Generating tile image (square crop)...");
+      const tileBlob = await getTileImage();
       
-      log("Image resized/optimized ✅", { 
-        originalSize: selectedFile.size, 
-        optimizedSize: resizedBlob.size, 
-        type: resizedBlob.type 
+      if (!tileBlob) {
+        console.warn("Upload blocked: missing tile image blob");
+        throw new Error("Failed to generate tile image");
+      }
+      
+      log("Generating popup image (uncropped)...");
+      const popupBlob = await getPopupImage(selectedFile);
+      
+      if (!popupBlob) {
+        console.warn("Upload blocked: missing popup image blob");
+        throw new Error("Failed to generate popup image");
+      }
+      
+      log("Images generated ✅", { 
+        tileSize: tileBlob.size, 
+        popupSize: popupBlob.size 
       });
 
-      // Proof-of-life: show the optimized result
-      revokeObjectUrl();
-      currentObjectUrl = URL.createObjectURL(resizedBlob);
-      previewImg.src = currentObjectUrl;
-      previewImg.classList.remove("hidden");
+      // Prepare form data
+      const formData = new FormData();
+      formData.append("tile_image", tileBlob, "tile.jpg");
+      formData.append("popup_image", popupBlob, "popup.jpg");
+      formData.append("artwork_name", artworkNameInput.value.trim() || "Untitled");
+      formData.append("artist_name", artistNameInput.value.trim() || "Anonymous");
 
-      // Disable Continue after optimization (until user chooses another file)
-      continueBtn.disabled = true;
+      // Upload to server
+      if (DEBUG) console.log("FormData ready, sending...");
+      log("Uploading to /api/upload_assets...");
+      const response = await fetch("/api/upload_assets", {
+        method: "POST",
+        body: formData
+      });
 
-      // Next step: upload `resizedBlob` to Flask with fetch + FormData
-      // For now, we just show the optimized preview
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      log("Upload successful ✅", result);
+      if (DEBUG) console.log(`${LOG_PREFIX} Server response:`, result);
+
+      // Select a random empty XS tile for the uploaded artwork
+      const wall = document.getElementById("galleryWall");
+      if (!wall) {
+        console.error(`${LOG_PREFIX} Gallery wall not found`);
+        closeModal();
+        return;
+      }
+
+      // Build list of eligible empty XS tiles using computed dimensions
+      const allTiles = Array.from(wall.querySelectorAll('.tile'));
+      if (DEBUG) console.log("tiles total:", allTiles.length);
+
+      // Identify XS tiles by their rendered size (85x85 ±2px tolerance)
+      const XS_SIZE = 85;
+      const TOLERANCE = 2;
+      
+      const xsTiles = allTiles.filter(tile => {
+        const rect = tile.getBoundingClientRect();
+        const widthMatch = Math.abs(rect.width - XS_SIZE) <= TOLERANCE;
+        const heightMatch = Math.abs(rect.height - XS_SIZE) <= TOLERANCE;
+        return widthMatch && heightMatch;
+      });
+      
+      if (DEBUG) console.log("xs tiles found:", xsTiles.length);
+
+      // Filter for empty XS tiles (no occupied dataset AND no occupied class)
+      const emptyXSTiles = xsTiles.filter(tile => {
+        const hasOccupiedData = tile.dataset.occupied === "1";
+        const hasOccupiedClass = tile.classList.contains("occupied");
+        return !hasOccupiedData && !hasOccupiedClass;
+      });
+
+      if (DEBUG) console.log("eligible empty xs:", emptyXSTiles.length);
+
+      if (emptyXSTiles.length === 0) {
+        console.warn(`${LOG_PREFIX} No empty XS tiles available`);
+        alert("Upload successful, but no empty XS tiles available to display artwork.");
+        closeModal();
+        return;
+      }
+
+      // Randomly select one
+      const randomIndex = Math.floor(Math.random() * emptyXSTiles.length);
+      const selectedTile = emptyXSTiles[randomIndex];
+      const tileId = selectedTile.dataset.id;
+      
+      if (DEBUG) console.log(`${LOG_PREFIX} Chosen tile_id: ${tileId}`);
+
+      // Assign the asset to the selected tile
+      log("Assigning asset to tile via /api/assign_tile...");
+      const assignResponse = await fetch("/api/assign_tile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          tile_id: tileId,
+          asset_id: result.asset_id
+        })
+      });
+
+      if (!assignResponse.ok) {
+        throw new Error(`Tile assignment failed: ${assignResponse.status} ${assignResponse.statusText}`);
+      }
+
+      const assignResult = await assignResponse.json();
+      if (assignResult.ok) {
+        log("Tile assignment successful ✅");
+        if (DEBUG) console.log(`${LOG_PREFIX} Assignment confirmed:`, assignResult);
+        
+        // Apply the asset to the tile visually
+        const tileEl = wall.querySelector(`.tile[data-id="${tileId}"]`);
+        if (tileEl && window.applyAssetToTile) {
+          window.applyAssetToTile(tileEl, result);
+          log("Asset applied to tile visually ✅");
+        } else {
+          console.warn(`${LOG_PREFIX} Could not find tile element or applyAssetToTile function`);
+        }
+      } else {
+        throw new Error("Tile assignment returned ok: false");
+      }
+
+      // Close modal and reset
+      closeModal();
+      
+      // TODO: Next step - refresh wall state or call applyAssetToTile directly
+      
     } catch (error) {
-      console.error(`${LOG_PREFIX} Failed to resize image:`, error);
+      console.error(`${LOG_PREFIX} Upload failed:`, error);
+      continueBtn.disabled = false;
+      continueBtn.textContent = "Continue";
     }
   });
 });
