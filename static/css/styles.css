@@ -292,6 +292,11 @@ label {
   display: none;
 }
 
+/* Hide label when tile is occupied */
+.tile.occupied .tile-label {
+  display: none;
+}
+
 /* Label inside each tile */
 .tile-label {
   position: absolute;

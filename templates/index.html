@@ -14,7 +14,9 @@
   <!-- Expose server state to JS (single source of truth) -->
   <script>
     window.SERVER_GRID_COLOR = "{{ grid_color|default('#b84c27') }}";
-    window.SERVER_PLACEMENT = {{ placement|tojson }};
+    // DISABLED: No longer inject demo placement data
+    // Tiles start empty - artwork only comes from upload system database
+    window.SERVER_PLACEMENT = {};
   </script>
 </head>
 
