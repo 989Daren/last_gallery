@@ -7,6 +7,10 @@ import xml.etree.ElementTree as ET
 
 app = Flask(__name__)
 
+# ---- Kill-switch for demo/test art auto-population ----
+# Set to False to disable all auto-generation of placeholder artwork
+ENABLE_DEMO_AUTOFILL = False
+
 # ---- Grid color config ----
 COLOR_CONFIG = "grid_color.json"
 DEFAULT_GRID_COLOR = "#aa6655"  # set this to whatever default you want
@@ -190,7 +194,8 @@ def index():
     placement = load_placement()
 
     # If there's no saved placement yet, generate one server-side and persist it.
-    if not placement:
+    # GATED: Only auto-generate demo art if ENABLE_DEMO_AUTOFILL is True
+    if not placement and ENABLE_DEMO_AUTOFILL:
         new_placement = generate_initial_placement()
         if new_placement:
             save_placement(new_placement)
@@ -214,6 +219,32 @@ def set_grid_color():
     return jsonify({"status": "ok", "color": color})
 
 
+@app.route("/api/wall_state", methods=["GET"])
+def get_wall_state():
+    """Return the current wall state as JSON.
+    
+    Response format:
+    {
+      "assignments": [
+        {
+          "tile_id": "X1",
+          "tile_url": "/uploads/tile_123.png",
+          "popup_url": "/uploads/popup_123.png",
+          "artwork_name": "Title",
+          "artist_name": "Artist",
+          "asset_id": "123"
+        }
+      ]
+    }
+    
+    If no assignments exist, returns {"assignments": []}.
+    No demo fallback logic.
+    """
+    # Return empty array until storage/DB is wired
+    # TODO: Load from database or placement file when ready
+    return jsonify({"assignments": []}), 200
+
+
 @app.route("/shuffle", methods=["POST"])
 def shuffle_placement():
     """Regenerate and save a new randomized placement mapping.
@@ -221,7 +252,13 @@ def shuffle_placement():
     Expects JSON body like { "pin": "8375" }.
     If pin is incorrect, returns 401 with { "ok": false, "error": "Unauthorized" }.
     On success saves a new placement and returns { "ok": true }.
+    
+    GATED: Only functional if ENABLE_DEMO_AUTOFILL is True.
     """
+    # Kill-switch check: refuse if demo autofill is disabled
+    if not ENABLE_DEMO_AUTOFILL:
+        return jsonify({"ok": False, "error": "Shuffle feature disabled"}), 403
+    
     data = request.get_json(silent=True) or {}
     pin = data.get("pin")
 

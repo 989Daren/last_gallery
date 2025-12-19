@@ -4,6 +4,10 @@ const log  = (...args) => DEBUG && console.log(...args);
 const warn = (...args) => DEBUG && console.warn(...args);
 const error = (...args) => console.error(...args);
 
+// === Kill-switch for demo/test art auto-population ===
+// Set to false to disable all auto-generation of placeholder artwork
+const ENABLE_DEMO_AUTOFILL = false;
+
 // main.js
 // SVG → grid renderer using runtime parsing guide.
 // Preserves existing header defined in HTML.
@@ -302,49 +306,11 @@ function applyGridColor(color) {
 }
 
 function assignArtworkUrls(tiles) {
-  // If server provides explicit placement mapping, use it; otherwise random test assignment.
-  const serverPlacement = window.SERVER_PLACEMENT || {};
-  const hasServerPlacement = serverPlacement && Object.keys(serverPlacement).length > 0;
-
-  if (hasServerPlacement) {
-    tiles.forEach(tile => {
-      const art = serverPlacement[tile.id] || serverPlacement[String(tile.id)];
-      if (art) tile.artUrl = art;
-    });
-    return;
-  }
-
-  // Development fallback: assign test art to random tiles
-  const testArt = [
-    "/static/artwork/Timing.png",
-    "/static/artwork/Doom Scrolling.png",
-    "/static/artwork/Izzy in Spring.png",
-    "/static/artwork/Path to Your Heart.png",
-    "/static/artwork/Class Clown.png",
-    "/static/artwork/Andrea's Arch.png",
-    "/static/artwork/Daren's Dream.png",
-    "/static/artwork/Twilight Circus.jpg",
-    "/static/artwork/Caught in the Storm.png",
-    "/static/artwork/Perspective.jpg",
-    "/static/artwork/I'll Pay You Back.png",
-    "/static/artwork/The Stranger.png"
-  ];
-
-  const tileCount = tiles.length;
-  const artCount = testArt.length;
-  const assignCount = Math.min(tileCount, artCount);
-
-  const tileIndices = Array.from({ length: tileCount }, (_, i) => i);
-
-  // Fisher–Yates shuffle
-  for (let i = tileIndices.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [tileIndices[i], tileIndices[j]] = [tileIndices[j], tileIndices[i]];
-  }
-
-  for (let k = 0; k < assignCount; k++) {
-    tiles[tileIndices[k]].artUrl = testArt[k];
-  }
+  // DISABLED: No auto-population of demo/test art
+  // Tiles start empty - artwork only comes from database hydration via upload system
+  // Server placement is also disabled to prevent any auto-fill on load
+  
+  log("assignArtworkUrls: Skipping all auto-population (disabled)");
 }
 
 function buildLayoutTiles(tiles, totalHeight) {
@@ -355,6 +321,98 @@ function buildLayoutTiles(tiles, totalHeight) {
     return { ...tile, y: totalHeight - h - tile.y };
   });
 }
+
+// Single source of truth for clearing a tile; use everywhere.
+function resetTileToEmpty(tileEl) {
+  // 1. Remove art image container and all images inside
+  const artFrame = tileEl.querySelector(".art-frame");
+  if (artFrame) {
+    artFrame.remove();
+  }
+  
+  // 2. Remove any standalone art images (fallback)
+  const artImages = tileEl.querySelectorAll("img.tile-art, .art-imgwrap img");
+  artImages.forEach(img => img.remove());
+  
+  // 3. Remove occupancy data attributes
+  tileEl.removeAttribute("data-occupied");
+  tileEl.removeAttribute("data-tile-url");
+  tileEl.removeAttribute("data-popup-url");
+  tileEl.removeAttribute("data-artwork-name");
+  tileEl.removeAttribute("data-artist-name");
+  tileEl.removeAttribute("data-medium");
+  tileEl.removeAttribute("data-size");
+  tileEl.removeAttribute("data-art-url");
+  tileEl.removeAttribute("data-asset-id");
+  
+  // 4. Clear dataset properties (camelCase accessors)
+  delete tileEl.dataset.occupied;
+  delete tileEl.dataset.tileUrl;
+  delete tileEl.dataset.popupUrl;
+  delete tileEl.dataset.artworkName;
+  delete tileEl.dataset.artistName;
+  delete tileEl.dataset.medium;
+  delete tileEl.dataset.size;
+  delete tileEl.dataset.artUrl;
+  delete tileEl.dataset.assetId;
+  
+  // 5. Remove occupancy/glow classes
+  tileEl.classList.remove("occupied", "has-art", "filled", "hasImage", "hasArtwork", "glow", "lit");
+  
+  // 6. Clear any inline background styles
+  tileEl.style.backgroundImage = "";
+  
+  // Tile is now in default empty state with visible label
+}
+
+// Single source of truth for applying artwork to a tile; use everywhere.
+function applyAssetToTile(tileEl, asset) {
+  // 1. Always reset first to guarantee clean baseline
+  resetTileToEmpty(tileEl);
+  
+  // 2. Create art image with proper structure: .art-frame > .art-imgwrap > img.tile-art
+  const img = document.createElement("img");
+  img.src = asset.tile_url;
+  img.classList.add("tile-art");
+  img.alt = asset.artwork_name || "Artwork";
+  
+  const wrap = document.createElement("div");
+  wrap.classList.add("art-imgwrap");
+  wrap.appendChild(img);
+  
+  const frame = document.createElement("div");
+  frame.classList.add("art-frame");
+  frame.appendChild(wrap);
+  
+  // 3. Insert art-frame before label (ensures label doesn't overlay art)
+  const label = tileEl.querySelector(".tile-label");
+  if (label) {
+    tileEl.insertBefore(frame, label);
+  } else {
+    tileEl.appendChild(frame);
+  }
+  
+  // 4. Set occupancy dataset fields
+  tileEl.dataset.occupied = "1";
+  tileEl.dataset.tileUrl = asset.tile_url;
+  tileEl.dataset.popupUrl = asset.popup_url;
+  tileEl.dataset.artworkName = asset.artwork_name || asset.title || "";
+  tileEl.dataset.artistName = asset.artist_name || "";
+  
+  // Optional metadata
+  if (asset.medium) tileEl.dataset.medium = asset.medium;
+  if (asset.size) tileEl.dataset.size = asset.size;
+  if (asset.asset_id) tileEl.dataset.assetId = asset.asset_id;
+  
+  // 5. Apply occupied class (triggers glow via CSS)
+  tileEl.classList.add("occupied");
+  
+  // Rendering complete - tile now displays artwork with metadata
+}
+
+// Export for use by other scripts (e.g., upload_modal.js)
+window.applyAssetToTile = applyAssetToTile;
+window.resetTileToEmpty = resetTileToEmpty;
 
 function renderTiles(wall, layoutTiles) {
   wall.innerHTML = "";
@@ -369,36 +427,29 @@ function renderTiles(wall, layoutTiles) {
     el.dataset.size = tile.size;
     el.dataset.id = tile.id;
 
-    if (tile.artUrl) el.dataset.artUrl = tile.artUrl;
-
     el.style.position = "absolute";
     el.style.left = tile.x + "px";
     el.style.top = tile.y + "px";
     el.style.width = w + "px";
     el.style.height = h + "px";
 
-    if (tile.artUrl) {
-      const img = document.createElement("img");
-      img.src = tile.artUrl;
-      img.classList.add("tile-art");
-
-      const wrap = document.createElement("div");
-      wrap.classList.add("art-imgwrap");
-      wrap.appendChild(img);
-
-      const frame = document.createElement("div");
-      frame.classList.add("art-frame");
-      frame.appendChild(wrap);
-
-      el.appendChild(frame);
-    }
-
+    // Always create label first (establishes baseline)
     const label = document.createElement("span");
     label.classList.add("tile-label");
     label.textContent = tile.id;
     el.appendChild(label);
 
     wall.appendChild(el);
+    
+    // If tile has artwork, apply it using centralized function
+    if (tile.artUrl) {
+      applyAssetToTile(el, {
+        tile_url: tile.artUrl,
+        popup_url: tile.artUrl,
+        artwork_name: "",
+        artist_name: ""
+      });
+    }
   });
 }
 
@@ -528,7 +579,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      assignArtworkUrls(tiles);
+      // GATED: Only assign demo artwork if ENABLE_DEMO_AUTOFILL is true
+      if (ENABLE_DEMO_AUTOFILL) {
+        assignArtworkUrls(tiles);
+      }
 
       const { width, height } = computeWallDimensions(tiles);
       wall.style.position = "relative";
@@ -538,19 +592,54 @@ document.addEventListener("DOMContentLoaded", () => {
       const layoutTiles = buildLayoutTiles(tiles, height);
       renderTiles(wall, layoutTiles);
 
-      // Tile click → open popup (delegated; only for tiles with artwork)
+      // Clean all tiles to baseline empty state at boot (before any fetches/hydration)
+      const allTiles = wall.querySelectorAll(".tile");
+      allTiles.forEach(tile => resetTileToEmpty(tile));
+      log("Reset", allTiles.length, "tiles to empty state at boot");
+
+      // Fetch wall state from server
+      fetch('/api/wall_state')
+        .then(response => response.json())
+        .then(data => {
+          console.log('wall_state response:', data);
+          
+          const assignments = data.assignments || [];
+          console.log('wall_state assignments:', assignments.length);
+          
+          assignments.forEach(assignment => {
+            const tileEl = wall.querySelector(`.tile[data-id="${assignment.tile_id}"]`);
+            if (tileEl) {
+              applyAssetToTile(tileEl, assignment);
+            } else {
+              console.warn(`Tile not found for assignment:`, assignment.tile_id);
+            }
+          });
+        })
+        .catch(err => {
+          console.error('Failed to fetch wall_state:', err);
+        });
+
+      // Tile click → open popup (delegated; only for tiles with uploaded artwork)
       wall.addEventListener("click", (e) => {
         const tileEl = e.target.closest(".tile");
         if (!tileEl) return;
 
-        const artUrl = tileEl.dataset.artUrl;
-        if (!artUrl) return;
+        // Check for uploaded asset with metadata (from database hydration)
+        const popupUrl = tileEl.dataset.popupUrl;
+        const artworkName = tileEl.dataset.artworkName;
+        const artistName = tileEl.dataset.artistName;
 
-        // Demo metadata (title from filename, artist fixed, headers-only info)
+        // Only open popup if tile has uploaded artwork (ignore demo artUrl)
+        if (!popupUrl) return;
+
+        // Use metadata from dataset with proper fallbacks
+        const displayTitle = artworkName || "Untitled";
+        const displayArtist = artistName || "Anonymous";
+
         openArtworkPopup({
-          imgSrc: artUrl,
-          title: titleFromFilename(artUrl),
-          artist: "Daren Daniels",
+          imgSrc: popupUrl,
+          title: displayTitle,
+          artist: displayArtist,
           infoText: demoInfoHeadersOnly(),
         });
       });
@@ -587,37 +676,11 @@ document.addEventListener("DOMContentLoaded", () => {
       updateOutlineState();
 
       // ---- Shuffle handling (admin modal button) ----
+      // DISABLED: Shuffle functionality removed to prevent random art reassignment
       const shuffleButton = $("shuffleButton");
       if (shuffleButton) {
-        shuffleButton.addEventListener("click", async () => {
-          if (!adminUnlocked) {
-            openAdminModal();
-            showPinError("Enter PIN to use admin controls");
-            return;
-          }
-
-          try {
-            const r = await fetch(ENDPOINTS.shuffle, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ pin: ADMIN_PIN }),
-            });
-
-            if (r.status === 401) {
-              alert("Incorrect PIN");
-              return;
-            }
-
-            if (r.ok) {
-              window.location.reload();
-              return;
-            }
-
-            alert("Shuffle failed");
-          } catch (err) {
-            error("Shuffle request failed", err);
-            alert("Shuffle failed");
-          }
+        shuffleButton.addEventListener("click", () => {
+          alert("Shuffle feature is disabled. Use the upload system to manage artwork placement.");
         });
       }
     } catch (err) {
