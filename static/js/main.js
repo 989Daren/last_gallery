@@ -1042,11 +1042,42 @@ document.addEventListener("DOMContentLoaded", () => {
       updateOutlineState();
 
       // ---- Shuffle handling (admin modal button) ----
-      // DISABLED: Shuffle functionality removed to prevent random art reassignment
       const shuffleButton = $("shuffleButton");
       if (shuffleButton) {
-        shuffleButton.addEventListener("click", () => {
-          alert("Shuffle feature is disabled. Use the upload system to manage artwork placement.");
+        shuffleButton.addEventListener("click", async () => {
+          // Get PIN from admin input field
+          const pinEl = $("adminPinInput");
+          const pin = (pinEl?.value || "").trim();
+          
+          if (!pin) {
+            alert("Enter admin PIN first.");
+            return;
+          }
+          
+          try {
+            const response = await fetch("/shuffle", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pin })
+            });
+            
+            if (response.status === 403 || response.status === 401) {
+              alert("Forbidden: invalid admin PIN.");
+              return;
+            }
+            
+            if (!response.ok) {
+              alert("Shuffle failed: " + response.status);
+              return;
+            }
+            
+            // Success - refresh wall to show shuffled placements
+            await refreshWallFromServer();
+            
+          } catch (err) {
+            console.error("Shuffle error:", err);
+            alert("Shuffle failed: " + err.message);
+          }
         });
       }
     } catch (err) {
