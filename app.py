@@ -716,7 +716,7 @@ def admin_move_tile_asset():
 
 @app.route("/shuffle", methods=["POST"])
 def shuffle_placement():
-    """Shuffle existing artwork to random tiles.
+    """Shuffle existing artwork to random tiles (including empty tiles).
 
     Expects JSON body like { "pin": "8375" }.
     If pin is incorrect, returns 401 with { "ok": false, "error": "Unauthorized" }.
@@ -736,17 +736,27 @@ def shuffle_placement():
     if not wall_state:
         return jsonify({"ok": False, "error": "No artwork to shuffle"}), 400
     
-    # Extract tile IDs and asset IDs
-    tile_ids = list(wall_state.keys())
+    # Get asset IDs (artworks to shuffle)
     asset_ids = list(wall_state.values())
     
-    # Shuffle asset assignments
-    random.shuffle(asset_ids)
+    # Get all available tiles from SVG
+    svg_path = os.path.join('static', 'grid_full.svg')
+    all_tiles = _parse_svg_tiles(svg_path)
     
-    # Create new mapping
-    new_state = {tile_id: asset_id for tile_id, asset_id in zip(tile_ids, asset_ids)}
+    if not all_tiles or len(all_tiles) < len(asset_ids):
+        return jsonify({"ok": False, "error": "Not enough tiles available"}), 400
     
-    # Save shuffled state
+    # Get all tile IDs (includes empty tiles)
+    all_tile_ids = [tile['id'] for tile in all_tiles]
+    
+    # Randomly select N tiles for the N artworks
+    random.shuffle(all_tile_ids)
+    destination_tile_ids = all_tile_ids[:len(asset_ids)]
+    
+    # Create new wall state with only selected tiles
+    new_state = {tile_id: asset_id for tile_id, asset_id in zip(destination_tile_ids, asset_ids)}
+    
+    # Save shuffled state (clears tiles not in new_state)
     save_wall_state(new_state)
     
     return jsonify({"ok": True})
