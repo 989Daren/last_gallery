@@ -716,26 +716,39 @@ def admin_move_tile_asset():
 
 @app.route("/shuffle", methods=["POST"])
 def shuffle_placement():
-    """Regenerate and save a new randomized placement mapping.
+    """Shuffle existing artwork to random tiles.
 
     Expects JSON body like { "pin": "8375" }.
     If pin is incorrect, returns 401 with { "ok": false, "error": "Unauthorized" }.
-    On success saves a new placement and returns { "ok": true }.
+    On success shuffles existing artwork and returns { "ok": true }.
     
-    GATED: Only functional if ENABLE_DEMO_AUTOFILL is True.
+    Shuffle is allowed independently of demo autofill.
     """
-    # Kill-switch check: refuse if demo autofill is disabled
-    if not ENABLE_DEMO_AUTOFILL:
-        return jsonify({"ok": False, "error": "Shuffle feature disabled"}), 403
-    
     data = request.get_json(silent=True) or {}
     pin = data.get("pin")
 
     if pin != "8375":
         return jsonify({"ok": False, "error": "Unauthorized"}), 401
 
-    new_mapping = generate_initial_placement()
-    save_placement(new_mapping)
+    # Load current wall state
+    wall_state = load_wall_state()
+    
+    if not wall_state:
+        return jsonify({"ok": False, "error": "No artwork to shuffle"}), 400
+    
+    # Extract tile IDs and asset IDs
+    tile_ids = list(wall_state.keys())
+    asset_ids = list(wall_state.values())
+    
+    # Shuffle asset assignments
+    random.shuffle(asset_ids)
+    
+    # Create new mapping
+    new_state = {tile_id: asset_id for tile_id, asset_id in zip(tile_ids, asset_ids)}
+    
+    # Save shuffled state
+    save_wall_state(new_state)
+    
     return jsonify({"ok": True})
 
 
