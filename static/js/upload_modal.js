@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedFile = null;
   let currentObjectUrl = null;
   let cropper = null;
+  let uploadInFlight = false;  // Guard to ensure "Uploading..." only shows during actual upload
 
   // ===== Constants =====
   const LOG_PREFIX = "[upload_modal]";
@@ -36,6 +37,30 @@ document.addEventListener("DOMContentLoaded", () => {
   function log(...args) {
     if (!DEBUG) return;
     console.log(LOG_PREFIX, ...args);
+  }
+
+  function setPrimaryButtonState(mode) {
+    /**
+     * Centralized button state management to prevent race conditions.
+     * 
+     * @param {string} mode - One of: "continue" | "uploading" | "disabled"
+     */
+    switch (mode) {
+      case "continue":
+        continueBtn.textContent = "Continue";
+        continueBtn.disabled = false;
+        break;
+      case "uploading":
+        continueBtn.textContent = "Uploading...";
+        continueBtn.disabled = true;
+        break;
+      case "disabled":
+        continueBtn.textContent = "Continue";
+        continueBtn.disabled = true;
+        break;
+      default:
+        console.warn(`${LOG_PREFIX} Unknown button state: ${mode}`);
+    }
   }
 
   function revokeObjectUrl() {
@@ -77,11 +102,14 @@ document.addEventListener("DOMContentLoaded", () => {
     artworkNameInput.value = "";
     artistNameInput.value = "";
     selectedFile = null;
-    continueBtn.disabled = true;
+    uploadInFlight = false;
+    setPrimaryButtonState("disabled");
   }
 
   function openModal() {
     modal.classList.remove("hidden");
+    uploadInFlight = false;
+    setPrimaryButtonState("disabled");
   }
 
   function closeModal() {
@@ -196,7 +224,12 @@ document.addEventListener("DOMContentLoaded", () => {
       previewImg.onerror = null;
 
       previewImg.classList.remove("hidden");
-      continueBtn.disabled = false;
+      
+      // Only enable button if no upload is in flight
+      if (!uploadInFlight) {
+        setPrimaryButtonState("continue");
+      }
+      
       log("Image loaded successfully");
 
       destroyCropper(); // Clean up any existing instance
@@ -229,10 +262,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      continueBtn.disabled = true;
-      continueBtn.textContent = "Uploading...";
+      // Disable button during image generation but keep "Continue" text
+      setPrimaryButtonState("disabled");
 
-      // Generate both images
+      // Generate both images (button stays "Continue" during generation)
       log("Generating tile image (square crop)...");
       const tileBlob = await getTileImage();
       
@@ -261,6 +294,10 @@ document.addEventListener("DOMContentLoaded", () => {
       formData.append("artwork_name", artworkNameInput.value.trim() || "Untitled");
       formData.append("artist_name", artistNameInput.value.trim() || "Anonymous");
 
+      // CRITICAL: Only set "Uploading..." immediately before network request begins
+      uploadInFlight = true;
+      setPrimaryButtonState("uploading");
+      
       // Upload to server
       if (DEBUG) console.log("FormData ready, sending...");
       log("Uploading to /api/upload_assets...");
@@ -366,8 +403,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
     } catch (error) {
       console.error(`${LOG_PREFIX} Upload failed:`, error);
-      continueBtn.disabled = false;
-      continueBtn.textContent = "Continue";
+      uploadInFlight = false;
+      setPrimaryButtonState("continue");
     }
   });
 });
