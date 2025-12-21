@@ -72,6 +72,11 @@ ENABLE_DEMO_AUTOFILL = False
 # Set to True to use SQLite instead of JSON for wall_state persistence
 USE_SQLITE_PLACEMENTS = True
 
+# ---- SQLite assets metadata toggle ----
+# Set to True to store artwork metadata (title, artist) in SQLite instead of assets.json
+# Auto-migrates existing assets.json to SQLite on first run
+USE_SQLITE_ASSETS = True
+
 # ---- Grid color config ----
 COLOR_CONFIG = "grid_color.json"
 DEFAULT_GRID_COLOR = "#aa6655"  # set this to whatever default you want
@@ -134,6 +139,20 @@ def init_db():
         )
     """)
     
+    # Assets metadata table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS assets (
+            asset_id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            tile_url TEXT NOT NULL,
+            popup_url TEXT NOT NULL,
+            artwork_name TEXT NOT NULL,
+            artist_name TEXT NOT NULL,
+            notes TEXT,
+            paid INTEGER DEFAULT 0
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -170,27 +189,199 @@ def save_placement(mapping):
 
 
 def load_assets():
-    """Load assets metadata from data/assets.json.
+    """Load assets metadata from SQLite or data/assets.json.
     
-    Returns a dict keyed by asset_id. If file is missing or invalid, returns {}.
+    If USE_SQLITE_ASSETS is True, loads from SQLite database with auto-migration.
+    Otherwise loads from data/assets.json.
+    Returns a dict keyed by asset_id. If file/db is missing or invalid, returns {}.
     """
-    if os.path.exists(ASSETS_FILE):
+    if USE_SQLITE_ASSETS:
         try:
-            with open(ASSETS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f) or {}
-        except Exception:
+            init_db()
+            migrate_assets_json_to_sqlite_if_needed()
+            result = sqlite_load_assets()
+            if DEBUG_DB_TRACE:
+                print(f"LOAD_ASSETS: SQLITE mode, assets={len(result)}")
+            return result
+        except Exception as e:
+            if SERVER_DEBUG:
+                print(f"Error loading assets from SQLite: {e}")
             return {}
-    return {}
+    else:
+        # Existing JSON logic
+        if DEBUG_DB_TRACE:
+            print(f"LOAD_ASSETS: JSON mode")
+        if os.path.exists(ASSETS_FILE):
+            try:
+                with open(ASSETS_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f) or {}
+            except Exception:
+                return {}
+        return {}
 
 
 def save_assets(assets_dict):
-    """Save assets metadata to data/assets.json.
+    """Save assets metadata to SQLite or data/assets.json.
     
+    If USE_SQLITE_ASSETS is True, saves to SQLite database.
+    Otherwise saves to data/assets.json.
     Ensures the data/ directory exists before writing.
     """
-    os.makedirs(os.path.dirname(ASSETS_FILE), exist_ok=True)
-    with open(ASSETS_FILE, "w", encoding="utf-8") as f:
-        json.dump(assets_dict or {}, f, indent=2)
+    if USE_SQLITE_ASSETS:
+        if DEBUG_DB_TRACE:
+            print(f"SAVE_ASSETS: SQLITE mode, assets={len(assets_dict or {})}")
+        try:
+            init_db()
+            for asset_id, asset_data in (assets_dict or {}).items():
+                sqlite_insert_asset(
+                    asset_id=asset_id,
+                    tile_url=asset_data.get("tile_url", ""),
+                    popup_url=asset_data.get("popup_url", ""),
+                    artwork_name=asset_data.get("artwork_name", "Untitled"),
+                    artist_name=asset_data.get("artist_name", "Anonymous"),
+                    created_at=asset_data.get("created_at"),
+                    notes=asset_data.get("notes"),
+                    paid=asset_data.get("paid", 0)
+                )
+        except Exception as e:
+            if SERVER_DEBUG:
+                print(f"Error saving assets to SQLite: {e}")
+            raise
+    else:
+        # Existing JSON logic
+        if DEBUG_DB_TRACE:
+            print(f"SAVE_ASSETS: JSON mode, assets={len(assets_dict or {})}")
+        os.makedirs(os.path.dirname(ASSETS_FILE), exist_ok=True)
+        with open(ASSETS_FILE, "w", encoding="utf-8") as f:
+            json.dump(assets_dict or {}, f, indent=2)
+
+
+def sqlite_assets_count():
+    """Return the number of assets in SQLite assets table."""
+    init_db()
+    conn = sqlite3.connect(GALLERY_DB)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM assets")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+
+def sqlite_insert_asset(asset_id, tile_url, popup_url, artwork_name, artist_name, created_at=None, notes=None, paid=0):
+    """Insert or replace an asset in SQLite assets table.
+    
+    Args:
+        asset_id: UUID string
+        tile_url: URL path to tile image
+        popup_url: URL path to popup image
+        artwork_name: Title of artwork
+        artist_name: Name of artist
+        created_at: ISO timestamp (defaults to now)
+        notes: Optional notes
+        paid: Payment status (0 or 1)
+    """
+    init_db()
+    conn = sqlite3.connect(GALLERY_DB)
+    cursor = conn.cursor()
+    
+    if created_at is None:
+        created_at = datetime.utcnow().isoformat()
+    
+    cursor.execute("""
+        INSERT OR REPLACE INTO assets 
+        (asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid))
+    
+    conn.commit()
+    conn.close()
+
+
+def sqlite_load_assets():
+    """Load all assets from SQLite database.
+    
+    Returns dict keyed by asset_id with same structure as JSON load_assets().
+    """
+    init_db()
+    conn = sqlite3.connect(GALLERY_DB)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid
+        FROM assets
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    assets = {}
+    for row in rows:
+        asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid = row
+        assets[asset_id] = {
+            "asset_id": asset_id,
+            "tile_url": tile_url,
+            "popup_url": popup_url,
+            "artwork_name": artwork_name,
+            "artist_name": artist_name,
+            "created_at": created_at,
+            "notes": notes,
+            "paid": paid
+        }
+    
+    return assets
+
+
+def migrate_assets_json_to_sqlite_if_needed():
+    """Auto-migrate existing assets.json to SQLite on first run.
+    
+    Only runs when:
+    - USE_SQLITE_ASSETS is True
+    - assets.json exists
+    - SQLite assets table is empty
+    """
+    if not USE_SQLITE_ASSETS:
+        return
+    
+    # Check if migration is needed
+    if not os.path.exists(ASSETS_FILE):
+        return
+    
+    if sqlite_assets_count() > 0:
+        return
+    
+    # Load JSON assets
+    try:
+        with open(ASSETS_FILE, "r", encoding="utf-8") as f:
+            json_assets = json.load(f) or {}
+    except Exception:
+        return
+    
+    if not json_assets:
+        return
+    
+    # Migrate each asset
+    migration_time = datetime.utcnow().isoformat()
+    for asset_id, asset_data in json_assets.items():
+        created_at = asset_data.get("created_at") or asset_data.get("created") or migration_time
+        tile_url = asset_data.get("tile_url", "")
+        popup_url = asset_data.get("popup_url", "")
+        artwork_name = asset_data.get("artwork_name", "Untitled")
+        artist_name = asset_data.get("artist_name", "Anonymous")
+        notes = asset_data.get("notes")
+        paid = asset_data.get("paid", 0)
+        
+        sqlite_insert_asset(
+            asset_id=asset_id,
+            tile_url=tile_url,
+            popup_url=popup_url,
+            artwork_name=artwork_name,
+            artist_name=artist_name,
+            created_at=created_at,
+            notes=notes,
+            paid=paid
+        )
+    
+    if DEBUG_DB_TRACE:
+        print(f"MIGRATION: Migrated {len(json_assets)} assets from assets.json to SQLite")
 
 
 def load_wall_state():
@@ -681,15 +872,17 @@ def upload_assets():
     # Create asset metadata
     tile_url = f"/uploads/{tile_filename}"
     popup_url = f"/uploads/{popup_filename}"
+    created_at = datetime.utcnow().isoformat()
     
     asset_data = {
         "tile_url": tile_url,
         "popup_url": popup_url,
         "artwork_name": artwork_name,
-        "artist_name": artist_name
+        "artist_name": artist_name,
+        "created_at": created_at
     }
     
-    # Save to assets.json
+    # Save to assets backend (SQLite or JSON based on USE_SQLITE_ASSETS flag)
     assets = load_assets()
     assets[asset_id] = asset_data
     save_assets(assets)
