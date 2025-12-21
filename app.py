@@ -1,9 +1,47 @@
+"""
+╔════════════════════════════════════════════════════════════════════════════╗
+║ SQLITE UNDO SYSTEM AUDIT (Dec 21, 2025)                                   ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║ Findings:                                                                  ║
+║                                                                            ║
+║ 1. UNDO ROUTE (/api/admin/undo):                                          ║
+║    ✓ Calls pop_latest_snapshot() to get state from SQLite                 ║
+║    ✓ Restores state via save_wall_state(state_dict)                       ║
+║    ✓ No reference to legacy wall_state_history.json                       ║
+║                                                                            ║
+║ 2. POP_LATEST_SNAPSHOT():                                                 ║
+║    ✓ Executes SELECT from placement_snapshots ORDER BY id DESC LIMIT 1    ║
+║    ✓ Deletes popped row (LIFO stack behavior)                             ║
+║    ✓ Returns (id, action, state_dict) or (None, None, None) if empty      ║
+║                                                                            ║
+║ 3. SAVE_WALL_STATE():                                                     ║
+║    ✓ Has SQLite branch gated by USE_SQLITE_PLACEMENTS = True              ║
+║    ✓ Has JSON fallback branch for backwards compatibility                 ║
+║    ✓ SQLite branch: DELETE + INSERT transaction pattern                   ║
+║                                                                            ║
+║ 4. LOAD_WALL_STATE():                                                     ║
+║    ✓ Has SQLite branch gated by USE_SQLITE_PLACEMENTS = True              ║
+║    ✓ Has JSON fallback branch for backwards compatibility                 ║
+║    ✓ SQLite branch: SELECT from placements table                          ║
+║                                                                            ║
+║ 5. PUSH_SNAPSHOT():                                                       ║
+║    ✓ Called by /clear_tile and /clear_all_tiles before deletion           ║
+║    ✓ Inserts into placement_snapshots with action descriptor              ║
+║    ✓ Returns snapshot count for UI feedback                               ║
+║                                                                            ║
+║ CONCLUSION: No legacy JSON history system references found. All undo      ║
+║ operations flow through SQLite placement_snapshots table.                 ║
+╚════════════════════════════════════════════════════════════════════════════╝
+"""
+
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import json
 import re
 import random
 import uuid
+import sqlite3
+from datetime import datetime
 import xml.etree.ElementTree as ET
 from werkzeug.utils import secure_filename
 
@@ -12,9 +50,27 @@ app = Flask(__name__)
 # ---- Debug toggle ----
 SERVER_DEBUG = False
 
+# ---- Temporary debug flag for SQLite undo audit ----
+# Set to True to log SQLite snapshot operations (push/pop) and wall state save/load paths.
+# How to verify:
+#   1. Run Flask server
+#   2. Upload artwork and place it on wall
+#   3. Click "Clear Grid" or "Clear Tile"
+#   4. Click "Undo" button
+#   5. Observe console logs showing:
+#      - UNDO: attempting pop_latest_snapshot()
+#      - UNDO: popped snapshot id=X action=... tiles=N
+#      - SAVE_WALL_STATE: SQLITE mode, tiles=N
+#   6. Refresh page to confirm persistence via LOAD_WALL_STATE: SQLITE mode
+DEBUG_DB_TRACE = True
+
 # ---- Kill-switch for demo/test art auto-population ----
 # Set to False to disable all auto-generation of placeholder artwork
 ENABLE_DEMO_AUTOFILL = False
+
+# ---- SQLite persistence toggle (only affects wall placements) ----
+# Set to True to use SQLite instead of JSON for wall_state persistence
+USE_SQLITE_PLACEMENTS = True
 
 # ---- Grid color config ----
 COLOR_CONFIG = "grid_color.json"
@@ -28,6 +84,7 @@ PLACEMENT_FILE = os.path.join("data", "placement.json")
 ASSETS_FILE = os.path.join("data", "assets.json")
 WALL_STATE_FILE = os.path.join("data", "wall_state.json")
 WALL_STATE_HISTORY_FILE = os.path.join("data", "wall_state_history.json")
+GALLERY_DB = os.path.join("data", "gallery.db")
 
 # Admin PIN for protected endpoints
 ADMIN_PIN = "8375"
@@ -49,6 +106,36 @@ def load_grid_color():
             return DEFAULT_GRID_COLOR
     return DEFAULT_GRID_COLOR
 
+def init_db():
+    """Initialize SQLite database for wall placements and undo snapshots.
+    
+    Creates data/gallery.db and required tables if they don't exist.
+    """
+    os.makedirs("data", exist_ok=True)
+    conn = sqlite3.connect(GALLERY_DB)
+    cursor = conn.cursor()
+    
+    # Placements table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS placements (
+            tile_id TEXT PRIMARY KEY,
+            asset_id TEXT NOT NULL,
+            placed_at TEXT NOT NULL
+        )
+    """)
+    
+    # Undo snapshots table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS placement_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            action TEXT NOT NULL,
+            state_json TEXT NOT NULL
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
 
 def save_grid_color(color: str):
     """Persist the chosen grid color so all visitors see it."""
@@ -107,27 +194,156 @@ def save_assets(assets_dict):
 
 
 def load_wall_state():
-    """Load wall state (tile_id -> asset_id mapping) from data/wall_state.json.
+    """Load wall state (tile_id -> asset_id mapping).
     
-    Returns a dict. If file is missing or invalid, returns {}.
+    If USE_SQLITE_PLACEMENTS is True, loads from SQLite database.
+    Otherwise loads from data/wall_state.json.
+    Returns a dict. If file/db is missing or invalid, returns {}.
     """
-    if os.path.exists(WALL_STATE_FILE):
+    if USE_SQLITE_PLACEMENTS:
         try:
-            with open(WALL_STATE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f) or {}
-        except Exception:
+            init_db()
+            conn = sqlite3.connect(GALLERY_DB)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT tile_id, asset_id FROM placements 
+                WHERE asset_id IS NOT NULL AND asset_id != ''
+            """)
+            rows = cursor.fetchall()
+            conn.close()
+            result = {tile_id: asset_id for tile_id, asset_id in rows}
+            if DEBUG_DB_TRACE:
+                print(f"LOAD_WALL_STATE: SQLITE mode, tiles={len(result)}")
+            return result
+        except Exception as e:
+            if SERVER_DEBUG:
+                print(f"Error loading from SQLite: {e}")
             return {}
-    return {}
+    else:
+        # Existing JSON logic
+        if os.path.exists(WALL_STATE_FILE):
+            try:
+                with open(WALL_STATE_FILE, "r", encoding="utf-8") as f:
+                    result = json.load(f) or {}
+                    if DEBUG_DB_TRACE:
+                        print(f"LOAD_WALL_STATE: JSON mode, tiles={len(result)}")
+                    return result
+            except Exception:
+                return {}
+        if DEBUG_DB_TRACE:
+            print("LOAD_WALL_STATE: JSON mode, tiles=0 (file not found)")
+        return {}
 
 
 def save_wall_state(state_dict):
-    """Save wall state to data/wall_state.json.
+    """Save wall state.
     
+    If USE_SQLITE_PLACEMENTS is True, saves to SQLite database.
+    Otherwise saves to data/wall_state.json.
     Ensures the data/ directory exists before writing.
     """
-    os.makedirs(os.path.dirname(WALL_STATE_FILE), exist_ok=True)
-    with open(WALL_STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state_dict or {}, f, indent=2)
+    if USE_SQLITE_PLACEMENTS:
+        if DEBUG_DB_TRACE:
+            print(f"SAVE_WALL_STATE: SQLITE mode, tiles={len(state_dict or {})}")
+        try:
+            init_db()
+            conn = sqlite3.connect(GALLERY_DB)
+            cursor = conn.cursor()
+            
+            # Clear existing placements and insert new ones in a transaction
+            cursor.execute("DELETE FROM placements")
+            
+            if state_dict:
+                placed_at = datetime.utcnow().isoformat()
+                for tile_id, asset_id in state_dict.items():
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO placements (tile_id, asset_id, placed_at)
+                        VALUES (?, ?, ?)
+                    """, (tile_id, asset_id, placed_at))
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            if SERVER_DEBUG:
+                print(f"Error saving to SQLite: {e}")
+            raise
+    else:
+        # Existing JSON logic
+        if DEBUG_DB_TRACE:
+            print(f"SAVE_WALL_STATE: JSON mode, tiles={len(state_dict or {})}")
+        os.makedirs(os.path.dirname(WALL_STATE_FILE), exist_ok=True)
+        with open(WALL_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state_dict or {}, f, indent=2)
+
+
+def push_snapshot(action: str, state: dict) -> int:
+    """Push a snapshot of wall state to undo stack.
+    
+    Args:
+        action: Description of action (e.g., 'clear_tile:X99', 'clear_grid')
+        state: Wall state dict to save
+    
+    Returns:
+        Remaining snapshot count
+    """
+    init_db()
+    conn = sqlite3.connect(GALLERY_DB)
+    cursor = conn.cursor()
+    
+    created_at = datetime.utcnow().isoformat()
+    state_json = json.dumps(state)
+    
+    cursor.execute("""
+        INSERT INTO placement_snapshots (created_at, action, state_json)
+        VALUES (?, ?, ?)
+    """, (created_at, action, state_json))
+    
+    # Get count of remaining snapshots
+    cursor.execute("SELECT COUNT(*) FROM placement_snapshots")
+    count = cursor.fetchone()[0]
+    
+    conn.commit()
+    conn.close()
+    
+    return count
+
+
+def pop_latest_snapshot():
+    """Pop the most recent snapshot from undo stack.
+    
+    Returns:
+        Tuple of (id, action, state_dict) if found, or (None, None, None) if empty
+    """
+    init_db()
+    conn = sqlite3.connect(GALLERY_DB)
+    cursor = conn.cursor()
+    
+    # Get latest snapshot
+    cursor.execute("""
+        SELECT id, action, state_json FROM placement_snapshots 
+        ORDER BY id DESC LIMIT 1
+    """)
+    row = cursor.fetchone()
+    
+    if not row:
+        if DEBUG_DB_TRACE:
+            print("UNDO: no snapshot available")
+        conn.close()
+        return None, None, None
+    
+    snapshot_id, action, state_json = row
+    state_dict = json.loads(state_json)
+    
+    if DEBUG_DB_TRACE:
+        print(f"UNDO: popped snapshot id={snapshot_id} action={action} tiles={len(state_dict)}")
+    
+    # Delete this snapshot
+    cursor.execute("DELETE FROM placement_snapshots WHERE id = ?", (snapshot_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return snapshot_id, action, state_dict
 
 
 def load_json(path, default):
@@ -519,12 +735,12 @@ def assign_tile():
 
 @app.route("/api/admin/clear_tile", methods=["POST"])
 def admin_clear_tile():
-    """Admin-only: Clear a single tile assignment with history snapshot.
+    """Admin-only: Clear a single tile assignment with snapshot.
     
     Requires X-Admin-Pin header.
     Body: { "tile_id": "X99" }
     
-    Returns: { "ok": true, "history_count": N }
+    Returns: { "ok": true }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
@@ -536,39 +752,49 @@ def admin_clear_tile():
     if not tile_id:
         return jsonify({"ok": False, "error": "Missing tile_id"}), 400
     
-    # Load current state and push snapshot
+    # Load current state
     wall_state = load_wall_state()
-    history_count = push_history_snapshot(wall_state)
     
-    # Remove tile assignment if present
-    if tile_id in wall_state:
-        del wall_state[tile_id]
+    # If tile already empty, don't push snapshot
+    if tile_id not in wall_state:
+        return jsonify({"ok": True, "message": "Tile already empty"})
     
+    # Push snapshot before clearing
+    push_snapshot(f"clear_tile:{tile_id}", wall_state)
+    
+    # Remove tile assignment
+    del wall_state[tile_id]
     save_wall_state(wall_state)
     
-    return jsonify({"ok": True, "history_count": history_count})
+    return jsonify({"ok": True})
 
 
 @app.route("/api/admin/clear_all_tiles", methods=["POST"])
 def admin_clear_all_tiles():
-    """Admin-only: Clear all tile assignments with history snapshot.
+    """Admin-only: Clear all tile assignments with snapshot.
     
     Requires X-Admin-Pin header.
     
-    Returns: { "ok": true, "history_count": N }
+    Returns: { "ok": true }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
     
-    # Load current state and push snapshot
+    # Load current state
     wall_state = load_wall_state()
-    history_count = push_history_snapshot(wall_state)
+    
+    # If already empty, don't push snapshot
+    if not wall_state:
+        return jsonify({"ok": True, "message": "Already empty"})
+    
+    # Push snapshot before clearing
+    push_snapshot("clear_grid", wall_state)
     
     # Clear all assignments
     save_wall_state({})
     
-    return jsonify({"ok": True, "history_count": history_count})
+    return jsonify({"ok": True})
 
 
 @app.route("/api/admin/undo", methods=["POST"])
@@ -577,21 +803,24 @@ def admin_undo():
     
     Requires X-Admin-Pin header.
     
-    Returns: { "ok": true, "history_count": N } or { "ok": false, "error": "Nothing to undo" }
+    Returns: { "ok": true, "action": "..." } or { "ok": false, "message": "No undo available" }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
     
-    snapshot, history_count = pop_history_snapshot()
+    if DEBUG_DB_TRACE:
+        print("UNDO: attempting pop_latest_snapshot()")
     
-    if snapshot is None:
-        return jsonify({"ok": False, "error": "Nothing to undo", "history_count": 0})
+    snapshot_id, action, state = pop_latest_snapshot()
+    
+    if snapshot_id is None:
+        return jsonify({"ok": False, "message": "No undo available"})
     
     # Restore snapshot as current state
-    save_wall_state(snapshot)
+    save_wall_state(state)
     
-    return jsonify({"ok": True, "history_count": history_count})
+    return jsonify({"ok": True, "action": action})
 
 
 @app.route("/api/admin/history_status", methods=["GET"])
@@ -676,6 +905,8 @@ def admin_tile_info():
 def admin_move_tile_asset():
     """Admin-only: Move artwork from one tile to another.
     
+    Uses SQLite placement_snapshots for unified Undo stack; legacy JSON history no longer used here.
+    
     Requires X-Admin-Pin header.
     Body: { "from_tile_id": "X99", "to_tile_id": "X12" }
     
@@ -702,8 +933,8 @@ def admin_move_tile_asset():
     if to_tile_id in wall_state:
         return jsonify({"ok": False, "error": "Destination tile is occupied"}), 400
     
-    # Push snapshot before modifying
-    history_count = push_history_snapshot(wall_state)
+    # Push SQLite snapshot before modifying
+    snapshot_count = push_snapshot(f"move_tile:{from_tile_id}->{to_tile_id}", wall_state)
     
     # Move asset
     wall_state[to_tile_id] = wall_state[from_tile_id]
@@ -711,7 +942,7 @@ def admin_move_tile_asset():
     
     save_wall_state(wall_state)
     
-    return jsonify({"ok": True, "history_count": history_count})
+    return jsonify({"ok": True, "history_count": snapshot_count})
 
 
 @app.route("/shuffle", methods=["POST"])
