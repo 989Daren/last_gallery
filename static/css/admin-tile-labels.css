@@ -1,0 +1,31 @@
+/* ========================================
+   ADMIN OVERLAYS - Tile ID Labels
+   ======================================== */
+
+/* Admin-only tile ID overlays (click-through)
+ * - Only visible when admin session active AND toggle ON
+ * - Bright green for high contrast against artwork
+ * - Click-through (pointer-events: none) to allow tile interactions
+ * - High z-index to appear above tile content
+ */
+.admin-tile-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #00ff00;
+  font-size: 24px;
+  font-weight: 700;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  z-index: 100;
+  pointer-events: none;  /* Click-through - doesn't block tile clicks */
+  text-shadow: 
+    -1px -1px 0 #000,  
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000,
+     0 0 8px #00ff00;
+  user-select: none;
+  display: none;  /* Hidden by default, shown only when toggle is ON */
+}
