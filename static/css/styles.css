@@ -10,6 +10,20 @@
   /* Header offset (dynamically set by JS) */
   --header-height: 0px;
 
+  /* Wall lighting controls */
+  --spotEnabled: 1;
+  --spotOpacity: 0.35;
+  --spotX: 55%;
+  --spotY: 20%;
+  --spotSize: 65%;
+  
+  --vigEnabled: 1;
+  --vigOpacity: 0.22;
+  --vigFeather: 55%;
+  
+  --spotZ: 1;
+  --vigZ: 2;
+
   /* Theme helpers (safe refactor; no aesthetic intent change) */
   --page-bg: #111;
   --bar-bg: #222;
@@ -201,11 +215,46 @@ label {
 }
 
 /* =====================================================
+   WALL LIGHTING OVERLAYS (behind tiles)
+   ===================================================== */
+
+.wall-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: normal;
+}
+
+.wall-spotlight {
+  z-index: var(--spotZ);
+  opacity: calc(var(--spotEnabled) * var(--spotOpacity));
+  background: radial-gradient(
+    ellipse var(--spotSize) var(--spotSize) at var(--spotX) var(--spotY),
+    rgba(255, 248, 240, 0.8) 0%,
+    rgba(255, 248, 240, 0.4) 25%,
+    rgba(255, 248, 240, 0.1) 50%,
+    transparent 100%
+  );
+}
+
+.wall-vignette {
+  z-index: var(--vigZ);
+  opacity: calc(var(--vigEnabled) * var(--vigOpacity));
+  background: radial-gradient(
+    ellipse var(--vigFeather) var(--vigFeather) at 50% 50%,
+    transparent 0%,
+    rgba(0, 0, 0, 0.3) 40%,
+    rgba(0, 0, 0, 0.7) 100%
+  );
+}
+
+/* =====================================================
    TILES + ARTWORK
    ===================================================== */
 
 .tile {
   position: absolute;
+  z-index: 10; /* Above wall lighting overlays */
   background: var(--tileColor);
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.3);
