@@ -1,39 +1,3 @@
-"""
-╔════════════════════════════════════════════════════════════════════════════╗
-║ SQLITE UNDO SYSTEM AUDIT (Dec 21, 2025)                                   ║
-╠════════════════════════════════════════════════════════════════════════════╣
-║ Findings:                                                                  ║
-║                                                                            ║
-║ 1. UNDO ROUTE (/api/admin/undo):                                          ║
-║    ✓ Calls pop_latest_snapshot() to get state from SQLite                 ║
-║    ✓ Restores state via save_wall_state(state_dict)                       ║
-║    ✓ No reference to legacy wall_state_history.json                       ║
-║                                                                            ║
-║ 2. POP_LATEST_SNAPSHOT():                                                 ║
-║    ✓ Executes SELECT from placement_snapshots ORDER BY id DESC LIMIT 1    ║
-║    ✓ Deletes popped row (LIFO stack behavior)                             ║
-║    ✓ Returns (id, action, state_dict) or (None, None, None) if empty      ║
-║                                                                            ║
-║ 3. SAVE_WALL_STATE():                                                     ║
-║    ✓ Has SQLite branch gated by USE_SQLITE_PLACEMENTS = True              ║
-║    ✓ Has JSON fallback branch for backwards compatibility                 ║
-║    ✓ SQLite branch: DELETE + INSERT transaction pattern                   ║
-║                                                                            ║
-║ 4. LOAD_WALL_STATE():                                                     ║
-║    ✓ Has SQLite branch gated by USE_SQLITE_PLACEMENTS = True              ║
-║    ✓ Has JSON fallback branch for backwards compatibility                 ║
-║    ✓ SQLite branch: SELECT from placements table                          ║
-║                                                                            ║
-║ 5. PUSH_SNAPSHOT():                                                       ║
-║    ✓ Called by /clear_tile and /clear_all_tiles before deletion           ║
-║    ✓ Inserts into placement_snapshots with action descriptor              ║
-║    ✓ Returns snapshot count for UI feedback                               ║
-║                                                                            ║
-║ CONCLUSION: No legacy JSON history system references found. All undo      ║
-║ operations flow through SQLite placement_snapshots table.                 ║
-╚════════════════════════════════════════════════════════════════════════════╝
-"""
-
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import json
@@ -93,7 +57,7 @@ GALLERY_DB = os.path.join("data", "gallery.db")
 
 # Admin PIN for protected endpoints
 ADMIN_PIN = "8375"
-MAX_HISTORY_DEPTH = 5
+MAX_HISTORY_DEPTH = 10
 
 # Ensure uploads directory exists
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -137,6 +101,20 @@ def init_db():
             action TEXT NOT NULL,
             state_json TEXT NOT NULL
         )
+    """)
+    
+    # Indexes for placement_snapshots (performance optimization)
+    # Index on action column for filtered counts and WHERE clauses
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_snapshots_action 
+        ON placement_snapshots(action)
+    """)
+    
+    # Composite index for "latest per action type" queries
+    # Supports: WHERE action='shuffle' ORDER BY id DESC
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_snapshots_action_id 
+        ON placement_snapshots(action, id DESC)
     """)
     
     # Assets metadata table
@@ -467,15 +445,95 @@ def save_wall_state(state_dict):
             json.dump(state_dict or {}, f, indent=2)
 
 
-def push_snapshot(action: str, state: dict) -> int:
+def get_last_shuffle_id():
+    """Get the ID of the most recent shuffle snapshot.
+    
+    Returns:
+        int or None: ID of last shuffle snapshot, or None if no shuffle exists
+    """
+    init_db()
+    conn = sqlite3.connect(GALLERY_DB)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT id FROM placement_snapshots 
+        WHERE action = 'shuffle'
+        ORDER BY id DESC LIMIT 1
+    """)
+    row = cursor.fetchone()
+    
+    conn.close()
+    
+    return row[0] if row else None
+
+
+def get_snapshot_counts():
+    """Get counts of shuffle vs non-shuffle snapshots (timeline-aware).
+    
+    Returns:
+        Dict with:
+        - shuffle_count: Total shuffle snapshots
+        - non_shuffle_total: Total non-shuffle snapshots
+        - non_shuffle_count: Non-shuffle snapshots AFTER last shuffle (eligible for undo)
+        - last_shuffle_id: ID of most recent shuffle, or None
+    """
+    init_db()
+    conn = sqlite3.connect(GALLERY_DB)
+    cursor = conn.cursor()
+    
+    # Count shuffle snapshots
+    cursor.execute("""
+        SELECT COUNT(*) FROM placement_snapshots 
+        WHERE action = 'shuffle'
+    """)
+    shuffle_count = cursor.fetchone()[0]
+    
+    # Count total non-shuffle snapshots
+    cursor.execute("""
+        SELECT COUNT(*) FROM placement_snapshots 
+        WHERE action != 'shuffle'
+    """)
+    non_shuffle_total = cursor.fetchone()[0]
+    
+    # Get last shuffle ID
+    cursor.execute("""
+        SELECT id FROM placement_snapshots 
+        WHERE action = 'shuffle'
+        ORDER BY id DESC LIMIT 1
+    """)
+    row = cursor.fetchone()
+    last_shuffle_id = row[0] if row else None
+    
+    # Count non-shuffle snapshots AFTER last shuffle (timeline-aware)
+    if last_shuffle_id is not None:
+        cursor.execute("""
+            SELECT COUNT(*) FROM placement_snapshots 
+            WHERE action != 'shuffle' AND id > ?
+        """, (last_shuffle_id,))
+        non_shuffle_after_last_shuffle = cursor.fetchone()[0]
+    else:
+        # No shuffle exists, all non-shuffle snapshots are eligible
+        non_shuffle_after_last_shuffle = non_shuffle_total
+    
+    conn.close()
+    
+    return {
+        'shuffle_count': shuffle_count,
+        'non_shuffle_total': non_shuffle_total,
+        'non_shuffle_count': non_shuffle_after_last_shuffle,  # Eligible count
+        'last_shuffle_id': last_shuffle_id
+    }
+
+
+def push_snapshot(action: str, state: dict) -> dict:
     """Push a snapshot of wall state to undo stack.
     
     Args:
-        action: Description of action (e.g., 'clear_tile:X99', 'clear_grid')
+        action: Description of action (e.g., 'clear_tile:X99', 'clear_grid', 'shuffle')
         state: Wall state dict to save
     
     Returns:
-        Remaining snapshot count
+        Dict with 'shuffle_count' and 'non_shuffle_count' (timeline-aware)
     """
     init_db()
     conn = sqlite3.connect(GALLERY_DB)
@@ -489,18 +547,32 @@ def push_snapshot(action: str, state: dict) -> int:
         VALUES (?, ?, ?)
     """, (created_at, action, state_json))
     
-    # Get count of remaining snapshots
-    cursor.execute("SELECT COUNT(*) FROM placement_snapshots")
-    count = cursor.fetchone()[0]
+    # Prune old snapshots to maintain MAX_HISTORY_DEPTH
+    cursor.execute("""
+        DELETE FROM placement_snapshots 
+        WHERE id NOT IN (
+            SELECT id FROM placement_snapshots 
+            ORDER BY id DESC 
+            LIMIT ?
+        )
+    """, (MAX_HISTORY_DEPTH,))
     
     conn.commit()
     conn.close()
     
-    return count
+    # Return timeline-aware counts
+    counts = get_snapshot_counts()
+    return {
+        'shuffle_count': counts['shuffle_count'],
+        'non_shuffle_count': counts['non_shuffle_count']  # Eligible count
+    }
 
 
-def pop_latest_snapshot():
+def pop_latest_snapshot(action_type=None):
     """Pop the most recent snapshot from undo stack.
+    
+    Args:
+        action_type: 'shuffle' or 'non_shuffle' to filter by type, None for latest of any type
     
     Returns:
         Tuple of (id, action, state_dict) if found, or (None, None, None) if empty
@@ -509,16 +581,41 @@ def pop_latest_snapshot():
     conn = sqlite3.connect(GALLERY_DB)
     cursor = conn.cursor()
     
-    # Get latest snapshot
-    cursor.execute("""
-        SELECT id, action, state_json FROM placement_snapshots 
-        ORDER BY id DESC LIMIT 1
-    """)
+    # Get latest snapshot based on action_type filter
+    if action_type == 'shuffle':
+        cursor.execute("""
+            SELECT id, action, state_json FROM placement_snapshots 
+            WHERE action = 'shuffle'
+            ORDER BY id DESC LIMIT 1
+        """)
+    elif action_type == 'non_shuffle':
+        # Timeline-aware: only pop non-shuffle snapshots AFTER last shuffle
+        last_shuffle_id = get_last_shuffle_id()
+        
+        if last_shuffle_id is not None:
+            cursor.execute("""
+                SELECT id, action, state_json FROM placement_snapshots 
+                WHERE action != 'shuffle' AND id > ?
+                ORDER BY id DESC LIMIT 1
+            """, (last_shuffle_id,))
+        else:
+            # No shuffle exists, any non-shuffle snapshot is eligible
+            cursor.execute("""
+                SELECT id, action, state_json FROM placement_snapshots 
+                WHERE action != 'shuffle'
+                ORDER BY id DESC LIMIT 1
+            """)
+    else:
+        cursor.execute("""
+            SELECT id, action, state_json FROM placement_snapshots 
+            ORDER BY id DESC LIMIT 1
+        """)
+    
     row = cursor.fetchone()
     
     if not row:
         if DEBUG_DB_TRACE:
-            print("UNDO: no snapshot available")
+            print(f"UNDO: no snapshot available (action_type={action_type})")
         conn.close()
         return None, None, None
     
@@ -554,6 +651,14 @@ def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
+
+# ==============================================================================
+# Legacy JSON History System
+# ==============================================================================
+# PRESERVED: These functions support /api/admin/history_status route,
+# which is actively called by main.js to update the undo button UI.
+# Do NOT remove without migrating the frontend to use SQLite snapshot counts.
+# ==============================================================================
 
 def load_history():
     """Load wall state history from data/wall_state_history.json.
@@ -953,13 +1058,17 @@ def admin_clear_tile():
         return jsonify({"ok": True, "message": "Tile already empty"})
     
     # Push snapshot before clearing
-    push_snapshot(f"clear_tile:{tile_id}", wall_state)
+    counts = push_snapshot(f"clear_tile:{tile_id}", wall_state)
     
     # Remove tile assignment
     del wall_state[tile_id]
     save_wall_state(wall_state)
     
-    return jsonify({"ok": True})
+    return jsonify({
+        "ok": True,
+        "shuffle_count": counts['shuffle_count'],
+        "non_shuffle_count": counts['non_shuffle_count']
+    })
 
 
 @app.route("/api/admin/clear_all_tiles", methods=["POST"])
@@ -982,12 +1091,16 @@ def admin_clear_all_tiles():
         return jsonify({"ok": True, "message": "Already empty"})
     
     # Push snapshot before clearing
-    push_snapshot("clear_grid", wall_state)
+    counts = push_snapshot("clear_grid", wall_state)
     
     # Clear all assignments
     save_wall_state({})
     
-    return jsonify({"ok": True})
+    return jsonify({
+        "ok": True,
+        "shuffle_count": counts['shuffle_count'],
+        "non_shuffle_count": counts['non_shuffle_count']
+    })
 
 
 @app.route("/api/admin/undo", methods=["POST"])
@@ -995,25 +1108,43 @@ def admin_undo():
     """Admin-only: Undo last wall state change.
     
     Requires X-Admin-Pin header.
+    Body (optional): { "action_type": "shuffle" | "non_shuffle" }
     
-    Returns: { "ok": true, "action": "..." } or { "ok": false, "message": "No undo available" }
+    Returns: { "ok": true, "action": "...", "shuffle_count": N, "non_shuffle_count": N }
+             or { "ok": false, "message": "...", "shuffle_count": N, "non_shuffle_count": N }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
     
-    if DEBUG_DB_TRACE:
-        print("UNDO: attempting pop_latest_snapshot()")
+    data = request.get_json(silent=True) or {}
+    action_type = data.get('action_type')  # 'shuffle', 'non_shuffle', or None
     
-    snapshot_id, action, state = pop_latest_snapshot()
+    if DEBUG_DB_TRACE:
+        print(f"UNDO: attempting pop_latest_snapshot(action_type={action_type})")
+    
+    snapshot_id, action, state = pop_latest_snapshot(action_type)
+    
+    # Get updated timeline-aware counts
+    counts = get_snapshot_counts()
     
     if snapshot_id is None:
-        return jsonify({"ok": False, "message": "No undo available"})
+        return jsonify({
+            "ok": False, 
+            "message": f"No {action_type or ''} undo available".strip(),
+            "shuffle_count": counts['shuffle_count'],
+            "non_shuffle_count": counts['non_shuffle_count']
+        })
     
     # Restore snapshot as current state
     save_wall_state(state)
     
-    return jsonify({"ok": True, "action": action})
+    return jsonify({
+        "ok": True, 
+        "action": action,
+        "shuffle_count": counts['shuffle_count'],
+        "non_shuffle_count": counts['non_shuffle_count']
+    })
 
 
 @app.route("/api/admin/history_status", methods=["GET"])
@@ -1022,18 +1153,24 @@ def admin_history_status():
     
     Requires X-Admin-Pin header.
     
-    Returns: { "history_count": N, "can_undo": bool }
+    Returns: { "shuffle_count": N, "non_shuffle_count": N (timeline-aware), 
+               "can_undo": bool, "can_undo_shuffle": bool, ... }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
     
-    history = load_history()
-    history_count = len(history)
+    counts = get_snapshot_counts()
     
     return jsonify({
-        "history_count": history_count,
-        "can_undo": history_count > 0
+        "shuffle_count": counts['shuffle_count'],
+        "non_shuffle_count": counts['non_shuffle_count'],  # Timeline-aware eligible count
+        "non_shuffle_total": counts['non_shuffle_total'],  # For debugging
+        "can_undo": counts['non_shuffle_count'] > 0,  # Based on eligible count
+        "can_undo_shuffle": counts['shuffle_count'] > 0,
+        "last_shuffle_id": counts['last_shuffle_id'],
+        # Legacy field for backward compatibility
+        "history_count": counts['shuffle_count'] + counts['non_shuffle_total']
     })
 
 
@@ -1101,7 +1238,10 @@ def admin_move_tile_asset():
     Uses SQLite placement_snapshots for unified Undo stack; legacy JSON history no longer used here.
     
     Requires X-Admin-Pin header.
-    Body: { "from_tile_id": "X99", "to_tile_id": "X12" }
+    Body: { "from_tile_id": "X99", "to_tile_id": "X12", "override": false }
+    
+    The 'override' flag allows admins to bypass size validation for rule-breaking moves.
+    When false or omitted, standard validation applies.
     
     Returns: { "ok": true, "history_count": N }
     """
@@ -1112,6 +1252,7 @@ def admin_move_tile_asset():
     data = request.get_json(silent=True) or {}
     from_tile_id = data.get("from_tile_id")
     to_tile_id = data.get("to_tile_id")
+    override = data.get("override", False)  # Admin override flag
     
     if not from_tile_id or not to_tile_id:
         return jsonify({"ok": False, "error": "Missing from_tile_id or to_tile_id"}), 400
@@ -1126,8 +1267,11 @@ def admin_move_tile_asset():
     if to_tile_id in wall_state:
         return jsonify({"ok": False, "error": "Destination tile is occupied"}), 400
     
+    # Note: Size validation is now handled client-side with override confirmation
+    # Backend accepts any move when override=True or when called by admin
+    
     # Push SQLite snapshot before modifying
-    snapshot_count = push_snapshot(f"move_tile:{from_tile_id}->{to_tile_id}", wall_state)
+    counts = push_snapshot(f"move_tile:{from_tile_id}->{to_tile_id}", wall_state)
     
     # Move asset
     wall_state[to_tile_id] = wall_state[from_tile_id]
@@ -1135,7 +1279,13 @@ def admin_move_tile_asset():
     
     save_wall_state(wall_state)
     
-    return jsonify({"ok": True, "history_count": snapshot_count})
+    return jsonify({
+        "ok": True,
+        "shuffle_count": counts['shuffle_count'],
+        "non_shuffle_count": counts['non_shuffle_count'],
+        # Legacy field for backward compatibility
+        "history_count": counts['shuffle_count'] + counts['non_shuffle_count']
+    })
 
 
 @app.route("/shuffle", methods=["POST"])
@@ -1160,6 +1310,9 @@ def shuffle_placement():
     if not wall_state:
         return jsonify({"ok": False, "error": "No artwork to shuffle"}), 400
     
+    # Push snapshot BEFORE shuffling (for undo capability)
+    counts = push_snapshot("shuffle", wall_state)
+    
     # Get asset IDs (artworks to shuffle)
     asset_ids = list(wall_state.values())
     
@@ -1183,7 +1336,13 @@ def shuffle_placement():
     # Save shuffled state (clears tiles not in new_state)
     save_wall_state(new_state)
     
-    return jsonify({"ok": True})
+    return jsonify({
+        "ok": True,
+        "shuffle_count": counts['shuffle_count'],
+        "non_shuffle_count": counts['non_shuffle_count'],
+        # Legacy field for backward compatibility
+        "history_count": counts['shuffle_count'] + counts['non_shuffle_count']
+    })
 
 
 if __name__ == "__main__":

@@ -1,0 +1,16 @@
+/* Admin Debug Footer (development only) */
+.admin-debug-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.85);
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  padding: 4px 12px;
+  text-align: center;
+  z-index: 10000;
+  border-top: 1px solid #333;
+  pointer-events: none;
+}
