@@ -1,4 +1,13 @@
-/* Admin Debug Footer (development only) */
+/* ========================================
+   ADMIN OVERLAYS - Debug Footer
+   ======================================== */
+
+/* Admin Debug Footer (development only)
+ * - Controlled by ADMIN_DEBUG flag in main.js
+ * - Shows undo state details for development/debugging
+ * - Fixed at bottom, high z-index to stay above all content
+ * - Pointer-events: none to avoid blocking interactions
+ */
 .admin-debug-footer {
   position: fixed;
   bottom: 0;

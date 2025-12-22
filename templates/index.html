@@ -8,6 +8,7 @@
   <!-- Main stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-debug.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-tile-labels.css') }}">
 
   <!-- Cropper.js stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/cropper/cropper.min.css') }}">
@@ -181,6 +182,13 @@
         <div class="adminRow">
           <button id="shuffleButton" type="button">Shuffle Tiles</button>
           <button id="undoShuffleBtn" type="button" disabled>Undo Shuffle</button>
+        </div>
+
+        <div class="adminRow">
+          <label>
+            <input type="checkbox" id="showTileLabelsToggle">
+            Show Tile Labels
+          </label>
         </div>
       </div>
 

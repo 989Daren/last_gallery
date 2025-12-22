@@ -408,6 +408,11 @@ function applyAssetToTile(tileEl, asset) {
   // 5. Apply occupied class (triggers glow via CSS)
   tileEl.classList.add("occupied");
   
+  // 6. Apply admin tile label if toggle is ON
+  if (typeof applyAdminTileLabel === 'function') {
+    applyAdminTileLabel(tileEl);
+  }
+  
   // Rendering complete - tile now displays artwork with metadata
 }
 
@@ -508,6 +513,62 @@ document.addEventListener("DOMContentLoaded", () => {
   const adminControlsPanel = $("adminControlsPanel");
 
   let adminUnlocked = false;
+  let showTileLabels = false;  // Admin toggle for tile ID overlays
+
+  // ========== Admin Helper Functions ==========
+  
+  // Check if admin session is active (PIN accepted)
+  function isAdminActive() {
+    return adminUnlocked === true;
+  }
+
+  // Normalize history counts for both new timeline-aware and legacy formats
+  function normalizeHistoryCounts(data) {
+    // New format: separate counts
+    if (data.shuffle_count !== undefined && data.non_shuffle_count !== undefined) {
+      return {
+        shuffle_count: data.shuffle_count,
+        non_shuffle_count: data.non_shuffle_count,
+        non_shuffle_total: data.non_shuffle_total ?? data.non_shuffle_count,
+        last_shuffle_id: data.last_shuffle_id ?? null
+      };
+    }
+    
+    // Legacy format: single history_count
+    if (data.history_count !== undefined) {
+      return {
+        shuffle_count: data.history_count,
+        non_shuffle_count: data.history_count,
+        non_shuffle_total: data.history_count,
+        last_shuffle_id: null
+      };
+    }
+    
+    // Empty/unknown format
+    return {
+      shuffle_count: 0,
+      non_shuffle_count: 0,
+      non_shuffle_total: 0,
+      last_shuffle_id: null
+    };
+  }
+
+  // Centralized admin overlay refresh (tile labels + debug footer)
+  function refreshAdminOverlays(historyData) {
+    // Update tile labels if admin active and toggle is ON
+    if (isAdminActive() && showTileLabels) {
+      updateAllAdminTileLabels();
+    }
+    
+    // Update debug footer if enabled
+    if (ADMIN_DEBUG && isAdminActive()) {
+      const data = historyData || window.lastHistoryData || {};
+      const normalized = normalizeHistoryCounts(data);
+      updateAdminDebugFooter(normalized.shuffle_count, normalized.non_shuffle_count);
+    }
+  }
+
+  // ========== Admin Modal Functions ==========
 
   function openAdminModal() {
     if (!adminModal) return;
@@ -563,6 +624,13 @@ document.addEventListener("DOMContentLoaded", () => {
     adminControlsPanel?.classList.remove("hidden");
 
     colorPicker?.focus();
+    
+    // Apply tile labels if toggle is already ON (handles timing edge cases)
+    setTimeout(() => {
+      if (showTileLabels) {
+        refreshAdminOverlays();
+      }
+    }, 0);
   }
 
   adminBtn?.addEventListener("click", openAdminModal);
@@ -646,53 +714,47 @@ document.addEventListener("DOMContentLoaded", () => {
           applyAssetToTile(tileEl, assignment);
         }
       });
+      
+      // Refresh admin overlays after wall update
+      refreshAdminOverlays();
     } catch (err) {
       console.error('Failed to refresh wall from server:', err);
     }
   }
 
   // Helper to update undo button state
-  function updateUndoButton(shuffleCount, nonShuffleCount) {
-    // Handle both new format (separate counts) and legacy format (single history_count)
-    let shuffle_count = shuffleCount;
-    let non_shuffle_count = nonShuffleCount;
-    
-    // Legacy fallback: if called with a single number, assume it's total history_count
-    if (typeof shuffleCount === 'number' && nonShuffleCount === undefined) {
-      // Backward compatibility: enable both if any history exists
-      const totalCount = shuffleCount;
-      if (undoBtn) {
-        undoBtn.disabled = totalCount === 0;
-        undoBtn.title = totalCount === 0 ? "No actions to undo" : "";
-      }
-      const undoShuffleBtn = $("undoShuffleBtn");
-      if (undoShuffleBtn) {
-        undoShuffleBtn.disabled = totalCount === 0;
-        undoShuffleBtn.title = totalCount === 0 ? "No shuffle to undo" : "";
-      }
-      return;
+  function updateUndoButton(dataOrShuffleCount, nonShuffleCount) {
+    // Support both object format and separate parameters
+    let counts;
+    if (typeof dataOrShuffleCount === 'object') {
+      counts = normalizeHistoryCounts(dataOrShuffleCount);
+    } else {
+      // Legacy: separate parameters (shuffleCount, nonShuffleCount)
+      counts = normalizeHistoryCounts({
+        shuffle_count: dataOrShuffleCount,
+        non_shuffle_count: nonShuffleCount
+      });
     }
     
-    // New format: separate counts for independent button states
+    // Update Undo button (non-shuffle actions)
     if (undoBtn) {
-      undoBtn.disabled = non_shuffle_count === 0;
-      undoBtn.title = non_shuffle_count === 0 ? "No undoable actions after the last shuffle" : "";
-      if (DEBUG) console.log('Undo button state:', non_shuffle_count > 0 ? 'enabled' : 'disabled', `(non_shuffle_count=${non_shuffle_count})`);
+      undoBtn.disabled = counts.non_shuffle_count === 0;
+      undoBtn.title = counts.non_shuffle_count === 0 ? "No undoable actions after the last shuffle" : "";
+      if (DEBUG) console.log('Undo button state:', counts.non_shuffle_count > 0 ? 'enabled' : 'disabled', `(non_shuffle_count=${counts.non_shuffle_count})`);
     }
+    
+    // Update Undo Shuffle button
     const undoShuffleBtn = $("undoShuffleBtn");
     if (undoShuffleBtn) {
-      undoShuffleBtn.disabled = shuffle_count === 0;
-      undoShuffleBtn.title = shuffle_count === 0 ? "No shuffle to undo" : "";
-      if (DEBUG) console.log('Undo Shuffle button state:', shuffle_count > 0 ? 'enabled' : 'disabled', `(shuffle_count=${shuffle_count})`);
+      undoShuffleBtn.disabled = counts.shuffle_count === 0;
+      undoShuffleBtn.title = counts.shuffle_count === 0 ? "No shuffle to undo" : "";
+      if (DEBUG) console.log('Undo Shuffle button state:', counts.shuffle_count > 0 ? 'enabled' : 'disabled', `(shuffle_count=${counts.shuffle_count})`);
     }
-    
-    // Update admin debug footer if enabled
-    updateAdminDebugFooter(shuffle_count, non_shuffle_count);
   }
 
   // Helper to fetch history status and update undo button
   async function fetchHistoryStatus() {
-    if (!adminUnlocked) return;
+    if (!isAdminActive()) return;
     
     try {
       const response = await fetch('/api/admin/history_status', {
@@ -701,14 +763,12 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (response.ok) {
         const data = await response.json();
-        // Store full data for debug footer
+        // Store full data for overlays
         window.lastHistoryData = data;
-        // Use new separate counts if available, fallback to legacy history_count
-        if (data.shuffle_count !== undefined && data.non_shuffle_count !== undefined) {
-          updateUndoButton(data.shuffle_count, data.non_shuffle_count);
-        } else {
-          updateUndoButton(data.history_count);
-        }
+        // Update undo buttons
+        updateUndoButton(data);
+        // Refresh admin overlays (tile labels + debug footer)
+        refreshAdminOverlays(data);
       }
     } catch (err) {
       if (DEBUG) console.warn('Failed to fetch history status:', err);
@@ -730,6 +790,55 @@ document.addEventListener("DOMContentLoaded", () => {
     // Format: "Undo: 0 eligible / 3 total | Shuffle Undo: 1 | Last Shuffle ID: 42"
     footer.textContent = `Undo: ${non_shuffle_count} eligible / ${non_shuffle_total} total | Shuffle Undo: ${shuffle_count} | Last Shuffle ID: ${last_shuffle_id}`;
     footer.style.display = 'block';
+  }
+
+  // Helper to apply admin tile label overlay (click-through)
+  function applyAdminTileLabel(tileEl) {
+    if (!isAdminActive() || !showTileLabels) return;
+    
+    // Only show labels on occupied tiles
+    if (tileEl.dataset.occupied !== "1") return;
+    
+    // Check if label already exists
+    let label = tileEl.querySelector('.admin-tile-label');
+    if (label) {
+      label.style.display = 'block';
+      return;
+    }
+    
+    // Create new label overlay
+    label = document.createElement('div');
+    label.classList.add('admin-tile-label');
+    label.textContent = tileEl.dataset.id;
+    tileEl.appendChild(label);
+  }
+
+  // Helper to remove/hide admin tile label overlay
+  function removeAdminTileLabel(tileEl) {
+    const label = tileEl.querySelector('.admin-tile-label');
+    if (label) {
+      label.style.display = 'none';
+    }
+  }
+
+  // Helper to update all admin tile labels based on current state
+  function updateAllAdminTileLabels() {
+    if (!isAdminActive()) {
+      // Admin session not active, force hide all labels
+      showTileLabels = false;
+      const allLabels = wall.querySelectorAll('.admin-tile-label');
+      allLabels.forEach(label => label.style.display = 'none');
+      return;
+    }
+    
+    const allTiles = wall.querySelectorAll('.tile');
+    allTiles.forEach(tile => {
+      if (showTileLabels) {
+        applyAdminTileLabel(tile);
+      } else {
+        removeAdminTileLabel(tile);
+      }
+    });
   }
 
   // Clear Single Tile (with tile_info lookup and confirmation)
@@ -787,10 +896,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (DEBUG) console.log('Cleared tile:', tileId);
       
       // Update buttons with returned counts
-      if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
-        updateUndoButton(result.shuffle_count, result.non_shuffle_count);
-      }
+      updateUndoButton(result);
       await refreshWallFromServer();
+      refreshAdminOverlays(result);
       
       showAdminStatus(`Cleared ${tileId}`, "success");
       if (adminClearTileIdInput) adminClearTileIdInput.value = "";
@@ -821,10 +929,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (DEBUG) console.log('Cleared all tiles');
       
       // Update buttons with returned counts
-      if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
-        updateUndoButton(result.shuffle_count, result.non_shuffle_count);
-      }
+      updateUndoButton(result);
       await refreshWallFromServer();
+      refreshAdminOverlays(result);
       
       showAdminStatus("Cleared all tiles", "success");
     } catch (err) {
@@ -970,12 +1077,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (DEBUG) console.log('Moved artwork:', fromId, '→', toId, override ? '(override)' : '');
       
       // Update buttons with returned counts
-      if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
-        updateUndoButton(result.shuffle_count, result.non_shuffle_count);
-      } else if (result.history_count !== undefined) {
-        updateUndoButton(result.history_count);
-      }
+      updateUndoButton(result);
       await refreshWallFromServer();
+      refreshAdminOverlays(result);
       
       showAdminStatus(`Moved ${fromId} → ${toId}${override ? ' (override)' : ''}`, "success");
       if (adminMoveFromInput) adminMoveFromInput.value = "";
@@ -1012,10 +1116,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (DEBUG) console.log('Undo successful');
       
       // Update buttons with returned counts
-      if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
-        updateUndoButton(result.shuffle_count, result.non_shuffle_count);
-      }
+      updateUndoButton(result);
       await refreshWallFromServer();
+      refreshAdminOverlays(result);
       showAdminStatus("Undo successful", "success");
     } catch (err) {
       console.error('Failed to undo:', err);
@@ -1201,15 +1304,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (DEBUG) console.log('Undo shuffle successful:', result.action);
           
           // Update buttons with returned counts
-          if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
-            updateUndoButton(result.shuffle_count, result.non_shuffle_count);
-          } else {
-            // Fallback to fetching status
-            await fetchHistoryStatus();
-          }
-          
+          updateUndoButton(result);
           // Refresh wall to show restored placements
           await refreshWallFromServer();
+          refreshAdminOverlays(result);
           
           alert("Shuffle undone successfully");
         } catch (err) {
@@ -1224,6 +1322,23 @@ document.addEventListener("DOMContentLoaded", () => {
           undoShuffleModal.classList.add("hidden");
         }
       });
+
+      // ---- Show Tile Labels toggle ----
+      const showTileLabelsToggle = $("showTileLabelsToggle");
+      if (showTileLabelsToggle) {
+        showTileLabelsToggle.addEventListener("change", (e) => {
+          showTileLabels = e.target.checked;
+          // Apply immediately
+          refreshAdminOverlays();
+          // Defer second pass for timing/DOM readiness
+          setTimeout(() => {
+            if (showTileLabels === e.target.checked) {
+              refreshAdminOverlays();
+            }
+          }, 0);
+          if (DEBUG) console.log('Show Tile Labels:', showTileLabels);
+        });
+      }
 
       // ---- Shuffle handling (admin modal button) ----
       const shuffleButton = $("shuffleButton");
@@ -1258,14 +1373,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const result = await response.json();
             
             // Update undo button state with returned counts
-            if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
-              updateUndoButton(result.shuffle_count, result.non_shuffle_count);
-            } else if (result.history_count !== undefined) {
-              updateUndoButton(result.history_count);
-            }
+            updateUndoButton(result);
             
             // Success - refresh wall to show shuffled placements
             await refreshWallFromServer();
+            refreshAdminOverlays(result);
             
           } catch (err) {
             console.error("Shuffle error:", err);
