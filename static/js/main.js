@@ -1224,6 +1224,16 @@ document.addEventListener("DOMContentLoaded", () => {
       wall.style.width = width + "px";
       wall.style.height = height + "px";
 
+      // Insert wall lighting overlays BEFORE tiles
+      if (!wall.querySelector('.wall-spotlight') && !wall.querySelector('.wall-vignette')) {
+        const spotlightOverlay = document.createElement('div');
+        spotlightOverlay.className = 'wall-light wall-spotlight';
+        const vignetteOverlay = document.createElement('div');
+        vignetteOverlay.className = 'wall-light wall-vignette';
+        wall.prepend(vignetteOverlay);
+        wall.prepend(spotlightOverlay);
+      }
+
       const layoutTiles = buildLayoutTiles(tiles, height);
       renderTiles(wall, layoutTiles);
 
