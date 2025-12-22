@@ -7,6 +7,9 @@
   --tileColor: #5a3b33;
   --matColor: #111;
 
+  /* Header offset (dynamically set by JS) */
+  --header-height: 0px;
+
   /* Theme helpers (safe refactor; no aesthetic intent change) */
   --page-bg: #111;
   --bar-bg: #222;
@@ -46,9 +49,11 @@ body {
 .controls {
   padding: 12px 16px;
   background: var(--bar-bg);
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 10;
+  left: 0;
+  right: 0;
+  z-index: 5000;  /* Above tiles, below modals */
 
   display: flex;
   align-items: center;
@@ -175,6 +180,9 @@ label {
 .gallery-wall-wrapper {
   width: 100%;
   max-width: 100%;
+
+  /* Offset for fixed header */
+  padding-top: var(--header-height);
 
   /* Keep horizontal scrolling available for the wall itself (if grid wider than viewport). */
   overflow-x: auto;
@@ -330,7 +338,7 @@ label {
 .modalOverlay {
   position: fixed;
   inset: 0;
-  z-index: 3000; /* above art popup */
+  z-index: 8000;  /* Above fixed header and art popup */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -626,7 +634,7 @@ label {
 .popup-overlay {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 6000;  /* Above fixed header */
   display: none;
 
   /* background layer */
@@ -839,7 +847,7 @@ label {
   position: fixed;
   inset: 0;
   display: none;
-  z-index: 2000;
+  z-index: 6000;  /* Above fixed header (legacy, not currently used) */
 
   align-items: center;
   justify-content: center;

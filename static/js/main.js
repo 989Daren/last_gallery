@@ -499,6 +499,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const colorPicker = $("gridColorPicker");
   const outlineToggle = $("outlineToggle");
 
+  // ========== Fixed Header Offset ==========
+  // Dynamically calculate header height and set CSS variable
+  // to offset content below the fixed header
+  function setHeaderOffset() {
+    const header = document.querySelector('.controls');
+    if (header) {
+      const height = header.offsetHeight;
+      document.documentElement.style.setProperty('--header-height', `${height}px`);
+      if (DEBUG) console.log('Header offset set to:', height + 'px');
+    }
+  }
+
+  // Set on load and resize
+  setHeaderOffset();
+  window.addEventListener('resize', setHeaderOffset);
+
   // Ensure popup is present and wired (safe even if you later move it into HTML)
   wirePopupEventsOnce();
 
