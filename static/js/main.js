@@ -555,9 +555,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Centralized admin overlay refresh (tile labels + debug footer)
   function refreshAdminOverlays(historyData) {
-    // Update tile labels if admin active and toggle is ON
-    if (isAdminActive() && showTileLabels) {
+    // Handle tile labels based on admin state and toggle
+    if (!isAdminActive()) {
+      // Admin session not active, clear all labels
+      clearAllAdminTileLabels();
+    } else if (showTileLabels) {
+      // Toggle ON: apply labels
       updateAllAdminTileLabels();
+    } else {
+      // Toggle OFF: clear labels
+      clearAllAdminTileLabels();
     }
     
     // Update debug footer if enabled
@@ -566,6 +573,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const normalized = normalizeHistoryCounts(data);
       updateAdminDebugFooter(normalized.shuffle_count, normalized.non_shuffle_count);
     }
+  }
+
+  // Explicitly remove all admin tile label overlays from DOM
+  function clearAllAdminTileLabels() {
+    const allLabels = document.querySelectorAll('.admin-tile-label');
+    allLabels.forEach(label => label.remove());
   }
 
   // ========== Admin Modal Functions ==========
@@ -793,6 +806,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Helper to apply admin tile label overlay (click-through)
+  // Note: This is called from applyAssetToTile when artwork is added to a tile.
+  // For bulk label updates, use updateAllAdminTileLabels() which reconciles all labels.
   function applyAdminTileLabel(tileEl) {
     if (!isAdminActive() || !showTileLabels) return;
     
@@ -802,6 +817,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Check if label already exists
     let label = tileEl.querySelector('.admin-tile-label');
     if (label) {
+      // Update existing label text and ensure visible
+      label.textContent = tileEl.dataset.id;
       label.style.display = 'block';
       return;
     }
@@ -823,20 +840,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Helper to update all admin tile labels based on current state
   function updateAllAdminTileLabels() {
-    if (!isAdminActive()) {
-      // Admin session not active, force hide all labels
-      showTileLabels = false;
-      const allLabels = wall.querySelectorAll('.admin-tile-label');
-      allLabels.forEach(label => label.style.display = 'none');
+    if (!isAdminActive() || !showTileLabels) {
+      // Should not be called when admin inactive or toggle OFF
+      // (refreshAdminOverlays handles those cases)
       return;
     }
     
     const allTiles = wall.querySelectorAll('.tile');
     allTiles.forEach(tile => {
-      if (showTileLabels) {
-        applyAdminTileLabel(tile);
+      // Check if tile is currently occupied
+      const isOccupied = tile.dataset.occupied === "1";
+      
+      // Find any existing label overlays in this tile
+      const existingLabels = tile.querySelectorAll('.admin-tile-label');
+      
+      if (isOccupied) {
+        // Tile is occupied: ensure exactly 1 label with correct text
+        if (existingLabels.length === 0) {
+          // No label exists, create one
+          const label = document.createElement('div');
+          label.classList.add('admin-tile-label');
+          label.textContent = tile.dataset.id;
+          tile.appendChild(label);
+        } else {
+          // Label(s) exist - keep first, update text, remove duplicates
+          existingLabels[0].textContent = tile.dataset.id;
+          existingLabels[0].style.display = 'block';
+          // Remove any duplicate labels
+          for (let i = 1; i < existingLabels.length; i++) {
+            existingLabels[i].remove();
+          }
+        }
       } else {
-        removeAdminTileLabel(tile);
+        // Tile is empty: remove all labels
+        existingLabels.forEach(label => label.remove());
       }
     });
   }
@@ -1328,14 +1365,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (showTileLabelsToggle) {
         showTileLabelsToggle.addEventListener("change", (e) => {
           showTileLabels = e.target.checked;
-          // Apply immediately
+          // Apply or clear immediately
           refreshAdminOverlays();
-          // Defer second pass for timing/DOM readiness
-          setTimeout(() => {
-            if (showTileLabels === e.target.checked) {
-              refreshAdminOverlays();
-            }
-          }, 0);
+          // Defer second pass only for ON (timing/DOM readiness)
+          if (showTileLabels) {
+            setTimeout(() => {
+              if (showTileLabels === e.target.checked) {
+                refreshAdminOverlays();
+              }
+            }, 0);
+          }
           if (DEBUG) console.log('Show Tile Labels:', showTileLabels);
         });
       }
