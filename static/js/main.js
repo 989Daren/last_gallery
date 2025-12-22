@@ -1,5 +1,6 @@
 // === Debug toggle ===
 const DEBUG = false;
+const ADMIN_DEBUG = false;  // Show admin debug footer with undo state details
 const log  = (...args) => DEBUG && console.log(...args);
 const warn = (...args) => DEBUG && console.warn(...args);
 const error = (...args) => console.error(...args);
@@ -651,11 +652,42 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Helper to update undo button state
-  function updateUndoButton(historyCount) {
-    if (undoBtn) {
-      undoBtn.disabled = historyCount === 0;
-      if (DEBUG) console.log('Undo button state:', historyCount > 0 ? 'enabled' : 'disabled');
+  function updateUndoButton(shuffleCount, nonShuffleCount) {
+    // Handle both new format (separate counts) and legacy format (single history_count)
+    let shuffle_count = shuffleCount;
+    let non_shuffle_count = nonShuffleCount;
+    
+    // Legacy fallback: if called with a single number, assume it's total history_count
+    if (typeof shuffleCount === 'number' && nonShuffleCount === undefined) {
+      // Backward compatibility: enable both if any history exists
+      const totalCount = shuffleCount;
+      if (undoBtn) {
+        undoBtn.disabled = totalCount === 0;
+        undoBtn.title = totalCount === 0 ? "No actions to undo" : "";
+      }
+      const undoShuffleBtn = $("undoShuffleBtn");
+      if (undoShuffleBtn) {
+        undoShuffleBtn.disabled = totalCount === 0;
+        undoShuffleBtn.title = totalCount === 0 ? "No shuffle to undo" : "";
+      }
+      return;
     }
+    
+    // New format: separate counts for independent button states
+    if (undoBtn) {
+      undoBtn.disabled = non_shuffle_count === 0;
+      undoBtn.title = non_shuffle_count === 0 ? "No undoable actions after the last shuffle" : "";
+      if (DEBUG) console.log('Undo button state:', non_shuffle_count > 0 ? 'enabled' : 'disabled', `(non_shuffle_count=${non_shuffle_count})`);
+    }
+    const undoShuffleBtn = $("undoShuffleBtn");
+    if (undoShuffleBtn) {
+      undoShuffleBtn.disabled = shuffle_count === 0;
+      undoShuffleBtn.title = shuffle_count === 0 ? "No shuffle to undo" : "";
+      if (DEBUG) console.log('Undo Shuffle button state:', shuffle_count > 0 ? 'enabled' : 'disabled', `(shuffle_count=${shuffle_count})`);
+    }
+    
+    // Update admin debug footer if enabled
+    updateAdminDebugFooter(shuffle_count, non_shuffle_count);
   }
 
   // Helper to fetch history status and update undo button
@@ -669,11 +701,35 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (response.ok) {
         const data = await response.json();
-        updateUndoButton(data.history_count);
+        // Store full data for debug footer
+        window.lastHistoryData = data;
+        // Use new separate counts if available, fallback to legacy history_count
+        if (data.shuffle_count !== undefined && data.non_shuffle_count !== undefined) {
+          updateUndoButton(data.shuffle_count, data.non_shuffle_count);
+        } else {
+          updateUndoButton(data.history_count);
+        }
       }
     } catch (err) {
       if (DEBUG) console.warn('Failed to fetch history status:', err);
     }
+  }
+
+  // Helper to update admin debug footer (development only)
+  function updateAdminDebugFooter(shuffle_count, non_shuffle_count) {
+    if (!ADMIN_DEBUG) return;
+    
+    const footer = $("adminDebugFooter");
+    if (!footer) return;
+    
+    // Get additional data from last history fetch if available
+    const data = window.lastHistoryData || {};
+    const non_shuffle_total = data.non_shuffle_total ?? '?';
+    const last_shuffle_id = data.last_shuffle_id ?? 'none';
+    
+    // Format: "Undo: 0 eligible / 3 total | Shuffle Undo: 1 | Last Shuffle ID: 42"
+    footer.textContent = `Undo: ${non_shuffle_count} eligible / ${non_shuffle_total} total | Shuffle Undo: ${shuffle_count} | Last Shuffle ID: ${last_shuffle_id}`;
+    footer.style.display = 'block';
   }
 
   // Clear Single Tile (with tile_info lookup and confirmation)
@@ -730,7 +786,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
       if (DEBUG) console.log('Cleared tile:', tileId);
       
-      updateUndoButton(result.history_count);
+      // Update buttons with returned counts
+      if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
+        updateUndoButton(result.shuffle_count, result.non_shuffle_count);
+      }
       await refreshWallFromServer();
       
       showAdminStatus(`Cleared ${tileId}`, "success");
@@ -761,7 +820,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
       if (DEBUG) console.log('Cleared all tiles');
       
-      updateUndoButton(result.history_count);
+      // Update buttons with returned counts
+      if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
+        updateUndoButton(result.shuffle_count, result.non_shuffle_count);
+      }
       await refreshWallFromServer();
       
       showAdminStatus("Cleared all tiles", "success");
@@ -797,12 +859,55 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const widthMatch = Math.abs(fromRect.width - toRect.width) <= TOLERANCE;
     const heightMatch = Math.abs(fromRect.height - toRect.height) <= TOLERANCE;
+    const sizeMatches = widthMatch && heightMatch;
 
-    if (!widthMatch || !heightMatch) {
-      showAdminStatus("Tiles must be the same size", "error");
+    // If size doesn't match, show override confirmation modal
+    if (!sizeMatches) {
+      // Store move parameters for confirmation
+      window.pendingMove = { fromId, toId };
+      
+      // Show override confirmation modal
+      const overrideModal = $("moveOverrideModal");
+      if (overrideModal) {
+        overrideModal.classList.remove("hidden");
+      }
       return;
     }
 
+    // Size matches - proceed with standard flow
+    await executeTileMove(fromId, toId, false);
+  });
+
+  // Override confirmation modal handlers
+  const moveOverrideModal = $("moveOverrideModal");
+  const moveOverrideProceedBtn = $("moveOverrideProceedBtn");
+  const moveOverrideCancelBtn = $("moveOverrideCancelBtn");
+
+  moveOverrideProceedBtn?.addEventListener("click", async () => {
+    // Hide modal
+    if (moveOverrideModal) {
+      moveOverrideModal.classList.add("hidden");
+    }
+
+    // Execute move with override flag
+    if (window.pendingMove) {
+      const { fromId, toId } = window.pendingMove;
+      await executeTileMove(fromId, toId, true);
+      window.pendingMove = null;
+    }
+  });
+
+  moveOverrideCancelBtn?.addEventListener("click", () => {
+    // Hide modal and cancel move
+    if (moveOverrideModal) {
+      moveOverrideModal.classList.add("hidden");
+    }
+    window.pendingMove = null;
+    showAdminStatus("Move cancelled", "error");
+  });
+
+  // Helper function to execute tile move
+  async function executeTileMove(fromId, toId, override) {
     try {
       // Fetch source tile info
       const fromInfoResponse = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(fromId)}`, {
@@ -836,9 +941,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Confirm move
-      const confirmMsg = `Move "${fromInfo.artwork_name}" by ${fromInfo.artist_name} from ${fromId} to ${toId}?`;
-      if (!confirm(confirmMsg)) return;
+      // Confirm move (only if not already confirmed via override modal)
+      if (!override) {
+        const confirmMsg = `Move "${fromInfo.artwork_name}" by ${fromInfo.artist_name} from ${fromId} to ${toId}?`;
+        if (!confirm(confirmMsg)) return;
+      }
 
       // Execute move
       const response = await fetch('/api/admin/move_tile_asset', {
@@ -849,7 +956,8 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         body: JSON.stringify({
           from_tile_id: fromId,
-          to_tile_id: toId
+          to_tile_id: toId,
+          override: override
         })
       });
 
@@ -859,19 +967,24 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const result = await response.json();
-      if (DEBUG) console.log('Moved artwork:', fromId, '→', toId);
+      if (DEBUG) console.log('Moved artwork:', fromId, '→', toId, override ? '(override)' : '');
       
-      updateUndoButton(result.history_count);
+      // Update buttons with returned counts
+      if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
+        updateUndoButton(result.shuffle_count, result.non_shuffle_count);
+      } else if (result.history_count !== undefined) {
+        updateUndoButton(result.history_count);
+      }
       await refreshWallFromServer();
       
-      showAdminStatus(`Moved ${fromId} → ${toId}`, "success");
+      showAdminStatus(`Moved ${fromId} → ${toId}${override ? ' (override)' : ''}`, "success");
       if (adminMoveFromInput) adminMoveFromInput.value = "";
       if (adminMoveToInput) adminMoveToInput.value = "";
     } catch (err) {
       console.error('Failed to move artwork:', err);
       showAdminStatus(err.message || 'Failed to move artwork', "error");
     }
-  });
+  }
 
   // Undo
   undoBtn?.addEventListener("click", async () => {
@@ -881,7 +994,8 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Pin': ADMIN_PIN
-        }
+        },
+        body: JSON.stringify({ action_type: 'non_shuffle' })
       });
 
       if (!response.ok) {
@@ -891,13 +1005,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
       
       if (!result.ok) {
-        showAdminStatus(result.error || "Nothing to undo", "error");
+        showAdminStatus(result.message || "Nothing to undo", "error");
         return;
       }
 
       if (DEBUG) console.log('Undo successful');
       
-      updateUndoButton(result.history_count);
+      // Update buttons with returned counts
+      if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
+        updateUndoButton(result.shuffle_count, result.non_shuffle_count);
+      }
       await refreshWallFromServer();
       showAdminStatus("Undo successful", "success");
     } catch (err) {
@@ -1041,6 +1158,73 @@ document.addEventListener("DOMContentLoaded", () => {
       outlineToggle?.addEventListener("change", updateOutlineState);
       updateOutlineState();
 
+      // ---- Undo Shuffle handling ----
+      const undoShuffleBtn = $("undoShuffleBtn");
+      const undoShuffleModal = $("undoShuffleModal");
+      const undoShuffleProceedBtn = $("undoShuffleProceedBtn");
+      const undoShuffleCancelBtn = $("undoShuffleCancelBtn");
+
+      undoShuffleBtn?.addEventListener("click", () => {
+        // Show confirmation modal
+        if (undoShuffleModal) {
+          undoShuffleModal.classList.remove("hidden");
+        }
+      });
+
+      undoShuffleProceedBtn?.addEventListener("click", async () => {
+        // Hide modal
+        if (undoShuffleModal) {
+          undoShuffleModal.classList.add("hidden");
+        }
+
+        try {
+          const response = await fetch('/api/admin/undo', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Admin-Pin': ADMIN_PIN
+            },
+            body: JSON.stringify({ action_type: 'shuffle' })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Undo shuffle failed: ${response.status}`);
+          }
+
+          const result = await response.json();
+          
+          if (!result.ok) {
+            alert(result.message || "Nothing to undo");
+            return;
+          }
+
+          if (DEBUG) console.log('Undo shuffle successful:', result.action);
+          
+          // Update buttons with returned counts
+          if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
+            updateUndoButton(result.shuffle_count, result.non_shuffle_count);
+          } else {
+            // Fallback to fetching status
+            await fetchHistoryStatus();
+          }
+          
+          // Refresh wall to show restored placements
+          await refreshWallFromServer();
+          
+          alert("Shuffle undone successfully");
+        } catch (err) {
+          console.error('Failed to undo shuffle:', err);
+          alert('Failed to undo shuffle: ' + err.message);
+        }
+      });
+
+      undoShuffleCancelBtn?.addEventListener("click", () => {
+        // Hide modal and cancel
+        if (undoShuffleModal) {
+          undoShuffleModal.classList.add("hidden");
+        }
+      });
+
       // ---- Shuffle handling (admin modal button) ----
       const shuffleButton = $("shuffleButton");
       if (shuffleButton) {
@@ -1069,6 +1253,15 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!response.ok) {
               alert("Shuffle failed: " + response.status);
               return;
+            }
+            
+            const result = await response.json();
+            
+            // Update undo button state with returned counts
+            if (result.shuffle_count !== undefined && result.non_shuffle_count !== undefined) {
+              updateUndoButton(result.shuffle_count, result.non_shuffle_count);
+            } else if (result.history_count !== undefined) {
+              updateUndoButton(result.history_count);
             }
             
             // Success - refresh wall to show shuffled placements

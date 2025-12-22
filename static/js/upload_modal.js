@@ -399,8 +399,6 @@ document.addEventListener("DOMContentLoaded", () => {
       // Close modal and reset
       closeModal();
       
-      // TODO: Next step - refresh wall state or call applyAssetToTile directly
-      
     } catch (error) {
       console.error(`${LOG_PREFIX} Upload failed:`, error);
       uploadInFlight = false;

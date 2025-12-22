@@ -7,6 +7,7 @@
 
   <!-- Main stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-debug.css') }}">
 
   <!-- Cropper.js stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/cropper/cropper.min.css') }}">
@@ -179,6 +180,7 @@
 
         <div class="adminRow">
           <button id="shuffleButton" type="button">Shuffle Tiles</button>
+          <button id="undoShuffleBtn" type="button" disabled>Undo Shuffle</button>
         </div>
       </div>
 
@@ -187,6 +189,45 @@
       </div>
     </div>
   </div>
+
+  <!-- Undo Shuffle Confirmation Modal -->
+  <div id="undoShuffleModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="undoShuffleModalTitle">
+    <div class="modalCard" role="document">
+      <h2 id="undoShuffleModalTitle">Undo last shuffle?</h2>
+      
+      <div class="modal-message">
+        <p>This will restore tile placements to the state before the most recent shuffle.</p>
+        <p>Any changes made after that shuffle will be overwritten.</p>
+        <p><strong>Proceed?</strong></p>
+      </div>
+
+      <div class="upload-actions">
+        <button id="undoShuffleCancelBtn" type="button">Cancel</button>
+        <button id="undoShuffleProceedBtn" type="button">Proceed</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Move Override Confirmation Modal -->
+  <div id="moveOverrideModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="moveOverrideModalTitle">
+    <div class="modalCard" role="document">
+      <h2 id="moveOverrideModalTitle">Confirm Rule Override</h2>
+      
+      <div class="modal-message">
+        <p>This move breaks gallery rules.</p>
+        <p>Artwork is being placed in a tile size it did not earn through upgrade or shuffle logic.</p>
+        <p><strong>Proceed anyway?</strong></p>
+      </div>
+
+      <div class="upload-actions">
+        <button id="moveOverrideCancelBtn" type="button">Cancel</button>
+        <button id="moveOverrideProceedBtn" type="button">Proceed</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Debug Footer (development only) -->
+  <div id="adminDebugFooter" class="admin-debug-footer" style="display: none;"></div>
 
   <!-- JS -->
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
