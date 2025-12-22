@@ -257,6 +257,14 @@ label {
   display: block;
 }
 
+/* =====================================================
+   LEGACY ARTWORK GLOW DISABLED (replaced by wall lighting)
+   ===================================================== */
+.art-frame img {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
 /* Wrapper so outline draws reliably over image */
 .art-imgwrap {
   position: relative;
