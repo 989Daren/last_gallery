@@ -58,7 +58,7 @@ html, body {
 
 body {
   margin: 0;
-  background: var(--page-bg);
+  background: var(--wallColor);
   color: #fff;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
