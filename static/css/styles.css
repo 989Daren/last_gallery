@@ -219,7 +219,6 @@ label {
   position: relative;
   margin: 0 auto;   /* centers the entire grid */
   max-width: 100%;
-  background: var(--wallColor);
 }
 
 /* =====================================================
@@ -231,6 +230,11 @@ label {
   inset: 0;
   pointer-events: none;
   mix-blend-mode: normal;
+}
+
+.wall-color-layer {
+  z-index: 0;
+  background: var(--wallColor);
 }
 
 .wall-spotlight {
