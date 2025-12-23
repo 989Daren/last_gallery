@@ -16,13 +16,8 @@
   --spotX: 55%;
   --spotY: 20%;
   --spotSize: 65%;
-  
-  --vigEnabled: 1;
-  --vigOpacity: 0.22;
-  --vigFeather: 55%;
-  
   --spotZ: 1;
-  --vigZ: 2;
+  /* Vignette effect intentionally removed — spotlight effect preferred */
 
   /* Theme helpers (safe refactor; no aesthetic intent change) */
   --page-bg: #111;
@@ -228,25 +223,31 @@ label {
 .wall-spotlight {
   z-index: var(--spotZ);
   opacity: calc(var(--spotEnabled) * var(--spotOpacity));
-  background: radial-gradient(
-    ellipse var(--spotSize) var(--spotSize) at var(--spotX) var(--spotY),
-    rgba(255, 248, 240, 0.8) 0%,
-    rgba(255, 248, 240, 0.4) 25%,
-    rgba(255, 248, 240, 0.1) 50%,
-    transparent 100%
-  );
+  background: 
+    /* Subtle left-to-right energy wash */
+    linear-gradient(
+      to right,
+      rgba(255, 248, 240, 0.08) 0%,
+      transparent 50%
+    ),
+    /* Spotlight A: upper left-biased hotspot */
+    radial-gradient(
+      ellipse 70% 55% at 35% 18%,
+      rgba(255, 248, 240, 0.9) 0%,
+      rgba(255, 248, 240, 0.5) 30%,
+      rgba(255, 248, 240, 0.15) 60%,
+      transparent 75%
+    ),
+    /* Spotlight B: lower left-biased hotspot (below fold) */
+    radial-gradient(
+      ellipse 80% 60% at 40% 75%,
+      rgba(255, 248, 240, 0.7) 0%,
+      rgba(255, 248, 240, 0.35) 25%,
+      rgba(255, 248, 240, 0.1) 55%,
+      transparent 85%
+    );
 }
-
-.wall-vignette {
-  z-index: var(--vigZ);
-  opacity: calc(var(--vigEnabled) * var(--vigOpacity));
-  background: radial-gradient(
-    ellipse var(--vigFeather) var(--vigFeather) at 50% 50%,
-    transparent 0%,
-    rgba(0, 0, 0, 0.3) 40%,
-    rgba(0, 0, 0, 0.7) 100%
-  );
-}
+/* Vignette effect intentionally removed — spotlight effect preferred */
 
 /* =====================================================
    TILES + ARTWORK
@@ -255,7 +256,7 @@ label {
 .tile {
   position: absolute;
   z-index: 10; /* Above wall lighting overlays */
-  background: var(--tileColor);
+  background: transparent; /* Transparent to allow spotlight visibility */
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.3);
 
@@ -369,8 +370,8 @@ label {
   left: 4px;
   padding: 2px 4px;
 
-  /* Keep only one color rule (cleaned). */
-  color: color-mix(in srgb, var(--tileColor) 85%, white);
+  /* Solid light color for visibility on transparent tiles */
+  color: rgba(255, 255, 255, 0.85);
 
   font-size: 10px;
   font-weight: bold;
