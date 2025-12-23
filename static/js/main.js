@@ -401,15 +401,20 @@ function applyAssetToTile(tileEl, asset) {
   frame.appendChild(shadow);
   frame.appendChild(wrap);
   
+  // Wrap in shell to provide shadow allowance space
+  const shell = document.createElement("div");
+  shell.classList.add("art-shell");
+  shell.appendChild(frame);
+  
   // 3. Mark tile as having asset for cursor styling
   tileEl.classList.add("has-asset");
   
-  // 4. Insert art-frame before label (ensures label doesn't overlay art)
+  // 4. Insert art-shell before label (ensures label doesn't overlay art)
   const label = tileEl.querySelector(".tile-label");
   if (label) {
-    tileEl.insertBefore(frame, label);
+    tileEl.insertBefore(shell, label);
   } else {
-    tileEl.appendChild(frame);
+    tileEl.appendChild(shell);
   }
   
   // 4. Set occupancy dataset fields
