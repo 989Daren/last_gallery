@@ -381,9 +381,14 @@ function applyAssetToTile(tileEl, asset) {
   img.classList.add("tile-art");
   img.alt = asset.artwork_name || "Artwork";
   
+  // Create dedicated shadow layer
+  const shadow = document.createElement("div");
+  shadow.classList.add("art-shadow");
+  
   const wrap = document.createElement("div");
   wrap.classList.add("art-imgwrap");
-  wrap.appendChild(img);
+  wrap.appendChild(shadow);  // Shadow first (z-index: 0)
+  wrap.appendChild(img);     // Image on top (z-index: 1)
   
   // Calculate artwork dimensions (tile minus frame padding)
   const tileSize = parseInt(tileEl.style.width) || 85;
@@ -392,13 +397,8 @@ function applyAssetToTile(tileEl, asset) {
   wrap.style.width = artworkSize + "px";
   wrap.style.height = artworkSize + "px";
   
-  // Create dedicated shadow layer
-  const shadow = document.createElement("div");
-  shadow.classList.add("art-shadow");
-  
   const frame = document.createElement("div");
   frame.classList.add("art-frame");
-  frame.appendChild(shadow);
   frame.appendChild(wrap);
   
   // Wrap in shell to provide shadow allowance space
