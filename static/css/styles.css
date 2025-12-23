@@ -22,6 +22,15 @@
   /* Wall base color (illuminated by spotlights) */
   --wallColor: rgb(56, 56, 56);
 
+  /* Artwork shadow controls */
+  --artShadowX: 6px;
+  --artShadowY: 8px;
+  --artShadowBlur: 12px;
+  --artShadowAlpha: 0.38;
+  
+  /* Artwork padding allowance (space between art and tile boundary) */
+  --artPad: 14px;
+
   /* Theme helpers (safe refactor; no aesthetic intent change) */
   --page-bg: #111;
   --bar-bg: #222;
@@ -291,7 +300,7 @@ label {
 .tile.has-asset .art-shell {
   position: relative;
   display: inline-block;
-  padding: 12px; /* Allowance for shadow blur/offset */
+  padding: var(--artPad); /* Allowance for shadow blur/offset */
   pointer-events: none; /* Shell doesn't capture clicks */
 }
 
@@ -317,7 +326,7 @@ label {
 .tile.has-asset .art-imgwrap .art-shadow {
   position: absolute;
   inset: 0;
-  box-shadow: 8px 10px 18px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--artShadowX) var(--artShadowY) var(--artShadowBlur) rgba(0, 0, 0, var(--artShadowAlpha));
   pointer-events: none;
   z-index: 0;
 }
