@@ -301,9 +301,9 @@ function computeWallDimensions(tiles) {
   return { width: maxRight, height: maxBottom };
 }
 
-// Apply the global grid color via CSS variable
+// Apply the global grid color via CSS variable (now controls wall base color)
 function applyGridColor(color) {
-  document.documentElement.style.setProperty("--tileColor", color);
+  document.documentElement.style.setProperty("--wallColor", color);
 }
 
 function assignArtworkUrls(tiles) {
@@ -456,7 +456,9 @@ function selectRandomEmptyXSTile() {
 window.selectRandomEmptyXSTile = selectRandomEmptyXSTile;
 
 function renderTiles(wall, layoutTiles) {
-  wall.innerHTML = "";
+  // Clear only tiles, preserve wall lighting overlays
+  const tiles = wall.querySelectorAll('.tile');
+  tiles.forEach(tile => tile.remove());
 
   layoutTiles.forEach(tile => {
     const units = sizeToUnits(tile.size);
@@ -1224,13 +1226,11 @@ document.addEventListener("DOMContentLoaded", () => {
       wall.style.width = width + "px";
       wall.style.height = height + "px";
 
-      // Insert wall lighting overlays BEFORE tiles
-      if (!wall.querySelector('.wall-spotlight') && !wall.querySelector('.wall-vignette')) {
+      // Insert wall lighting overlay BEFORE tiles
+      // Vignette effect intentionally removed — spotlight effect preferred
+      if (!wall.querySelector('.wall-spotlight')) {
         const spotlightOverlay = document.createElement('div');
         spotlightOverlay.className = 'wall-light wall-spotlight';
-        const vignetteOverlay = document.createElement('div');
-        vignetteOverlay.className = 'wall-light wall-vignette';
-        wall.prepend(vignetteOverlay);
         wall.prepend(spotlightOverlay);
       }
 
