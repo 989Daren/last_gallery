@@ -385,6 +385,13 @@ function applyAssetToTile(tileEl, asset) {
   wrap.classList.add("art-imgwrap");
   wrap.appendChild(img);
   
+  // Calculate artwork dimensions (tile minus frame padding)
+  const tileSize = parseInt(tileEl.style.width) || 85;
+  const framePadding = 6; // Default padding, overridden by CSS for different sizes
+  const artworkSize = tileSize - (framePadding * 2);
+  wrap.style.width = artworkSize + "px";
+  wrap.style.height = artworkSize + "px";
+  
   const frame = document.createElement("div");
   frame.classList.add("art-frame");
   frame.appendChild(wrap);

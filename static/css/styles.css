@@ -288,13 +288,14 @@ label {
 
 /* Art frame (internal mat/padding + glow) */
 .art-frame {
-  width: 100%;
-  height: 100%;
+  /* Shrink-wrap to artwork size (not tile size) so shadow is tight */
+  display: inline-block;
+  position: relative;
+  z-index: 2; /* Stack above neighboring shadows */
   padding: 6px;
   box-sizing: border-box;
   background: transparent;
   overflow: visible;
-  display: block;
 }
 
 /* Default bottom-right shadow for artwork (when tile has asset) */
@@ -324,8 +325,7 @@ label {
 /* Wrapper so outline draws reliably over image */
 .art-imgwrap {
   position: relative;
-  width: 100%;
-  height: 100%;
+  /* Size set dynamically via JS based on tile size */
   overflow: hidden; /* Crop image overflow within frame */
 }
 
