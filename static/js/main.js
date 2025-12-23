@@ -1251,8 +1251,14 @@ document.addEventListener("DOMContentLoaded", () => {
       wall.style.width = width + "px";
       wall.style.height = height + "px";
 
-      // Insert wall lighting overlay BEFORE tiles
-      // Vignette effect intentionally removed — spotlight effect preferred
+      // Insert wall lighting overlays BEFORE tiles
+      // Wall color layer (base)
+      if (!wall.querySelector('.wall-color-layer')) {
+        const colorOverlay = document.createElement('div');
+        colorOverlay.className = 'wall-light wall-color-layer';
+        wall.prepend(colorOverlay);
+      }
+      // Spotlight layer (illumination on top of color)
       if (!wall.querySelector('.wall-spotlight')) {
         const spotlightOverlay = document.createElement('div');
         spotlightOverlay.className = 'wall-light wall-spotlight';
