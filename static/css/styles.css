@@ -224,13 +224,7 @@ label {
   z-index: var(--spotZ);
   opacity: calc(var(--spotEnabled) * var(--spotOpacity));
   background: 
-    /* Subtle left-to-right energy wash */
-    linear-gradient(
-      to right,
-      rgba(255, 248, 240, 0.08) 0%,
-      transparent 50%
-    ),
-    /* Spotlight A: upper left-biased hotspot */
+    /* Spotlight A: upper hotspot */
     radial-gradient(
       ellipse 70% 55% at 35% 18%,
       rgba(255, 248, 240, 0.9) 0%,
@@ -238,13 +232,13 @@ label {
       rgba(255, 248, 240, 0.15) 60%,
       transparent 75%
     ),
-    /* Spotlight B: lower left-biased hotspot (below fold) */
+    /* Spotlight B: lower hotspot (identical except Y position) */
     radial-gradient(
-      ellipse 80% 60% at 40% 75%,
-      rgba(255, 248, 240, 0.7) 0%,
-      rgba(255, 248, 240, 0.35) 25%,
-      rgba(255, 248, 240, 0.1) 55%,
-      transparent 85%
+      ellipse 70% 55% at 35% 75%,
+      rgba(255, 248, 240, 0.9) 0%,
+      rgba(255, 248, 240, 0.5) 30%,
+      rgba(255, 248, 240, 0.15) 60%,
+      transparent 75%
     );
 }
 /* Vignette effect intentionally removed — spotlight effect preferred */
