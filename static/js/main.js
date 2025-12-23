@@ -479,6 +479,16 @@ function selectRandomEmptyXSTile() {
 // Export for use by other scripts
 window.selectRandomEmptyXSTile = selectRandomEmptyXSTile;
 
+// Size wall overlays to full scrollable dimensions (mobile pan support)
+function sizeWallOverlays(wall) {
+  const w = wall.scrollWidth;
+  const h = wall.scrollHeight;
+  wall.querySelectorAll('.wall-light, .wall-spotlight, .wall-color-layer').forEach(el => {
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+  });
+}
+
 function renderTiles(wall, layoutTiles) {
   // Clear only tiles, preserve wall lighting overlays
   const tiles = wall.querySelectorAll('.tile');
@@ -1251,6 +1261,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const layoutTiles = buildLayoutTiles(tiles, height);
       renderTiles(wall, layoutTiles);
+      sizeWallOverlays(wall);
+      sizeWallOverlays(wall);
 
       // Clean all tiles to baseline empty state at boot (before any fetches/hydration)
       const allTiles = wall.querySelectorAll(".tile");
@@ -1458,6 +1470,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Success - refresh wall to show shuffled placements
             await refreshWallFromServer();
             refreshAdminOverlays(result);
+            sizeWallOverlays(wall);
             
           } catch (err) {
             console.error("Shuffle error:", err);
@@ -1465,6 +1478,12 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         });
       }
+
+      // Size overlays on resize and orientation change (mobile support)
+      window.addEventListener('resize', () => sizeWallOverlays(wall));
+      window.addEventListener('orientationchange', () => {
+        setTimeout(() => sizeWallOverlays(wall), 50);
+      });
     } catch (err) {
       error("Failed to load SVG grid:", err);
       wall.innerHTML = `
