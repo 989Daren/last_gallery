@@ -310,7 +310,7 @@ label {
 .tile.has-asset .art-imgwrap {
   position: relative;
   z-index: 1;
-  overflow: hidden; /* Crop image overflow */
+  overflow: visible; /* Allow shadow to extend */
 }
 
 /* Dedicated shadow layer behind artwork - sized to artwork box */
@@ -351,7 +351,7 @@ label {
 .art-imgwrap {
   position: relative;
   /* Size set dynamically via JS based on tile size */
-  overflow: hidden; /* Crop image overflow within frame */
+  overflow: visible; /* Allow shadow to extend (image cropped via object-fit) */
 }
 
 .art-imgwrap img {
