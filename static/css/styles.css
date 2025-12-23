@@ -266,7 +266,7 @@ label {
   color: #fff;
 
   cursor: default;
-  overflow: hidden; /* Prevent artwork from spilling outside tile */
+  overflow: visible; /* Allow shadows to extend beyond tile bounds */
 }
 /* Only show pointer cursor on tiles with artwork */
 .tile.has-asset {
@@ -326,6 +326,7 @@ label {
   position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden; /* Crop image overflow within frame */
 }
 
 .art-imgwrap img {
