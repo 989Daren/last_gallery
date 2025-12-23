@@ -829,9 +829,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function applyAdminTileLabel(tileEl) {
     if (!isAdminActive() || !showTileLabels) return;
     
-    // Only show labels on occupied tiles
-    if (tileEl.dataset.occupied !== "1") return;
-    
     // Check if label already exists
     let label = tileEl.querySelector('.admin-tile-label');
     if (label) {
@@ -866,32 +863,24 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const allTiles = wall.querySelectorAll('.tile');
     allTiles.forEach(tile => {
-      // Check if tile is currently occupied
-      const isOccupied = tile.dataset.occupied === "1";
-      
       // Find any existing label overlays in this tile
       const existingLabels = tile.querySelectorAll('.admin-tile-label');
       
-      if (isOccupied) {
-        // Tile is occupied: ensure exactly 1 label with correct text
-        if (existingLabels.length === 0) {
-          // No label exists, create one
-          const label = document.createElement('div');
-          label.classList.add('admin-tile-label');
-          label.textContent = tile.dataset.id;
-          tile.appendChild(label);
-        } else {
-          // Label(s) exist - keep first, update text, remove duplicates
-          existingLabels[0].textContent = tile.dataset.id;
-          existingLabels[0].style.display = 'block';
-          // Remove any duplicate labels
-          for (let i = 1; i < existingLabels.length; i++) {
-            existingLabels[i].remove();
-          }
-        }
+      // Ensure exactly 1 label with correct text on every tile
+      if (existingLabels.length === 0) {
+        // No label exists, create one
+        const label = document.createElement('div');
+        label.classList.add('admin-tile-label');
+        label.textContent = tile.dataset.id;
+        tile.appendChild(label);
       } else {
-        // Tile is empty: remove all labels
-        existingLabels.forEach(label => label.remove());
+        // Label(s) exist - keep first, update text, remove duplicates
+        existingLabels[0].textContent = tile.dataset.id;
+        existingLabels[0].style.display = 'block';
+        // Remove any duplicate labels
+        for (let i = 1; i < existingLabels.length; i++) {
+          existingLabels[i].remove();
+        }
       }
     });
   }
