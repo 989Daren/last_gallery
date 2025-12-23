@@ -358,7 +358,7 @@ function resetTileToEmpty(tileEl) {
   delete tileEl.dataset.assetId;
   
   // 5. Remove occupancy/glow classes
-  tileEl.classList.remove("occupied", "has-art", "filled", "hasImage", "hasArtwork", "glow", "lit");
+  tileEl.classList.remove("occupied", "has-art", "filled", "hasImage", "hasArtwork", "glow", "lit", "has-asset");
   
   // 6. Clear any inline background styles
   tileEl.style.backgroundImage = "";
@@ -385,7 +385,10 @@ function applyAssetToTile(tileEl, asset) {
   frame.classList.add("art-frame");
   frame.appendChild(wrap);
   
-  // 3. Insert art-frame before label (ensures label doesn't overlay art)
+  // 3. Mark tile as having asset for cursor styling
+  tileEl.classList.add("has-asset");
+  
+  // 4. Insert art-frame before label (ensures label doesn't overlay art)
   const label = tileEl.querySelector(".tile-label");
   if (label) {
     tileEl.insertBefore(frame, label);
