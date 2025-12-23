@@ -23,10 +23,10 @@
   --wallColor: rgb(56, 56, 56);
 
   /* Artwork shadow controls */
-  --artShadowX: 6px;
-  --artShadowY: 8px;
-  --artShadowBlur: 12px;
-  --artShadowAlpha: 0.38;
+  --artShadowX: 4px;
+  --artShadowY: 6px;
+  --artShadowBlur: 6px;
+  --artShadowAlpha: 0.45;
   
   /* Artwork padding allowance (space between art and tile boundary) */
   --artPad: 14px;
