@@ -392,8 +392,13 @@ function applyAssetToTile(tileEl, asset) {
   wrap.style.width = artworkSize + "px";
   wrap.style.height = artworkSize + "px";
   
+  // Create dedicated shadow layer
+  const shadow = document.createElement("div");
+  shadow.classList.add("art-shadow");
+  
   const frame = document.createElement("div");
   frame.classList.add("art-frame");
+  frame.appendChild(shadow);
   frame.appendChild(wrap);
   
   // 3. Mark tile as having asset for cursor styling
