@@ -266,7 +266,7 @@ label {
   color: #fff;
 
   cursor: default;
-  overflow: visible; /* Allow shadows to extend beyond tile bounds */
+  overflow: hidden; /* Clip shadows within tile bounds */
 }
 /* Only show pointer cursor on tiles with artwork */
 .tile.has-asset {
@@ -288,19 +288,28 @@ label {
 
 /* Art frame (internal mat/padding + glow) */
 .art-frame {
-  /* Shrink-wrap to artwork size (not tile size) so shadow is tight */
+  /* Shrink-wrap to artwork size (not tile size) */
   display: inline-block;
   position: relative;
-  z-index: 2; /* Stack above neighboring shadows */
   padding: 6px;
   box-sizing: border-box;
   background: transparent;
   overflow: visible;
 }
 
-/* Default bottom-right shadow for artwork (when tile has asset) */
-.tile.has-asset .art-frame {
+/* Dedicated shadow layer behind artwork */
+.tile.has-asset .art-shadow {
+  position: absolute;
+  inset: 0;
   box-shadow: 8px 10px 18px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Crop layer stacks above shadow */
+.tile.has-asset .art-imgwrap {
+  position: relative;
+  z-index: 1;
 }
 
 .art-frame img {
