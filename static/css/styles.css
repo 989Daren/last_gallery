@@ -265,10 +265,13 @@ label {
   font-size: 12px;
   color: #fff;
 
-  cursor: pointer !important;
+  cursor: default;
   overflow: hidden; /* Prevent artwork from spilling outside tile */
 }
-
+/* Only show pointer cursor on tiles with artwork */
+.tile.has-asset {
+  cursor: pointer;
+}
 .tiles-no-outline .tile {
   border: none !important;
 }
