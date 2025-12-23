@@ -9,6 +9,10 @@ const error = (...args) => console.error(...args);
 // Set to false to disable all auto-generation of placeholder artwork
 const ENABLE_DEMO_AUTOFILL = false;
 
+// === Public tile label visibility ===
+// Set to false to hide white tile ID labels from public view (admin labels unaffected)
+const SHOW_PUBLIC_TILE_LABELS = false;
+
 // main.js
 // SVG → grid renderer using runtime parsing guide.
 // Preserves existing header defined in HTML.
@@ -479,11 +483,13 @@ function renderTiles(wall, layoutTiles) {
     el.style.width = w + "px";
     el.style.height = h + "px";
 
-    // Always create label first (establishes baseline)
-    const label = document.createElement("span");
-    label.classList.add("tile-label");
-    label.textContent = tile.id;
-    el.appendChild(label);
+    // Create public tile label (if enabled)
+    if (SHOW_PUBLIC_TILE_LABELS) {
+      const label = document.createElement("span");
+      label.classList.add("tile-label");
+      label.textContent = tile.id;
+      el.appendChild(label);
+    }
 
     wall.appendChild(el);
     
