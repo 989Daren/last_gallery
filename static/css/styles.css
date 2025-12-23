@@ -287,14 +287,23 @@ label {
 }
 
 /* Art frame (internal mat/padding + glow) */
-.art-frame {
-  /* Shrink-wrap to artwork size (not tile size) */
+/* Shadow allowance wrapper - provides space for shadow to render */
+.tile.has-asset .art-shell {
+  position: relative;
   display: inline-block;
+  padding: 12px; /* Allowance for shadow blur/offset */
+  pointer-events: none; /* Shell doesn't capture clicks */
+}
+
+.art-frame {
+  /* Tight to artwork size */
+  display: block;
   position: relative;
   padding: 6px;
   box-sizing: border-box;
   background: transparent;
   overflow: visible;
+  pointer-events: auto; /* Frame and contents are clickable */
 }
 
 /* Dedicated shadow layer behind artwork */
