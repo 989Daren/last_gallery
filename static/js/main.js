@@ -200,49 +200,44 @@ function wirePopupEventsOnce() {
   if (overlay.__wired) return;
   overlay.__wired = true;
 
-  const popup = overlay.querySelector(".popup");
-  const infoRibbon = overlay.querySelector(".popup-info");
-  const popupImg = overlay.querySelector(".popup-img");
+  // STEP 1: Helper functions for state detection
+  function isPopupOpen() {
+    return overlay.classList.contains("is-open");
+  }
 
-  // STEP 2: Centralized ribbon close logic
+  function isRibbonOpen() {
+    return ribbonVisible(overlay);
+  }
+
+  // STEP 1: Centralized close functions
   function closeInfoRibbon() {
     overlay.classList.add("hide-info");
   }
 
-  // STEP 4: Outside-click dismissal (overlay level)
-  // Closes ribbon only, NOT the image popup
+  function closeImagePopup() {
+    closeArtworkPopup();
+  }
+
+  // STEP 3: Unified state-machine click handler
+  // Implements two-click dismiss: first click closes ribbon, second closes popup
   overlay.addEventListener("click", (e) => {
-    // If ribbon is visible and click is outside both image and ribbon, close ribbon
-    if (ribbonVisible(overlay)) {
-      const clickedOnImage = popupImg && popupImg.contains(e.target);
-      const clickedOnRibbon = infoRibbon && infoRibbon.contains(e.target);
-      
-      if (!clickedOnImage && !clickedOnRibbon) {
-        closeInfoRibbon();
-      }
-    } else {
-      // No ribbon visible, close entire popup
-      closeArtworkPopup();
+    const popupOpen = isPopupOpen();
+    const ribbonOpen = isRibbonOpen();
+
+    if (!popupOpen) return;
+
+    // First click: close ribbon only
+    if (ribbonOpen) {
+      closeInfoRibbon();
+      return; // CRITICAL: prevents closing popup on same click
     }
+
+    // Second click: close popup
+    closeImagePopup();
   });
 
-  // Inside popup: stop propagation when ribbon is visible
-  popup.addEventListener("click", (e) => {
-    if (ribbonVisible(overlay)) {
-      e.stopPropagation();
-    }
-  });
-
-  // STEP 3: Make ribbon itself clickable to close
-  infoRibbon?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    closeInfoRibbon();
-  });
-
-  // STEP 5: Image clicks do nothing (protected by popup stopPropagation)
-  popupImg?.addEventListener("click", (e) => {
-    e.stopPropagation();
-  });
+  // STEP 4: No stopPropagation - let all clicks bubble to unified handler
+  // (removed all previous stopPropagation calls)
 }
 
 // Map size string → units (square tiles, N × N)
