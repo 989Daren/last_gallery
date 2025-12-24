@@ -1,6 +1,7 @@
 // === Debug toggle ===
 const DEBUG = false;
 const ADMIN_DEBUG = false;  // Show admin debug footer with undo state details
+const __DEV__ = true;  // Enable dev-only features (canary, extra logging)
 const log  = (...args) => DEBUG && console.log(...args);
 const warn = (...args) => DEBUG && console.warn(...args);
 const error = (...args) => console.error(...args);
@@ -661,6 +662,9 @@ async function finalizeWallAfterUndoRestore() {
 // =====================================================
 // DEV CANARY — Detect inner image drift
 // =====================================================
+// Baseline storage for image shift detection (persists across calls)
+let imageShiftBaseline = null;
+
 function checkForImageShift(label = '') {
   const tiles = Array.from(
     document.querySelectorAll('.tile.has-asset')
@@ -675,17 +679,39 @@ function checkForImageShift(label = '') {
 
     if (!wrap) return;
 
-    const tr = tile.getBoundingClientRect();
+    // Compare against .art-frame (parent of .art-imgwrap), fall back to tile
+    const frame = tile.querySelector('.art-frame');
+    const reference = frame || tile;
+
+    const refRect = reference.getBoundingClientRect();
     const wr = wrap.getBoundingClientRect();
 
-    const dx = Math.round(wr.left - tr.left);
-    const dy = Math.round(wr.top  - tr.top);
+    const dx = Math.round(wr.left - refRect.left);
+    const dy = Math.round(wr.top  - refRect.top);
 
-    // Allow tiny tolerance for subpixel rounding
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+    // Initialize baseline on first successful measurement
+    if (imageShiftBaseline === null) {
+      imageShiftBaseline = { dx, dy };
+      if (DEBUG) console.log('[checkForImageShift] Baseline recorded:', imageShiftBaseline);
+      return;
+    }
+
+    // Compare against baseline to detect regressions
+    const deltaDx = dx - imageShiftBaseline.dx;
+    const deltaDy = dy - imageShiftBaseline.dy;
+
+    // Warn only if position changed relative to baseline (tolerance ±1px)
+    if (Math.abs(deltaDx) > 1 || Math.abs(deltaDy) > 1) {
       console.warn(
-        `⚠️ IMAGE SHIFT DETECTED ${label}`,
-        { tileIndex: i, dx, dy, tile, wrap }
+        `⚠️ IMAGE SHIFT REGRESSION ${label}`,
+        {
+          tileIndex: i,
+          baseline: { dx: imageShiftBaseline.dx, dy: imageShiftBaseline.dy },
+          current: { dx, dy },
+          delta: { dx: deltaDx, dy: deltaDy },
+          tile,
+          wrap
+        }
       );
     }
   });
@@ -823,9 +849,17 @@ function renderWallFromState() {
   // PHASE 6: Finalize layout
   finalizeAfterRender(wall);
   
-  // PHASE 7: Diagnostic canary
+  // PHASE 7: Diagnostic canary (dev-only)
   console.log('[RENDER] renderWallFromState');
-  checkForImageShift('renderWallFromState');
+  if (__DEV__) checkForImageShift('renderWallFromState');
+}
+
+// PHASE 3: Single render choke point for explicit state changes
+function commitWallStateChange(reason) {
+  if (DEBUG) console.log('[PHASE 3] commitWallStateChange:', reason);
+  renderWallFromState();
+  console.log('[RENDER] commitWallStateChange:', reason);
+  if (__DEV__) checkForImageShift(reason);
 }
 
 // RENDER ENTRY POINT
@@ -1138,11 +1172,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
       
-      // Render from state
-      renderWallFromState();
-      
-      console.log('[RENDER] refreshWallFromServer completed');
-      checkForImageShift('refreshWallFromServer completed');
+      // PHASE 3: Single render after state update (refreshAdminOverlays called inside)
+      commitWallStateChange('refreshWallFromServer');
     } catch (err) {
       console.error('Failed to refresh wall from server:', err);
     }
@@ -1342,8 +1373,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Update buttons with returned counts
       updateUndoButton(result);
+      // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
       await refreshWallFromServer();
-      refreshAdminOverlays(result);
       
       showAdminStatus(`Cleared ${tileId}`, "success");
       if (adminClearTileIdInput) adminClearTileIdInput.value = "";
@@ -1378,8 +1409,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Update buttons with returned counts
       updateUndoButton(result);
+      // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
       await refreshWallFromServer();
-      refreshAdminOverlays(result);
       
       showAdminStatus("Cleared all tiles", "success");
     } catch (err) {
@@ -1529,8 +1560,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Update buttons with returned counts
       updateUndoButton(result);
+      // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
       await refreshWallFromServer();
-      refreshAdminOverlays(result);
       
       showAdminStatus(`Moved ${fromId} → ${toId}${override ? ' (override)' : ''}`, "success");
       if (adminMoveFromInput) adminMoveFromInput.value = "";
@@ -1541,7 +1572,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Undo
+  // Undo (PHASE 3: hardened with guards)
   undoBtn?.addEventListener("click", async () => {
     try {
       const response = await fetch('/api/admin/undo', {
@@ -1568,8 +1599,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Update buttons with returned counts
       updateUndoButton(result);
+      // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
       await refreshWallFromServer();
-      refreshAdminOverlays(result);
       showAdminStatus("Undo successful", "success");
     } catch (err) {
       console.error('Failed to undo:', err);
@@ -1632,10 +1663,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // PHASE 2: Hydrate state, then render from state
       hydrateWallStateFromExistingData(layoutTiles, assignments);
-      renderWallFromState();
-      
-      console.log('[RENDER] boot state-driven hydration completed');
-      checkForImageShift('boot state-driven hydration completed');
+      // PHASE 3: Single render after state hydration
+      commitWallStateChange('boot hydration');
 
       // Tile click → open popup (delegated; only for tiles with uploaded artwork)
       wall.addEventListener("click", (e) => {
@@ -1741,9 +1770,8 @@ document.addEventListener("DOMContentLoaded", () => {
           
           // Update buttons with returned counts
           updateUndoButton(result);
-          // Refresh wall to show restored placements
+          // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
           await refreshWallFromServer();
-          refreshAdminOverlays(result);
           
           alert("Shuffle undone successfully");
         } catch (err) {
@@ -1816,13 +1844,8 @@ document.addEventListener("DOMContentLoaded", () => {
             // Update undo button state with returned counts
             updateUndoButton(result);
             
-            // RENDER ENTRY POINT: Success - refresh wall to show shuffled placements
-            // Called by: shuffle button click
+            // PHASE 3: Single render after shuffle (refreshAdminOverlays called inside renderWallFromState)
             await refreshWallFromServer();
-            refreshAdminOverlays(result);
-            
-            console.log('[RENDER] shuffle completed');
-            checkForImageShift('shuffle completed');
           } catch (err) {
             console.error("Shuffle error:", err);
             alert("Shuffle failed: " + err.message);
