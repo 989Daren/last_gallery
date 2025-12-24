@@ -491,8 +491,15 @@ function sizeWallOverlays(wall) {
 
 // Centralized post-render finalize (layout settle + overlay sizing)
 function finalizeAfterRender(wall) {
-  // Force layout read to ensure DOM changes have settled
-  wall.getBoundingClientRect();
+  // Force synchronous layout read (stabilizes clipping/compositing after Undo)
+  void wall.offsetWidth;
+  
+  // Clear any lingering transforms that could cause shift/clipping
+  wall.querySelectorAll('.art-imgwrap, .art-imgwrap img, img.tile-art').forEach(el => {
+    if (el && el.style && el.style.transform && el.style.transform !== 'none') {
+      el.style.transform = 'none';
+    }
+  });
   
   // Ensure overlays cover full wall dimensions
   sizeWallOverlays(wall);
