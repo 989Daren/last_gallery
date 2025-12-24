@@ -29,6 +29,58 @@ const ENDPOINTS = {
 
 const $ = (id) => document.getElementById(id);
 
+// ========================================
+// PHASE 2: Canonical wall state (single source of truth)
+// ========================================
+const wallState = {
+  tiles: {
+    // Structure: tileId -> { assetId, size, x, y, asset }
+    // assetId: null if tile is empty
+    // asset: { tile_url, popup_url, artwork_name, artist_name } if assigned
+  },
+  metadata: {
+    // Wall dimensions, SVG source, etc.
+    width: 0,
+    height: 0
+  }
+};
+
+// PHASE 2: State history for undo (replaces DOM snapshots)
+const stateHistory = {
+  snapshots: [],
+  maxSnapshots: 50
+};
+
+// Take a deep copy snapshot of current state before mutations
+function captureStateSnapshot() {
+  const snapshot = JSON.parse(JSON.stringify(wallState));
+  stateHistory.snapshots.push(snapshot);
+  
+  // Limit history size
+  if (stateHistory.snapshots.length > stateHistory.maxSnapshots) {
+    stateHistory.snapshots.shift();
+  }
+  
+  if (DEBUG) console.log('State snapshot captured, history depth:', stateHistory.snapshots.length);
+}
+
+// Restore state from last snapshot
+function restoreStateSnapshot() {
+  if (stateHistory.snapshots.length === 0) {
+    console.warn('No state snapshots available for restore');
+    return false;
+  }
+  
+  const snapshot = stateHistory.snapshots.pop();
+  
+  // Deep copy back to wallState
+  wallState.tiles = JSON.parse(JSON.stringify(snapshot.tiles));
+  wallState.metadata = JSON.parse(JSON.stringify(snapshot.metadata));
+  
+  if (DEBUG) console.log('State snapshot restored, remaining depth:', stateHistory.snapshots.length);
+  return true;
+}
+
 // -------------------------------
 // Popup demo metadata helpers
 // -------------------------------
@@ -65,6 +117,7 @@ function ensurePopupDom() {
   overlay.className = "popup-overlay";
   overlay.setAttribute("aria-hidden", "true");
 
+  // ⚠️ PHASE 1 AUDIT: innerHTML mutation (non-render, UI setup)
   overlay.innerHTML = `
     <div class="popup" role="dialog" aria-modal="true" aria-label="Artwork preview">
       <div class="popup-title">
@@ -84,6 +137,7 @@ function ensurePopupDom() {
     </div>
   `;
 
+  // ⚠️ PHASE 1 AUDIT: appendChild mutation (non-render, UI setup)
   document.body.appendChild(overlay);
   return overlay;
 }
@@ -305,6 +359,41 @@ function computeWallDimensions(tiles) {
   return { width: maxRight, height: maxBottom };
 }
 
+// ========================================
+// PHASE 2: Hydrate wallState from existing data (bridge step)
+// ========================================
+function hydrateWallStateFromExistingData(layoutTiles, assignments = []) {
+  // Clear existing state
+  wallState.tiles = {};
+  
+  // Populate tiles with layout data
+  layoutTiles.forEach(tile => {
+    wallState.tiles[tile.id] = {
+      assetId: null,
+      size: tile.size,
+      x: tile.x,
+      y: tile.y,
+      asset: null
+    };
+  });
+  
+  // Apply assignments (from server /api/wall_state)
+  assignments.forEach(assignment => {
+    const tileId = assignment.tile_id;
+    if (wallState.tiles[tileId]) {
+      wallState.tiles[tileId].assetId = assignment.asset_id;
+      wallState.tiles[tileId].asset = {
+        tile_url: assignment.tile_url,
+        popup_url: assignment.popup_url,
+        artwork_name: assignment.artwork_name,
+        artist_name: assignment.artist_name
+      };
+    }
+  });
+  
+  if (DEBUG) console.log('wallState hydrated:', Object.keys(wallState.tiles).length, 'tiles');
+}
+
 // Apply the global grid color via CSS variable (now controls wall base color)
 function applyGridColor(color) {
   document.documentElement.style.setProperty("--wallColor", color);
@@ -328,6 +417,7 @@ function buildLayoutTiles(tiles, totalHeight) {
 }
 
 // Single source of truth for clearing a tile; use everywhere.
+// ⚠️ PHASE 1 AUDIT: direct DOM mutation (bypasses render pipeline)
 function resetTileToEmpty(tileEl) {
   // 1. Remove art image container and all images inside
   const artFrame = tileEl.querySelector(".art-frame");
@@ -370,6 +460,8 @@ function resetTileToEmpty(tileEl) {
   // Tile is now in default empty state with visible label
 }
 
+// RENDER ENTRY POINT
+// Called by: initial load hydration, undo restore, tile assignment
 // Single source of truth for applying artwork to a tile; use everywhere.
 function applyAssetToTile(tileEl, asset) {
   // 1. Always reset first to guarantee clean baseline
@@ -566,7 +658,180 @@ async function finalizeWallAfterUndoRestore() {
   nudgeWallComposite();
 }
 
+// =====================================================
+// DEV CANARY — Detect inner image drift
+// =====================================================
+function checkForImageShift(label = '') {
+  const tiles = Array.from(
+    document.querySelectorAll('.tile.has-asset')
+  ).slice(0, 3); // sample a few
+
+  if (!tiles.length) return;
+
+  tiles.forEach((tile, i) => {
+    const wrap =
+      tile.querySelector('.art-imgwrap') ||
+      tile.querySelector('img');
+
+    if (!wrap) return;
+
+    const tr = tile.getBoundingClientRect();
+    const wr = wrap.getBoundingClientRect();
+
+    const dx = Math.round(wr.left - tr.left);
+    const dy = Math.round(wr.top  - tr.top);
+
+    // Allow tiny tolerance for subpixel rounding
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      console.warn(
+        `⚠️ IMAGE SHIFT DETECTED ${label}`,
+        { tileIndex: i, dx, dy, tile, wrap }
+      );
+    }
+  });
+}
+
+// ========================================
+// PHASE 2: New state-driven render pipeline
+// ========================================
+function renderWallFromState() {
+  const wall = document.getElementById('galleryWall');
+  if (!wall) {
+    console.error('[renderWallFromState] Gallery wall not found');
+    return;
+  }
+  
+  // Calculate wall dimensions from state
+  let maxRight = 0;
+  let maxBottom = 0;
+  Object.values(wallState.tiles).forEach(tile => {
+    const units = sizeToUnits(tile.size);
+    const w = units * BASE_UNIT;
+    const h = units * BASE_UNIT;
+    maxRight = Math.max(maxRight, tile.x + w);
+    maxBottom = Math.max(maxBottom, tile.y + h);
+  });
+  
+  wallState.metadata.width = maxRight;
+  wallState.metadata.height = maxBottom;
+  
+  // PHASE 1: Complete wall clear (preserve nothing)
+  wall.innerHTML = '';
+  wall.style.position = 'relative';
+  wall.style.width = maxRight + 'px';
+  wall.style.height = maxBottom + 'px';
+  
+  // PHASE 2: Insert wall lighting overlays
+  const colorOverlay = document.createElement('div');
+  colorOverlay.className = 'wall-light wall-color-layer';
+  wall.appendChild(colorOverlay);
+  
+  const spotlightOverlay = document.createElement('div');
+  spotlightOverlay.className = 'wall-light wall-spotlight';
+  wall.appendChild(spotlightOverlay);
+  
+  // PHASE 3: Render all tiles from state
+  Object.entries(wallState.tiles).forEach(([tileId, tileData]) => {
+    const units = sizeToUnits(tileData.size);
+    const w = units * BASE_UNIT;
+    const h = units * BASE_UNIT;
+    
+    const el = document.createElement('div');
+    el.classList.add('tile');
+    el.dataset.size = tileData.size;
+    el.dataset.id = tileId;
+    el.style.position = 'absolute';
+    el.style.left = tileData.x + 'px';
+    el.style.top = tileData.y + 'px';
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    
+    // Create public tile label (if enabled)
+    if (SHOW_PUBLIC_TILE_LABELS) {
+      const label = document.createElement('span');
+      label.classList.add('tile-label');
+      label.textContent = tileId;
+      el.appendChild(label);
+    }
+    
+    wall.appendChild(el);
+    
+    // PHASE 4: Apply asset if tile has one
+    if (tileData.asset && tileData.assetId) {
+      // Inline asset application (avoid external function for now)
+      // 1. Reset tile to empty first
+      el.classList.remove('has-asset', 'occupied');
+      el.removeAttribute('data-popup-url');
+      el.removeAttribute('data-artwork-name');
+      el.removeAttribute('data-artist-name');
+      
+      // 2. Create artwork DOM structure
+      const img = document.createElement('img');
+      img.src = tileData.asset.tile_url;
+      img.alt = tileData.asset.artwork_name || 'Artwork';
+      img.classList.add('art-img');
+      
+      const shadow = document.createElement('div');
+      shadow.classList.add('art-shadow');
+      
+      const wrap = document.createElement('div');
+      wrap.classList.add('art-imgwrap');
+      wrap.appendChild(shadow);
+      wrap.appendChild(img);
+      
+      const tileSize = parseInt(el.style.width) || 85;
+      const framePadding = 6;
+      const artworkSize = tileSize - (framePadding * 2);
+      wrap.style.width = artworkSize + 'px';
+      wrap.style.height = artworkSize + 'px';
+      
+      const frame = document.createElement('div');
+      frame.classList.add('art-frame');
+      frame.appendChild(wrap);
+      
+      const shell = document.createElement('div');
+      shell.classList.add('art-shell');
+      shell.appendChild(frame);
+      
+      // 3. Mark tile as having asset
+      el.classList.add('has-asset');
+      
+      // 4. Insert shell
+      const label = el.querySelector('.tile-label');
+      if (label) {
+        el.insertBefore(shell, label);
+      } else {
+        el.appendChild(shell);
+      }
+      
+      // 5. Set metadata
+      el.dataset.popupUrl = tileData.asset.popup_url || tileData.asset.tile_url;
+      el.dataset.artworkName = tileData.asset.artwork_name || '';
+      el.dataset.artistName = tileData.asset.artist_name || '';
+      if (tileData.assetId) el.dataset.assetId = tileData.assetId;
+      
+      // 6. Apply occupied class
+      el.classList.add('occupied');
+    }
+  });
+  
+  // PHASE 5: Refresh admin overlays if admin is active
+  if (typeof refreshAdminOverlays === 'function') {
+    refreshAdminOverlays();
+  }
+  
+  // PHASE 6: Finalize layout
+  finalizeAfterRender(wall);
+  
+  // PHASE 7: Diagnostic canary
+  console.log('[RENDER] renderWallFromState');
+  checkForImageShift('renderWallFromState');
+}
+
+// RENDER ENTRY POINT
+// Called by: initial load, shuffle
 function renderTiles(wall, layoutTiles) {
+  // ⚠️ PHASE 1 AUDIT: direct DOM mutation (clear tiles in render pipeline)
   // Clear only tiles, preserve wall lighting overlays
   const tiles = wall.querySelectorAll('.tile');
   tiles.forEach(tile => tile.remove());
@@ -607,6 +872,9 @@ function renderTiles(wall, layoutTiles) {
       });
     }
   });
+  
+  console.log('[RENDER] renderTiles completed');
+  checkForImageShift('renderTiles completed');
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -708,6 +976,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Explicitly remove all admin tile label overlays from DOM
   function clearAllAdminTileLabels() {
+    // ⚠️ PHASE 1 AUDIT: direct DOM mutation (admin UI only, not render)
     const allLabels = document.querySelectorAll('.admin-tile-label');
     allLabels.forEach(label => label.remove());
   }
@@ -835,13 +1104,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 5000);
   }
 
-  // Helper to re-render wall from server
+  // PHASE 2: converted to state-driven render
+  // Helper to re-render wall from server (used by admin operations)
   async function refreshWallFromServer() {
     try {
-      // Clear all tiles first
-      const allTiles = wall.querySelectorAll(".tile");
-      allTiles.forEach(tile => resetTileToEmpty(tile));
-      
       // Fetch current state
       const response = await fetch('/api/wall_state');
       if (!response.ok) throw new Error(`Failed to fetch wall_state: ${response.status}`);
@@ -851,19 +1117,32 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (DEBUG) console.log('Refreshed wall state, assignments:', assignments.length);
       
-      // Apply assignments
+      // Update state with new assignments (preserve existing layout)
+      Object.keys(wallState.tiles).forEach(tileId => {
+        // Clear all assets first
+        wallState.tiles[tileId].assetId = null;
+        wallState.tiles[tileId].asset = null;
+      });
+      
+      // Apply new assignments to state
       assignments.forEach(assignment => {
-        const tileEl = wall.querySelector(`.tile[data-id="${assignment.tile_id}"]`);
-        if (tileEl) {
-          applyAssetToTile(tileEl, assignment);
+        const tileId = assignment.tile_id;
+        if (wallState.tiles[tileId]) {
+          wallState.tiles[tileId].assetId = assignment.asset_id;
+          wallState.tiles[tileId].asset = {
+            tile_url: assignment.tile_url,
+            popup_url: assignment.popup_url,
+            artwork_name: assignment.artwork_name,
+            artist_name: assignment.artist_name
+          };
         }
       });
       
-      // Refresh admin overlays after wall update
-      refreshAdminOverlays();
+      // Render from state
+      renderWallFromState();
       
-      // Finalize after Undo restore (paint reset without DOM replacement)
-      await finalizeWallAfterUndoRestore();
+      console.log('[RENDER] refreshWallFromServer completed');
+      checkForImageShift('refreshWallFromServer completed');
     } catch (err) {
       console.error('Failed to refresh wall from server:', err);
     }
@@ -958,6 +1237,7 @@ document.addEventListener("DOMContentLoaded", () => {
     label = document.createElement('div');
     label.classList.add('admin-tile-label');
     label.textContent = tileEl.dataset.id;
+    // ⚠️ PHASE 1 AUDIT: appendChild mutation (admin UI only, not render)
     tileEl.appendChild(label);
   }
 
@@ -988,11 +1268,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const label = document.createElement('div');
         label.classList.add('admin-tile-label');
         label.textContent = tile.dataset.id;
+        // ⚠️ PHASE 1 AUDIT: appendChild mutation (admin UI only, not render)
         tile.appendChild(label);
       } else {
         // Label(s) exist - keep first, update text, remove duplicates
         existingLabels[0].textContent = tile.dataset.id;
         existingLabels[0].style.display = 'block';
+        // ⚠️ PHASE 1 AUDIT: direct DOM mutation (admin UI cleanup, not render)
         // Remove any duplicate labels
         for (let i = 1; i < existingLabels.length; i++) {
           existingLabels[i].remove();
@@ -1038,6 +1320,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const confirmMsg = `Remove "${tileInfo.artwork_name}" by ${tileInfo.artist_name} from ${tileId}?`;
       if (!confirm(confirmMsg)) return;
 
+      // PHASE 2: Capture state snapshot before mutation
+      captureStateSnapshot();
+
       // Clear the tile
       const response = await fetch('/api/admin/clear_tile', {
         method: 'POST',
@@ -1071,6 +1356,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Clear All Tiles
   clearAllTilesBtn?.addEventListener("click", async () => {
     if (!confirm("Clear all tiles? This can be undone.")) return;
+
+    // PHASE 2: Capture state snapshot before mutation
+    captureStateSnapshot();
 
     try {
       const response = await fetch('/api/admin/clear_all_tiles', {
@@ -1214,6 +1502,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!confirm(confirmMsg)) return;
       }
 
+      // PHASE 2: Capture state snapshot before mutation
+      captureStateSnapshot();
+
       // Execute move
       const response = await fetch('/api/admin/move_tile_asset', {
         method: 'POST',
@@ -1312,6 +1603,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!tiles.length) {
         error("No tiles generated from SVG.");
+        // ⚠️ PHASE 1 AUDIT: innerHTML mutation (error fallback, not render)
         wall.innerHTML = `
           <div style="color:#fff; padding:16px; font-family:system-ui;">
             No tiles generated from SVG. Check that <code>${SVG_GRID_PATH}</code> exists
@@ -1327,54 +1619,23 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const { width, height } = computeWallDimensions(tiles);
-      wall.style.position = "relative";
-      wall.style.width = width + "px";
-      wall.style.height = height + "px";
-
-      // Insert wall lighting overlays BEFORE tiles
-      // Wall color layer (base)
-      if (!wall.querySelector('.wall-color-layer')) {
-        const colorOverlay = document.createElement('div');
-        colorOverlay.className = 'wall-light wall-color-layer';
-        wall.prepend(colorOverlay);
-      }
-      // Spotlight layer (illumination on top of color)
-      if (!wall.querySelector('.wall-spotlight')) {
-        const spotlightOverlay = document.createElement('div');
-        spotlightOverlay.className = 'wall-light wall-spotlight';
-        wall.prepend(spotlightOverlay);
-      }
-
       const layoutTiles = buildLayoutTiles(tiles, height);
-      renderTiles(wall, layoutTiles);
-      finalizeAfterRenderAsync(wall);
 
-      // Clean all tiles to baseline empty state at boot (before any fetches/hydration)
-      const allTiles = wall.querySelectorAll(".tile");
-      allTiles.forEach(tile => resetTileToEmpty(tile));
-      log("Reset", allTiles.length, "tiles to empty state at boot");
-
-      // Fetch wall state from server
-      fetch('/api/wall_state')
-        .then(response => response.json())
-        .then(data => {
-          if (DEBUG) console.log('wall_state response:', data);
-          
-          const assignments = data.assignments || [];
-          if (DEBUG) console.log('wall_state assignments:', assignments.length);
-          
-          assignments.forEach(assignment => {
-            const tileEl = wall.querySelector(`.tile[data-id="${assignment.tile_id}"]`);
-            if (tileEl) {
-              applyAssetToTile(tileEl, assignment);
-            } else {
-              console.warn(`Tile not found for assignment:`, assignment.tile_id);
-            }
-          });
-        })
-        .catch(err => {
-          console.error('Failed to fetch wall_state:', err);
-        });
+      // PHASE 2: Fetch wall state from server and hydrate
+      // Called by: initial boot (DOMContentLoaded)
+      const response = await fetch('/api/wall_state');
+      const data = await response.json();
+      
+      if (DEBUG) console.log('wall_state response:', data);
+      const assignments = data.assignments || [];
+      if (DEBUG) console.log('wall_state assignments:', assignments.length);
+      
+      // PHASE 2: Hydrate state, then render from state
+      hydrateWallStateFromExistingData(layoutTiles, assignments);
+      renderWallFromState();
+      
+      console.log('[RENDER] boot state-driven hydration completed');
+      checkForImageShift('boot state-driven hydration completed');
 
       // Tile click → open popup (delegated; only for tiles with uploaded artwork)
       wall.addEventListener("click", (e) => {
@@ -1552,10 +1813,13 @@ document.addEventListener("DOMContentLoaded", () => {
             // Update undo button state with returned counts
             updateUndoButton(result);
             
-            // Success - refresh wall to show shuffled placements
+            // RENDER ENTRY POINT: Success - refresh wall to show shuffled placements
+            // Called by: shuffle button click
             await refreshWallFromServer();
             refreshAdminOverlays(result);
             
+            console.log('[RENDER] shuffle completed');
+            checkForImageShift('shuffle completed');
           } catch (err) {
             console.error("Shuffle error:", err);
             alert("Shuffle failed: " + err.message);
