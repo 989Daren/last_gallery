@@ -514,6 +514,82 @@ function finalizeAfterRenderAsync(wall) {
   });
 }
 
+// Hard rebuild wall after Undo (fixes compositor drift by cloning DOM node)
+async function hardRebuildWallAfterUndo() {
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  const wall = document.querySelector('#galleryWall');
+  if (!wrapper || !wall) return;
+
+  // 1) Clone + replace the wall node (forces fresh compositor/layer state)
+  const clone = wall.cloneNode(true);
+  wall.parentNode.replaceChild(clone, wall);
+
+  // 2) Wait for images inside the new wall to decode (prevents early finalize)
+  const imgs = Array.from(clone.querySelectorAll('img'));
+  await Promise.allSettled(
+    imgs.map(img => {
+      if (img.decode) return img.decode().catch(() => {});
+      if (img.complete) return Promise.resolve();
+      return new Promise(res => {
+        img.addEventListener('load', () => res(), { once: true });
+        img.addEventListener('error', () => res(), { once: true });
+      });
+    })
+  );
+
+  // 3) Double-rAF finalize + forced reflow
+  await new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        void clone.offsetWidth; // hard reflow on the new node
+        resolve();
+      });
+    });
+  });
+
+  // 4) Defensive: nuke any lingering inline transforms
+  clone.querySelectorAll('.art-imgwrap, .art-imgwrap img, img.tile-art, img').forEach(el => {
+    if (el && el.style) el.style.transform = 'none';
+  });
+
+  // 5) Ensure overlays cover full wall dimensions
+  sizeWallOverlays(clone);
+
+  // 6) Re-attach click handler (lost during clone/replace)
+  attachWallClickHandler(clone);
+}
+
+// Re-attach wall click handler (for use after DOM replacement)
+function attachWallClickHandler(wall) {
+  wall.addEventListener("click", (e) => {
+    const tileEl = e.target.closest(".tile");
+    if (!tileEl) return;
+
+    // Track selected tile for admin operations
+    window.selectedTileId = tileEl.dataset.id;
+    if (DEBUG) console.log('Selected tile:', window.selectedTileId);
+
+    // Check for uploaded asset with metadata
+    const popupUrl = tileEl.dataset.popupUrl;
+    const artworkName = tileEl.dataset.artworkName;
+    const artistName = tileEl.dataset.artistName;
+
+    // Only open popup if tile has uploaded artwork
+    if (!popupUrl) return;
+
+    // Use metadata from dataset with proper fallbacks
+    const displayTitle = artworkName || "Untitled";
+    const displayArtist = artistName || "Anonymous";
+
+    openArtworkPopup({
+      imgSrc: popupUrl,
+      title: displayTitle,
+      artist: displayArtist,
+      infoText: demoInfoHeadersOnly(),
+    });
+  });
+}
+
 function renderTiles(wall, layoutTiles) {
   // Clear only tiles, preserve wall lighting overlays
   const tiles = wall.querySelectorAll('.tile');
@@ -810,8 +886,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Refresh admin overlays after wall update
       refreshAdminOverlays();
       
-      // Finalize layout and overlays
-      finalizeAfterRenderAsync(wall);
+      // Hard rebuild to fix compositor drift after Undo/restore
+      await hardRebuildWallAfterUndo();
     } catch (err) {
       console.error('Failed to refresh wall from server:', err);
     }
@@ -1324,34 +1400,8 @@ document.addEventListener("DOMContentLoaded", () => {
           console.error('Failed to fetch wall_state:', err);
         });
 
-      // Tile click → open popup (delegated; only for tiles with uploaded artwork)
-      wall.addEventListener("click", (e) => {
-        const tileEl = e.target.closest(".tile");
-        if (!tileEl) return;
-
-        // Track selected tile for admin operations
-        window.selectedTileId = tileEl.dataset.id;
-        if (DEBUG) console.log('Selected tile:', window.selectedTileId);
-
-        // Check for uploaded asset with metadata (from database hydration)
-        const popupUrl = tileEl.dataset.popupUrl;
-        const artworkName = tileEl.dataset.artworkName;
-        const artistName = tileEl.dataset.artistName;
-
-        // Only open popup if tile has uploaded artwork (ignore demo artUrl)
-        if (!popupUrl) return;
-
-        // Use metadata from dataset with proper fallbacks
-        const displayTitle = artworkName || "Untitled";
-        const displayArtist = artistName || "Anonymous";
-
-        openArtworkPopup({
-          imgSrc: popupUrl,
-          title: displayTitle,
-          artist: displayArtist,
-          infoText: demoInfoHeadersOnly(),
-        });
-      });
+      // Attach tile click handler (delegated; opens popup for uploaded artwork)
+      attachWallClickHandler(wall);
 
       // ---- Global color handling (owner-controlled) ----
       const serverColor = window.SERVER_GRID_COLOR || "#b84c27";
