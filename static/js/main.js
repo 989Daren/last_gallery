@@ -489,6 +489,24 @@ function sizeWallOverlays(wall) {
   });
 }
 
+// Centralized post-render finalize (layout settle + overlay sizing)
+function finalizeAfterRender(wall) {
+  // Force layout read to ensure DOM changes have settled
+  wall.getBoundingClientRect();
+  
+  // Ensure overlays cover full wall dimensions
+  sizeWallOverlays(wall);
+}
+
+// Async version for delayed finalize (ensures all renders complete)
+function finalizeAfterRenderAsync(wall) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      finalizeAfterRender(wall);
+    });
+  });
+}
+
 function renderTiles(wall, layoutTiles) {
   // Clear only tiles, preserve wall lighting overlays
   const tiles = wall.querySelectorAll('.tile');
@@ -784,6 +802,9 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Refresh admin overlays after wall update
       refreshAdminOverlays();
+      
+      // Finalize layout and overlays
+      finalizeAfterRenderAsync(wall);
     } catch (err) {
       console.error('Failed to refresh wall from server:', err);
     }
@@ -1267,8 +1288,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const layoutTiles = buildLayoutTiles(tiles, height);
       renderTiles(wall, layoutTiles);
-      sizeWallOverlays(wall);
-      sizeWallOverlays(wall);
+      finalizeAfterRenderAsync(wall);
 
       // Clean all tiles to baseline empty state at boot (before any fetches/hydration)
       const allTiles = wall.querySelectorAll(".tile");
@@ -1476,7 +1496,6 @@ document.addEventListener("DOMContentLoaded", () => {
             // Success - refresh wall to show shuffled placements
             await refreshWallFromServer();
             refreshAdminOverlays(result);
-            sizeWallOverlays(wall);
             
           } catch (err) {
             console.error("Shuffle error:", err);
@@ -1486,9 +1505,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Size overlays on resize and orientation change (mobile support)
-      window.addEventListener('resize', () => sizeWallOverlays(wall));
+      window.addEventListener('resize', () => finalizeAfterRender(wall));
       window.addEventListener('orientationchange', () => {
-        setTimeout(() => sizeWallOverlays(wall), 50);
+        setTimeout(() => finalizeAfterRender(wall), 50);
       });
     } catch (err) {
       error("Failed to load SVG grid:", err);
