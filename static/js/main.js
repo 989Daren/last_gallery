@@ -1791,6 +1791,9 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
           
+          // PHASE 2: Capture state snapshot before mutation
+          captureStateSnapshot();
+          
           try {
             const response = await fetch("/shuffle", {
               method: "POST",
