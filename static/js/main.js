@@ -129,9 +129,7 @@ function ensurePopupDom() {
       <div class="popup-media">
         <img class="popup-img" id="popupImg" alt="">
         <div class="popup-info">
-          <div class="popup-info-bg">
-            <button class="popup-info-close" type="button" aria-label="Close info">×</button>
-          </div>
+          <div class="popup-info-bg"></div>
           <div class="popup-info-text" id="popupInfoText"></div>
         </div>
       </div>
@@ -203,26 +201,47 @@ function wirePopupEventsOnce() {
   overlay.__wired = true;
 
   const popup = overlay.querySelector(".popup");
-  const closeBtn = overlay.querySelector(".popup-info-close");
+  const infoRibbon = overlay.querySelector(".popup-info");
+  const popupImg = overlay.querySelector(".popup-img");
 
-  // Outside click closes everything
-  overlay.addEventListener("click", () => {
-    closeArtworkPopup();
+  // STEP 2: Centralized ribbon close logic
+  function closeInfoRibbon() {
+    overlay.classList.add("hide-info");
+  }
+
+  // STEP 4: Outside-click dismissal (overlay level)
+  // Closes ribbon only, NOT the image popup
+  overlay.addEventListener("click", (e) => {
+    // If ribbon is visible and click is outside both image and ribbon, close ribbon
+    if (ribbonVisible(overlay)) {
+      const clickedOnImage = popupImg && popupImg.contains(e.target);
+      const clickedOnRibbon = infoRibbon && infoRibbon.contains(e.target);
+      
+      if (!clickedOnImage && !clickedOnRibbon) {
+        closeInfoRibbon();
+      }
+    } else {
+      // No ribbon visible, close entire popup
+      closeArtworkPopup();
+    }
   });
 
-  // Inside popup behavior depends on ribbon visibility:
-  // - ribbon visible: protect (stopPropagation)
-  // - ribbon not visible: behave like current (allow bubble → overlay closes)
+  // Inside popup: stop propagation when ribbon is visible
   popup.addEventListener("click", (e) => {
     if (ribbonVisible(overlay)) {
       e.stopPropagation();
     }
   });
 
-  // X closes ONLY ribbon + white text
-  closeBtn?.addEventListener("click", (e) => {
+  // STEP 3: Make ribbon itself clickable to close
+  infoRibbon?.addEventListener("click", (e) => {
     e.stopPropagation();
-    overlay.classList.add("hide-info");
+    closeInfoRibbon();
+  });
+
+  // STEP 5: Image clicks do nothing (protected by popup stopPropagation)
+  popupImg?.addEventListener("click", (e) => {
+    e.stopPropagation();
   });
 }
 
