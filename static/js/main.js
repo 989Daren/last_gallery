@@ -31,6 +31,46 @@ const ENDPOINTS = {
 const $ = (id) => document.getElementById(id);
 
 // ========================================
+// Repeated selector/ID/API string constants
+// ========================================
+const SEL = {
+  wall: 'galleryWall',           // ID for getElementById/$(...)
+  wallQuery: '#galleryWall',     // Selector for querySelector
+  tile: '.tile',
+  artFrame: '.art-frame',
+  artImgwrap: '.art-imgwrap',
+  adminTileLabel: '.admin-tile-label',
+  tileLabel: '.tile-label',
+  tileHasAsset: '.tile.has-asset',
+};
+
+const IDS = {
+  popupOverlay: 'popupOverlay',
+  popupTitle: 'popupTitle',
+  popupArtist: 'popupArtist',
+  popupImg: 'popupImg',
+  popupInfoText: 'popupInfoText',
+};
+
+const API = {
+  wallState: '/api/wall_state',
+  tileInfo: '/api/admin/tile_info',
+  undo: '/api/admin/undo',
+  clearTile: '/api/admin/clear_tile',
+  clearAll: '/api/admin/clear_all_tiles',
+  moveTile: '/api/admin/move_tile_asset',
+  historyStatus: '/api/admin/history_status',
+};
+
+const LOG = {
+  render: '[RENDER]',
+  admin: '[ADMIN]',
+  state: '[STATE]',
+  undo: '[UNDO]',
+  boot: '[BOOT]',
+};
+
+// ========================================
 // PHASE 2: Canonical wall state (single source of truth)
 // ========================================
 const wallState = {
@@ -109,12 +149,12 @@ function demoInfoHeadersOnly() {
 // Popup system (created only if missing)
 // -------------------------------
 function ensurePopupDom() {
-  let overlay = $("popupOverlay");
+  let overlay = $(IDS.popupOverlay);
   if (overlay) return overlay;
 
   // Minimal, non-destructive: create popup only if it doesn't exist in HTML yet.
   overlay = document.createElement("div");
-  overlay.id = "popupOverlay";
+  overlay.id = IDS.popupOverlay;
   overlay.className = "popup-overlay";
   overlay.setAttribute("aria-hidden", "true");
 
@@ -157,10 +197,10 @@ function ribbonVisible(overlayEl) {
 function openArtworkPopup({ imgSrc, title, artist, infoText }) {
   const overlay = ensurePopupDom();
 
-  const titleEl  = $("popupTitle");
-  const artistEl = $("popupArtist");
-  const imgEl    = $("popupImg");
-  const infoEl   = $("popupInfoText");
+  const titleEl  = $(IDS.popupTitle);
+  const artistEl = $(IDS.popupArtist);
+  const imgEl    = $(IDS.popupImg);
+  const infoEl   = $(IDS.popupInfoText);
 
   if (titleEl)  titleEl.textContent  = title || "";
   if (artistEl) artistEl.textContent = artist || "";
@@ -184,14 +224,14 @@ popupTimers.push(setTimeout(() => overlay.classList.add("stage-info-text"), 2000
 }
 
 function closeArtworkPopup() {
-  const overlay = $("popupOverlay");
+  const overlay = $(IDS.popupOverlay);
   if (!overlay) return;
 
   clearPopupTimers();
   overlay.classList.remove("is-open", "show-title", "stage-info-bg", "stage-info-text", "hide-info");
   overlay.setAttribute("aria-hidden", "true");
 
-  const imgEl = $("popupImg");
+  const imgEl = $(IDS.popupImg);
   if (imgEl) imgEl.src = "";
 }
 
@@ -437,7 +477,7 @@ function buildLayoutTiles(tiles, totalHeight) {
 // ⚠️ PHASE 1 AUDIT: direct DOM mutation (bypasses render pipeline)
 function resetTileToEmpty(tileEl) {
   // 1. Remove art image container and all images inside
-  const artFrame = tileEl.querySelector(".art-frame");
+  const artFrame = tileEl.querySelector(SEL.artFrame);
   if (artFrame) {
     artFrame.remove();
   }
@@ -520,7 +560,7 @@ function applyAssetToTile(tileEl, asset) {
   tileEl.classList.add("has-asset");
 
   // 4. Insert art-shell before label (ensures label doesn't overlay art)
-  const label = tileEl.querySelector(".tile-label");
+  const label = tileEl.querySelector(SEL.tileLabel);
   if (label) {
     tileEl.insertBefore(shell, label);
   } else {
@@ -560,14 +600,14 @@ window.resetTileToEmpty = resetTileToEmpty;
  * @returns {HTMLElement|null} - The selected tile element, or null if none available
  */
 function selectRandomEmptyXSTile() {
-  const wall = document.getElementById("galleryWall");
+  const wall = document.getElementById(SEL.wall);
   if (!wall) {
     console.warn("[selectRandomEmptyXSTile] Gallery wall not found");
     return null;
   }
 
   // Find all XS tiles that are NOT occupied
-  const emptyXSTiles = Array.from(wall.querySelectorAll('.tile[data-size="xs"]'))
+  const emptyXSTiles = Array.from(wall.querySelectorAll(SEL.tile + '[data-size="xs"]'))
     .filter(tile => tile.dataset.occupied !== "1");
 
   if (emptyXSTiles.length === 0) {
@@ -626,7 +666,7 @@ function finalizeAfterRenderAsync(wall) {
 
 // Wait for all wall images to decode before finalizing
 function waitForWallImagesDecode() {
-  const wall = document.querySelector('#galleryWall');
+  const wall = document.querySelector(SEL.wallQuery);
   if (!wall) return Promise.resolve();
 
   const imgs = Array.from(wall.querySelectorAll('img'));
@@ -646,7 +686,7 @@ function waitForWallImagesDecode() {
 
 // Forces a repaint/composite reset WITHOUT replacing elements
 function nudgeWallComposite() {
-  const wall = document.querySelector('#galleryWall');
+  const wall = document.querySelector(SEL.wallQuery);
   if (!wall) return;
 
   // 1) force layout
@@ -684,20 +724,20 @@ let imageShiftBaseline = null;
 
 function checkForImageShift(label = '') {
   const tiles = Array.from(
-    document.querySelectorAll('.tile.has-asset')
+    document.querySelectorAll(SEL.tileHasAsset)
   ).slice(0, 3); // sample a few
 
   if (!tiles.length) return;
 
   tiles.forEach((tile, i) => {
     const wrap =
-      tile.querySelector('.art-imgwrap') ||
+      tile.querySelector(SEL.artImgwrap) ||
       tile.querySelector('img');
 
     if (!wrap) return;
 
     // Compare against .art-frame (parent of .art-imgwrap), fall back to tile
-    const frame = tile.querySelector('.art-frame');
+    const frame = tile.querySelector(SEL.artFrame);
     const reference = frame || tile;
 
     const refRect = reference.getBoundingClientRect();
@@ -738,7 +778,7 @@ function checkForImageShift(label = '') {
 // PHASE 2: New state-driven render pipeline
 // ========================================
 function renderWallFromState() {
-  const wall = document.getElementById('galleryWall');
+  const wall = document.getElementById(SEL.wall);
   if (!wall) {
     console.error('[renderWallFromState] Gallery wall not found');
     return;
@@ -840,7 +880,7 @@ function renderWallFromState() {
       el.classList.add('has-asset');
 
       // 4. Insert shell
-      const label = el.querySelector('.tile-label');
+      const label = el.querySelector(SEL.tileLabel);
       if (label) {
         el.insertBefore(shell, label);
       } else {
@@ -867,7 +907,7 @@ function renderWallFromState() {
   finalizeAfterRender(wall);
 
   // PHASE 7: Diagnostic canary (dev-only)
-  console.log('[RENDER] renderWallFromState');
+  console.log(LOG.render, 'renderWallFromState');
   if (__DEV__) checkForImageShift('renderWallFromState');
 }
 
@@ -875,7 +915,7 @@ function renderWallFromState() {
 function commitWallStateChange(reason) {
   if (DEBUG) console.log('[PHASE 3] commitWallStateChange:', reason);
   renderWallFromState();
-  console.log('[RENDER] commitWallStateChange:', reason);
+  console.log(LOG.render, 'commitWallStateChange:', reason);
   if (__DEV__) checkForImageShift(reason);
 }
 
@@ -886,7 +926,7 @@ function commitWallStateChange(reason) {
 function renderTiles(wall, layoutTiles) {
   // ⚠️ PHASE 1 AUDIT: direct DOM mutation (clear tiles in render pipeline)
   // Clear only tiles, preserve wall lighting overlays
-  const tiles = wall.querySelectorAll('.tile');
+  const tiles = wall.querySelectorAll(SEL.tile);
   tiles.forEach(tile => tile.remove());
 
   layoutTiles.forEach(tile => {
@@ -926,12 +966,12 @@ function renderTiles(wall, layoutTiles) {
     }
   });
 
-  console.log('[RENDER] renderTiles completed');
+  console.log(LOG.render, 'renderTiles completed');
   checkForImageShift('renderTiles completed');
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  const wall = $("galleryWall");
+  const wall = $(SEL.wall);
   const colorPicker = $("gridColorPicker");
   const outlineToggle = $("outlineToggle");
 
@@ -1162,7 +1202,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function refreshWallFromServer() {
     try {
       // Fetch current state
-      const response = await fetch('/api/wall_state');
+      const response = await fetch(API.wallState);
       if (!response.ok) throw new Error(`Failed to fetch wall_state: ${response.status}`);
 
       const data = await response.json();
@@ -1233,7 +1273,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isAdminActive()) return;
 
     try {
-      const response = await fetch('/api/admin/history_status', {
+      const response = await fetch(API.historyStatus, {
         headers: { 'X-Admin-Pin': ADMIN_PIN }
       });
 
@@ -1275,7 +1315,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isAdminActive() || !showTileLabels) return;
 
     // Check if label already exists
-    let label = tileEl.querySelector('.admin-tile-label');
+    let label = tileEl.querySelector(SEL.adminTileLabel);
     if (label) {
       // Update existing label text and ensure visible
       label.textContent = tileEl.dataset.id;
@@ -1307,10 +1347,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const allTiles = wall.querySelectorAll('.tile');
+    const allTiles = wall.querySelectorAll(SEL.tile);
     allTiles.forEach(tile => {
       // Find any existing label overlays in this tile
-      const existingLabels = tile.querySelectorAll('.admin-tile-label');
+      const existingLabels = tile.querySelectorAll(SEL.adminTileLabel);
 
       // Ensure exactly 1 label with correct text on every tile
       if (existingLabels.length === 0) {
@@ -1343,7 +1383,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Validate tile exists in DOM
-    const tileEl = wall.querySelector(`.tile[data-id="${tileId}"]`);
+    const tileEl = wall.querySelector(`${SEL.tile}[data-id="${tileId}"]`);
     if (!tileEl) {
       showAdminStatus("Tile ID not found", "error");
       return;
@@ -1351,7 +1391,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       // Fetch tile info
-      const infoResponse = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(tileId)}`, {
+      const infoResponse = await fetch(`${API.tileInfo}?tile_id=${encodeURIComponent(tileId)}`, {
         headers: { 'X-Admin-Pin': ADMIN_PIN }
       });
 
@@ -1374,7 +1414,7 @@ document.addEventListener("DOMContentLoaded", () => {
       captureStateSnapshot();
 
       // Clear the tile
-      const response = await fetch('/api/admin/clear_tile', {
+      const response = await fetch(API.clearTile, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1411,7 +1451,7 @@ document.addEventListener("DOMContentLoaded", () => {
     captureStateSnapshot();
 
     try {
-      const response = await fetch('/api/admin/clear_all_tiles', {
+      const response = await fetch(API.clearAll, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1449,8 +1489,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Validate both tiles exist in DOM
-    const fromTileEl = wall.querySelector(`.tile[data-id="${fromId}"]`);
-    const toTileEl = wall.querySelector(`.tile[data-id="${toId}"]`);
+    const fromTileEl = wall.querySelector(`${SEL.tile}[data-id="${fromId}"]`);
+    const toTileEl = wall.querySelector(`${SEL.tile}[data-id="${toId}"]`);
 
     if (!fromTileEl || !toTileEl) {
       showAdminStatus("Tile ID not found", "error");
@@ -1515,7 +1555,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function executeTileMove(fromId, toId, override) {
     try {
       // Fetch source tile info
-      const fromInfoResponse = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(fromId)}`, {
+      const fromInfoResponse = await fetch(`${API.tileInfo}?tile_id=${encodeURIComponent(fromId)}`, {
         headers: { 'X-Admin-Pin': ADMIN_PIN }
       });
 
@@ -1531,7 +1571,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Fetch destination tile info
-      const toInfoResponse = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(toId)}`, {
+      const toInfoResponse = await fetch(`${API.tileInfo}?tile_id=${encodeURIComponent(toId)}`, {
         headers: { 'X-Admin-Pin': ADMIN_PIN }
       });
 
@@ -1556,7 +1596,7 @@ document.addEventListener("DOMContentLoaded", () => {
       captureStateSnapshot();
 
       // Execute move
-      const response = await fetch('/api/admin/move_tile_asset', {
+      const response = await fetch(API.moveTile, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1594,7 +1634,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Undo (PHASE 3: hardened with guards)
   undoBtn?.addEventListener("click", async () => {
     try {
-      const response = await fetch('/api/admin/undo', {
+      const response = await fetch(API.undo, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1673,7 +1713,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // PHASE 2: Fetch wall state from server and hydrate
       // Called by: initial boot (DOMContentLoaded)
-      const response = await fetch('/api/wall_state');
+      const response = await fetch(API.wallState);
       const data = await response.json();
 
       if (DEBUG) console.log('wall_state response:', data);
@@ -1765,7 +1805,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         try {
-          const response = await fetch('/api/admin/undo', {
+          const response = await fetch(API.undo, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
