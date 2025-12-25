@@ -77,13 +77,13 @@ def load_grid_color():
 
 def init_db():
     """Initialize SQLite database for wall placements and undo snapshots.
-    
+
     Creates data/gallery.db and required tables if they don't exist.
     """
     os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(GALLERY_DB)
     cursor = conn.cursor()
-    
+
     # Placements table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS placements (
@@ -92,7 +92,7 @@ def init_db():
             placed_at TEXT NOT NULL
         )
     """)
-    
+
     # Undo snapshots table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS placement_snapshots (
@@ -102,21 +102,21 @@ def init_db():
             state_json TEXT NOT NULL
         )
     """)
-    
+
     # Indexes for placement_snapshots (performance optimization)
     # Index on action column for filtered counts and WHERE clauses
     cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_snapshots_action 
+        CREATE INDEX IF NOT EXISTS idx_snapshots_action
         ON placement_snapshots(action)
     """)
-    
+
     # Composite index for "latest per action type" queries
     # Supports: WHERE action='shuffle' ORDER BY id DESC
     cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_snapshots_action_id 
+        CREATE INDEX IF NOT EXISTS idx_snapshots_action_id
         ON placement_snapshots(action, id DESC)
     """)
-    
+
     # Assets metadata table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS assets (
@@ -130,7 +130,7 @@ def init_db():
             paid INTEGER DEFAULT 0
         )
     """)
-    
+
     conn.commit()
     conn.close()
 
@@ -168,7 +168,7 @@ def save_placement(mapping):
 
 def load_assets():
     """Load assets metadata from SQLite or data/assets.json.
-    
+
     If USE_SQLITE_ASSETS is True, loads from SQLite database with auto-migration.
     Otherwise loads from data/assets.json.
     Returns a dict keyed by asset_id. If file/db is missing or invalid, returns {}.
@@ -200,7 +200,7 @@ def load_assets():
 
 def save_assets(assets_dict):
     """Save assets metadata to SQLite or data/assets.json.
-    
+
     If USE_SQLITE_ASSETS is True, saves to SQLite database.
     Otherwise saves to data/assets.json.
     Ensures the data/ directory exists before writing.
@@ -247,7 +247,7 @@ def sqlite_assets_count():
 
 def sqlite_insert_asset(asset_id, tile_url, popup_url, artwork_name, artist_name, created_at=None, notes=None, paid=0):
     """Insert or replace an asset in SQLite assets table.
-    
+
     Args:
         asset_id: UUID string
         tile_url: URL path to tile image
@@ -261,36 +261,36 @@ def sqlite_insert_asset(asset_id, tile_url, popup_url, artwork_name, artist_name
     init_db()
     conn = sqlite3.connect(GALLERY_DB)
     cursor = conn.cursor()
-    
+
     if created_at is None:
         created_at = datetime.utcnow().isoformat()
-    
+
     cursor.execute("""
-        INSERT OR REPLACE INTO assets 
+        INSERT OR REPLACE INTO assets
         (asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid))
-    
+
     conn.commit()
     conn.close()
 
 
 def sqlite_load_assets():
     """Load all assets from SQLite database.
-    
+
     Returns dict keyed by asset_id with same structure as JSON load_assets().
     """
     init_db()
     conn = sqlite3.connect(GALLERY_DB)
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         SELECT asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid
         FROM assets
     """)
     rows = cursor.fetchall()
     conn.close()
-    
+
     assets = {}
     for row in rows:
         asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid = row
@@ -304,13 +304,13 @@ def sqlite_load_assets():
             "notes": notes,
             "paid": paid
         }
-    
+
     return assets
 
 
 def migrate_assets_json_to_sqlite_if_needed():
     """Auto-migrate existing assets.json to SQLite on first run.
-    
+
     Only runs when:
     - USE_SQLITE_ASSETS is True
     - assets.json exists
@@ -318,24 +318,24 @@ def migrate_assets_json_to_sqlite_if_needed():
     """
     if not USE_SQLITE_ASSETS:
         return
-    
+
     # Check if migration is needed
     if not os.path.exists(ASSETS_FILE):
         return
-    
+
     if sqlite_assets_count() > 0:
         return
-    
+
     # Load JSON assets
     try:
         with open(ASSETS_FILE, "r", encoding="utf-8") as f:
             json_assets = json.load(f) or {}
     except Exception:
         return
-    
+
     if not json_assets:
         return
-    
+
     # Migrate each asset
     migration_time = datetime.utcnow().isoformat()
     for asset_id, asset_data in json_assets.items():
@@ -346,7 +346,7 @@ def migrate_assets_json_to_sqlite_if_needed():
         artist_name = asset_data.get("artist_name", "Anonymous")
         notes = asset_data.get("notes")
         paid = asset_data.get("paid", 0)
-        
+
         sqlite_insert_asset(
             asset_id=asset_id,
             tile_url=tile_url,
@@ -357,14 +357,14 @@ def migrate_assets_json_to_sqlite_if_needed():
             notes=notes,
             paid=paid
         )
-    
+
     if DEBUG_DB_TRACE:
         print(f"MIGRATION: Migrated {len(json_assets)} assets from assets.json to SQLite")
 
 
 def load_wall_state():
     """Load wall state (tile_id -> asset_id mapping).
-    
+
     If USE_SQLITE_PLACEMENTS is True, loads from SQLite database.
     Otherwise loads from data/wall_state.json.
     Returns a dict. If file/db is missing or invalid, returns {}.
@@ -375,7 +375,7 @@ def load_wall_state():
             conn = sqlite3.connect(GALLERY_DB)
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT tile_id, asset_id FROM placements 
+                SELECT tile_id, asset_id FROM placements
                 WHERE asset_id IS NOT NULL AND asset_id != ''
             """)
             rows = cursor.fetchall()
@@ -406,7 +406,7 @@ def load_wall_state():
 
 def save_wall_state(state_dict):
     """Save wall state.
-    
+
     If USE_SQLITE_PLACEMENTS is True, saves to SQLite database.
     Otherwise saves to data/wall_state.json.
     Ensures the data/ directory exists before writing.
@@ -418,10 +418,10 @@ def save_wall_state(state_dict):
             init_db()
             conn = sqlite3.connect(GALLERY_DB)
             cursor = conn.cursor()
-            
+
             # Clear existing placements and insert new ones in a transaction
             cursor.execute("DELETE FROM placements")
-            
+
             if state_dict:
                 placed_at = datetime.utcnow().isoformat()
                 for tile_id, asset_id in state_dict.items():
@@ -429,7 +429,7 @@ def save_wall_state(state_dict):
                         INSERT OR REPLACE INTO placements (tile_id, asset_id, placed_at)
                         VALUES (?, ?, ?)
                     """, (tile_id, asset_id, placed_at))
-            
+
             conn.commit()
             conn.close()
         except Exception as e:
@@ -447,29 +447,29 @@ def save_wall_state(state_dict):
 
 def get_last_shuffle_id():
     """Get the ID of the most recent shuffle snapshot.
-    
+
     Returns:
         int or None: ID of last shuffle snapshot, or None if no shuffle exists
     """
     init_db()
     conn = sqlite3.connect(GALLERY_DB)
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT id FROM placement_snapshots 
+        SELECT id FROM placement_snapshots
         WHERE action = 'shuffle'
         ORDER BY id DESC LIMIT 1
     """)
     row = cursor.fetchone()
-    
+
     conn.close()
-    
+
     return row[0] if row else None
 
 
 def get_snapshot_counts():
     """Get counts of shuffle vs non-shuffle snapshots (timeline-aware).
-    
+
     Returns:
         Dict with:
         - shuffle_count: Total shuffle snapshots
@@ -480,43 +480,43 @@ def get_snapshot_counts():
     init_db()
     conn = sqlite3.connect(GALLERY_DB)
     cursor = conn.cursor()
-    
+
     # Count shuffle snapshots
     cursor.execute("""
-        SELECT COUNT(*) FROM placement_snapshots 
+        SELECT COUNT(*) FROM placement_snapshots
         WHERE action = 'shuffle'
     """)
     shuffle_count = cursor.fetchone()[0]
-    
+
     # Count total non-shuffle snapshots
     cursor.execute("""
-        SELECT COUNT(*) FROM placement_snapshots 
+        SELECT COUNT(*) FROM placement_snapshots
         WHERE action != 'shuffle'
     """)
     non_shuffle_total = cursor.fetchone()[0]
-    
+
     # Get last shuffle ID
     cursor.execute("""
-        SELECT id FROM placement_snapshots 
+        SELECT id FROM placement_snapshots
         WHERE action = 'shuffle'
         ORDER BY id DESC LIMIT 1
     """)
     row = cursor.fetchone()
     last_shuffle_id = row[0] if row else None
-    
+
     # Count non-shuffle snapshots AFTER last shuffle (timeline-aware)
     if last_shuffle_id is not None:
         cursor.execute("""
-            SELECT COUNT(*) FROM placement_snapshots 
+            SELECT COUNT(*) FROM placement_snapshots
             WHERE action != 'shuffle' AND id > ?
         """, (last_shuffle_id,))
         non_shuffle_after_last_shuffle = cursor.fetchone()[0]
     else:
         # No shuffle exists, all non-shuffle snapshots are eligible
         non_shuffle_after_last_shuffle = non_shuffle_total
-    
+
     conn.close()
-    
+
     return {
         'shuffle_count': shuffle_count,
         'non_shuffle_total': non_shuffle_total,
@@ -527,39 +527,39 @@ def get_snapshot_counts():
 
 def push_snapshot(action: str, state: dict) -> dict:
     """Push a snapshot of wall state to undo stack.
-    
+
     Args:
         action: Description of action (e.g., 'clear_tile:X99', 'clear_grid', 'shuffle')
         state: Wall state dict to save
-    
+
     Returns:
         Dict with 'shuffle_count' and 'non_shuffle_count' (timeline-aware)
     """
     init_db()
     conn = sqlite3.connect(GALLERY_DB)
     cursor = conn.cursor()
-    
+
     created_at = datetime.utcnow().isoformat()
     state_json = json.dumps(state)
-    
+
     cursor.execute("""
         INSERT INTO placement_snapshots (created_at, action, state_json)
         VALUES (?, ?, ?)
     """, (created_at, action, state_json))
-    
+
     # Prune old snapshots to maintain MAX_HISTORY_DEPTH
     cursor.execute("""
-        DELETE FROM placement_snapshots 
+        DELETE FROM placement_snapshots
         WHERE id NOT IN (
-            SELECT id FROM placement_snapshots 
-            ORDER BY id DESC 
+            SELECT id FROM placement_snapshots
+            ORDER BY id DESC
             LIMIT ?
         )
     """, (MAX_HISTORY_DEPTH,))
-    
+
     conn.commit()
     conn.close()
-    
+
     # Return timeline-aware counts
     counts = get_snapshot_counts()
     return {
@@ -570,67 +570,67 @@ def push_snapshot(action: str, state: dict) -> dict:
 
 def pop_latest_snapshot(action_type=None):
     """Pop the most recent snapshot from undo stack.
-    
+
     Args:
         action_type: 'shuffle' or 'non_shuffle' to filter by type, None for latest of any type
-    
+
     Returns:
         Tuple of (id, action, state_dict) if found, or (None, None, None) if empty
     """
     init_db()
     conn = sqlite3.connect(GALLERY_DB)
     cursor = conn.cursor()
-    
+
     # Get latest snapshot based on action_type filter
     if action_type == 'shuffle':
         cursor.execute("""
-            SELECT id, action, state_json FROM placement_snapshots 
+            SELECT id, action, state_json FROM placement_snapshots
             WHERE action = 'shuffle'
             ORDER BY id DESC LIMIT 1
         """)
     elif action_type == 'non_shuffle':
         # Timeline-aware: only pop non-shuffle snapshots AFTER last shuffle
         last_shuffle_id = get_last_shuffle_id()
-        
+
         if last_shuffle_id is not None:
             cursor.execute("""
-                SELECT id, action, state_json FROM placement_snapshots 
+                SELECT id, action, state_json FROM placement_snapshots
                 WHERE action != 'shuffle' AND id > ?
                 ORDER BY id DESC LIMIT 1
             """, (last_shuffle_id,))
         else:
             # No shuffle exists, any non-shuffle snapshot is eligible
             cursor.execute("""
-                SELECT id, action, state_json FROM placement_snapshots 
+                SELECT id, action, state_json FROM placement_snapshots
                 WHERE action != 'shuffle'
                 ORDER BY id DESC LIMIT 1
             """)
     else:
         cursor.execute("""
-            SELECT id, action, state_json FROM placement_snapshots 
+            SELECT id, action, state_json FROM placement_snapshots
             ORDER BY id DESC LIMIT 1
         """)
-    
+
     row = cursor.fetchone()
-    
+
     if not row:
         if DEBUG_DB_TRACE:
             print(f"UNDO: no snapshot available (action_type={action_type})")
         conn.close()
         return None, None, None
-    
+
     snapshot_id, action, state_json = row
     state_dict = json.loads(state_json)
-    
+
     if DEBUG_DB_TRACE:
         print(f"UNDO: popped snapshot id={snapshot_id} action={action} tiles={len(state_dict)}")
-    
+
     # Delete this snapshot
     cursor.execute("DELETE FROM placement_snapshots WHERE id = ?", (snapshot_id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return snapshot_id, action, state_dict
 
 
@@ -662,7 +662,7 @@ def save_json(path, data):
 
 def load_history():
     """Load wall state history from data/wall_state_history.json.
-    
+
     Returns a list of dicts (snapshots). If file is missing or invalid, returns [].
     """
     return load_json(WALL_STATE_HISTORY_FILE, [])
@@ -675,47 +675,47 @@ def save_history(history):
 
 def push_history_snapshot(current_state):
     """Push a snapshot of current wall state to history.
-    
+
     Args:
         current_state: dict mapping tile_id -> asset_id
-    
+
     Returns:
         int: Updated history count
     """
     import copy
     history = load_history()
-    
+
     # Append deep copy of current state
     history.append(copy.deepcopy(current_state))
-    
+
     # Trim to last MAX_HISTORY_DEPTH snapshots
     if len(history) > MAX_HISTORY_DEPTH:
         history = history[-MAX_HISTORY_DEPTH:]
-    
+
     save_history(history)
     return len(history)
 
 
 def pop_history_snapshot():
     """Pop the most recent snapshot from history.
-    
+
     Returns:
         tuple: (snapshot dict or None, new history count)
     """
     history = load_history()
-    
+
     if not history:
         return None, 0
-    
+
     snapshot = history.pop()
     save_history(history)
-    
+
     return snapshot, len(history)
 
 
 def check_admin_pin():
     """Check if request has valid X-Admin-Pin header.
-    
+
     Returns:
         tuple: (bool: is_valid, response or None)
     """
@@ -884,7 +884,7 @@ def set_grid_color():
 @app.route("/api/wall_state", methods=["GET"])
 def get_wall_state():
     """Return the current wall state as JSON.
-    
+
     Response format:
     {
       "assignments": [
@@ -898,13 +898,13 @@ def get_wall_state():
         }
       ]
     }
-    
+
     If no assignments exist, returns {"assignments": []}.
     No demo fallback logic.
     """
     wall_state = load_wall_state()
     assets = load_assets()
-    
+
     assignments = []
     for tile_id, asset_id in wall_state.items():
         asset = assets.get(asset_id)
@@ -917,7 +917,7 @@ def get_wall_state():
                 "artist_name": asset["artist_name"],
                 "asset_id": asset_id
             })
-    
+
     return jsonify({"assignments": assignments}), 200
 
 
@@ -930,13 +930,13 @@ def uploads(filename):
 @app.route("/api/upload_assets", methods=["POST"])
 def upload_assets():
     """Handle asset upload (tile and popup images with metadata).
-    
+
     Accepts multipart/form-data with:
     - tile_image: file
     - popup_image: file
     - artwork_name: string
     - artist_name: string
-    
+
     Returns JSON:
     {
       "asset_id": "uuid",
@@ -948,37 +948,37 @@ def upload_assets():
     """
     if 'tile_image' not in request.files or 'popup_image' not in request.files:
         return jsonify({"ok": False, "error": "Missing required files"}), 400
-    
+
     tile_file = request.files['tile_image']
     popup_file = request.files['popup_image']
     artwork_name = request.form.get('artwork_name', 'Untitled')
     artist_name = request.form.get('artist_name', 'Anonymous')
-    
+
     if tile_file.filename == '' or popup_file.filename == '':
         return jsonify({"ok": False, "error": "Empty filename"}), 400
-    
+
     # Generate unique asset_id
     asset_id = str(uuid.uuid4())
-    
+
     # Get file extensions
     tile_ext = os.path.splitext(secure_filename(tile_file.filename))[1]
     popup_ext = os.path.splitext(secure_filename(popup_file.filename))[1]
-    
+
     # Create unique filenames
     tile_filename = f"tile_{asset_id}{tile_ext}"
     popup_filename = f"popup_{asset_id}{popup_ext}"
-    
+
     # Save files
     tile_path = os.path.join(UPLOAD_DIR, tile_filename)
     popup_path = os.path.join(UPLOAD_DIR, popup_filename)
     tile_file.save(tile_path)
     popup_file.save(popup_path)
-    
+
     # Create asset metadata
     tile_url = f"/uploads/{tile_filename}"
     popup_url = f"/uploads/{popup_filename}"
     created_at = datetime.utcnow().isoformat()
-    
+
     asset_data = {
         "tile_url": tile_url,
         "popup_url": popup_url,
@@ -986,12 +986,12 @@ def upload_assets():
         "artist_name": artist_name,
         "created_at": created_at
     }
-    
+
     # Save to assets backend (SQLite or JSON based on USE_SQLITE_ASSETS flag)
     assets = load_assets()
     assets[asset_id] = asset_data
     save_assets(assets)
-    
+
     # Return asset info
     return jsonify({
         "asset_id": asset_id,
@@ -1002,68 +1002,68 @@ def upload_assets():
 @app.route("/api/assign_tile", methods=["POST"])
 def assign_tile():
     """Assign an asset to a tile.
-    
+
     Expects JSON:
     {
       "tile_id": "X1",
       "asset_id": "uuid"
     }
-    
+
     Returns {"ok": true} on success.
     """
     data = request.get_json(silent=True) or {}
     tile_id = data.get('tile_id')
     asset_id = data.get('asset_id')
-    
+
     if not tile_id or not asset_id:
         return jsonify({"ok": False, "error": "Missing tile_id or asset_id"}), 400
-    
+
     # Verify asset exists
     assets = load_assets()
     if asset_id not in assets:
         return jsonify({"ok": False, "error": "Asset not found"}), 404
-    
+
     # Save tile assignment
     wall_state = load_wall_state()
     wall_state[tile_id] = asset_id
     save_wall_state(wall_state)
-    
+
     return jsonify({"ok": True}), 200
 
 
 @app.route("/api/admin/clear_tile", methods=["POST"])
 def admin_clear_tile():
     """Admin-only: Clear a single tile assignment with snapshot.
-    
+
     Requires X-Admin-Pin header.
     Body: { "tile_id": "X99" }
-    
+
     Returns: { "ok": true }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
-    
+
     data = request.get_json(silent=True) or {}
     tile_id = data.get("tile_id")
-    
+
     if not tile_id:
         return jsonify({"ok": False, "error": "Missing tile_id"}), 400
-    
+
     # Load current state
     wall_state = load_wall_state()
-    
+
     # If tile already empty, don't push snapshot
     if tile_id not in wall_state:
         return jsonify({"ok": True, "message": "Tile already empty"})
-    
+
     # Push snapshot before clearing
     counts = push_snapshot(f"clear_tile:{tile_id}", wall_state)
-    
+
     # Remove tile assignment
     del wall_state[tile_id]
     save_wall_state(wall_state)
-    
+
     return jsonify({
         "ok": True,
         "shuffle_count": counts['shuffle_count'],
@@ -1074,28 +1074,28 @@ def admin_clear_tile():
 @app.route("/api/admin/clear_all_tiles", methods=["POST"])
 def admin_clear_all_tiles():
     """Admin-only: Clear all tile assignments with snapshot.
-    
+
     Requires X-Admin-Pin header.
-    
+
     Returns: { "ok": true }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
-    
+
     # Load current state
     wall_state = load_wall_state()
-    
+
     # If already empty, don't push snapshot
     if not wall_state:
         return jsonify({"ok": True, "message": "Already empty"})
-    
+
     # Push snapshot before clearing
     counts = push_snapshot("clear_grid", wall_state)
-    
+
     # Clear all assignments
     save_wall_state({})
-    
+
     return jsonify({
         "ok": True,
         "shuffle_count": counts['shuffle_count'],
@@ -1106,41 +1106,41 @@ def admin_clear_all_tiles():
 @app.route("/api/admin/undo", methods=["POST"])
 def admin_undo():
     """Admin-only: Undo last wall state change.
-    
+
     Requires X-Admin-Pin header.
     Body (optional): { "action_type": "shuffle" | "non_shuffle" }
-    
+
     Returns: { "ok": true, "action": "...", "shuffle_count": N, "non_shuffle_count": N }
              or { "ok": false, "message": "...", "shuffle_count": N, "non_shuffle_count": N }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
-    
+
     data = request.get_json(silent=True) or {}
     action_type = data.get('action_type')  # 'shuffle', 'non_shuffle', or None
-    
+
     if DEBUG_DB_TRACE:
         print(f"UNDO: attempting pop_latest_snapshot(action_type={action_type})")
-    
+
     snapshot_id, action, state = pop_latest_snapshot(action_type)
-    
+
     # Get updated timeline-aware counts
     counts = get_snapshot_counts()
-    
+
     if snapshot_id is None:
         return jsonify({
-            "ok": False, 
+            "ok": False,
             "message": f"No {action_type or ''} undo available".strip(),
             "shuffle_count": counts['shuffle_count'],
             "non_shuffle_count": counts['non_shuffle_count']
         })
-    
+
     # Restore snapshot as current state
     save_wall_state(state)
-    
+
     return jsonify({
-        "ok": True, 
+        "ok": True,
         "action": action,
         "shuffle_count": counts['shuffle_count'],
         "non_shuffle_count": counts['non_shuffle_count']
@@ -1150,18 +1150,18 @@ def admin_undo():
 @app.route("/api/admin/history_status", methods=["GET"])
 def admin_history_status():
     """Admin-only: Get history status.
-    
+
     Requires X-Admin-Pin header.
-    
-    Returns: { "shuffle_count": N, "non_shuffle_count": N (timeline-aware), 
+
+    Returns: { "shuffle_count": N, "non_shuffle_count": N (timeline-aware),
                "can_undo": bool, "can_undo_shuffle": bool, ... }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
-    
+
     counts = get_snapshot_counts()
-    
+
     return jsonify({
         "shuffle_count": counts['shuffle_count'],
         "non_shuffle_count": counts['non_shuffle_count'],  # Timeline-aware eligible count
@@ -1177,23 +1177,23 @@ def admin_history_status():
 @app.route("/api/admin/tile_info", methods=["GET"])
 def admin_tile_info():
     """Admin-only: Get information about a tile.
-    
+
     Requires X-Admin-Pin header.
     Query params: tile_id
-    
+
     Returns tile occupation status and asset details if occupied.
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
-    
+
     tile_id = request.args.get("tile_id")
     if not tile_id:
         return jsonify({"ok": False, "error": "Missing tile_id parameter"}), 400
-    
+
     wall_state = load_wall_state()
     assets = load_assets()
-    
+
     # Check if tile is occupied
     if tile_id not in wall_state:
         return jsonify({
@@ -1201,11 +1201,11 @@ def admin_tile_info():
             "tile_id": tile_id,
             "occupied": False
         })
-    
+
     # Tile is occupied, get asset details
     asset_id = wall_state[tile_id]
     asset = assets.get(asset_id)
-    
+
     if asset:
         return jsonify({
             "ok": True,
@@ -1234,51 +1234,51 @@ def admin_tile_info():
 @app.route("/api/admin/move_tile_asset", methods=["POST"])
 def admin_move_tile_asset():
     """Admin-only: Move artwork from one tile to another.
-    
+
     Uses SQLite placement_snapshots for unified Undo stack; legacy JSON history no longer used here.
-    
+
     Requires X-Admin-Pin header.
     Body: { "from_tile_id": "X99", "to_tile_id": "X12", "override": false }
-    
+
     The 'override' flag allows admins to bypass size validation for rule-breaking moves.
     When false or omitted, standard validation applies.
-    
+
     Returns: { "ok": true, "history_count": N }
     """
     is_valid, error_response = check_admin_pin()
     if not is_valid:
         return error_response
-    
+
     data = request.get_json(silent=True) or {}
     from_tile_id = data.get("from_tile_id")
     to_tile_id = data.get("to_tile_id")
     override = data.get("override", False)  # Admin override flag
-    
+
     if not from_tile_id or not to_tile_id:
         return jsonify({"ok": False, "error": "Missing from_tile_id or to_tile_id"}), 400
-    
+
     wall_state = load_wall_state()
-    
+
     # Validate source tile is occupied
     if from_tile_id not in wall_state:
         return jsonify({"ok": False, "error": "Source tile is empty"}), 400
-    
+
     # Validate destination tile is empty
     if to_tile_id in wall_state:
         return jsonify({"ok": False, "error": "Destination tile is occupied"}), 400
-    
+
     # Note: Size validation is now handled client-side with override confirmation
     # Backend accepts any move when override=True or when called by admin
-    
+
     # Push SQLite snapshot before modifying
     counts = push_snapshot(f"move_tile:{from_tile_id}->{to_tile_id}", wall_state)
-    
+
     # Move asset
     wall_state[to_tile_id] = wall_state[from_tile_id]
     del wall_state[from_tile_id]
-    
+
     save_wall_state(wall_state)
-    
+
     return jsonify({
         "ok": True,
         "shuffle_count": counts['shuffle_count'],
@@ -1295,7 +1295,7 @@ def shuffle_placement():
     Expects JSON body like { "pin": "8375" }.
     If pin is incorrect, returns 401 with { "ok": false, "error": "Unauthorized" }.
     On success shuffles existing artwork and returns { "ok": true }.
-    
+
     Shuffle is allowed independently of demo autofill.
     """
     data = request.get_json(silent=True) or {}
@@ -1306,36 +1306,36 @@ def shuffle_placement():
 
     # Load current wall state
     wall_state = load_wall_state()
-    
+
     if not wall_state:
         return jsonify({"ok": False, "error": "No artwork to shuffle"}), 400
-    
+
     # Push snapshot BEFORE shuffling (for undo capability)
     counts = push_snapshot("shuffle", wall_state)
-    
+
     # Get asset IDs (artworks to shuffle)
     asset_ids = list(wall_state.values())
-    
+
     # Get all available tiles from SVG
     svg_path = os.path.join('static', 'grid_full.svg')
     all_tiles = _parse_svg_tiles(svg_path)
-    
+
     if not all_tiles or len(all_tiles) < len(asset_ids):
         return jsonify({"ok": False, "error": "Not enough tiles available"}), 400
-    
+
     # Get all tile IDs (includes empty tiles)
     all_tile_ids = [tile['id'] for tile in all_tiles]
-    
+
     # Randomly select N tiles for the N artworks
     random.shuffle(all_tile_ids)
     destination_tile_ids = all_tile_ids[:len(asset_ids)]
-    
+
     # Create new wall state with only selected tiles
     new_state = {tile_id: asset_id for tile_id, asset_id in zip(destination_tile_ids, asset_ids)}
-    
+
     # Save shuffled state (clears tiles not in new_state)
     save_wall_state(new_state)
-    
+
     return jsonify({
         "ok": True,
         "shuffle_count": counts['shuffle_count'],
