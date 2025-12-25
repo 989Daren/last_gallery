@@ -56,12 +56,12 @@ const stateHistory = {
 function captureStateSnapshot() {
   const snapshot = JSON.parse(JSON.stringify(wallState));
   stateHistory.snapshots.push(snapshot);
-  
+
   // Limit history size
   if (stateHistory.snapshots.length > stateHistory.maxSnapshots) {
     stateHistory.snapshots.shift();
   }
-  
+
   if (DEBUG) console.log('State snapshot captured, history depth:', stateHistory.snapshots.length);
 }
 
@@ -71,13 +71,13 @@ function restoreStateSnapshot() {
     console.warn('No state snapshots available for restore');
     return false;
   }
-  
+
   const snapshot = stateHistory.snapshots.pop();
-  
+
   // Deep copy back to wallState
   wallState.tiles = JSON.parse(JSON.stringify(snapshot.tiles));
   wallState.metadata = JSON.parse(JSON.stringify(snapshot.metadata));
-  
+
   if (DEBUG) console.log('State snapshot restored, remaining depth:', stateHistory.snapshots.length);
   return true;
 }
@@ -380,7 +380,7 @@ function computeWallDimensions(tiles) {
 function hydrateWallStateFromExistingData(layoutTiles, assignments = []) {
   // Clear existing state
   wallState.tiles = {};
-  
+
   // Populate tiles with layout data
   layoutTiles.forEach(tile => {
     wallState.tiles[tile.id] = {
@@ -391,7 +391,7 @@ function hydrateWallStateFromExistingData(layoutTiles, assignments = []) {
       asset: null
     };
   });
-  
+
   // Apply assignments (from server /api/wall_state)
   assignments.forEach(assignment => {
     const tileId = assignment.tile_id;
@@ -405,7 +405,7 @@ function hydrateWallStateFromExistingData(layoutTiles, assignments = []) {
       };
     }
   });
-  
+
   if (DEBUG) console.log('wallState hydrated:', Object.keys(wallState.tiles).length, 'tiles');
 }
 
@@ -418,7 +418,7 @@ function assignArtworkUrls(tiles) {
   // DISABLED: No auto-population of demo/test art
   // Tiles start empty - artwork only comes from database hydration via upload system
   // Server placement is also disabled to prevent any auto-fill on load
-  
+
   log("assignArtworkUrls: Skipping all auto-population (disabled)");
 }
 
@@ -431,7 +431,9 @@ function buildLayoutTiles(tiles, totalHeight) {
   });
 }
 
-// Single source of truth for clearing a tile; use everywhere.
+// LEGACY: Pre-Phase 2 tile clearing function
+// Not used by renderWallFromState() (which rebuilds from scratch)
+// Kept for backward compatibility with exported window.resetTileToEmpty
 // ⚠️ PHASE 1 AUDIT: direct DOM mutation (bypasses render pipeline)
 function resetTileToEmpty(tileEl) {
   // 1. Remove art image container and all images inside
@@ -439,11 +441,11 @@ function resetTileToEmpty(tileEl) {
   if (artFrame) {
     artFrame.remove();
   }
-  
+
   // 2. Remove any standalone art images (fallback)
   const artImages = tileEl.querySelectorAll("img.tile-art, .art-imgwrap img");
   artImages.forEach(img => img.remove());
-  
+
   // 3. Remove occupancy data attributes
   tileEl.removeAttribute("data-occupied");
   tileEl.removeAttribute("data-tile-url");
@@ -454,7 +456,7 @@ function resetTileToEmpty(tileEl) {
   tileEl.removeAttribute("data-size");
   tileEl.removeAttribute("data-art-url");
   tileEl.removeAttribute("data-asset-id");
-  
+
   // 4. Clear dataset properties (camelCase accessors)
   delete tileEl.dataset.occupied;
   delete tileEl.dataset.tileUrl;
@@ -465,57 +467,58 @@ function resetTileToEmpty(tileEl) {
   delete tileEl.dataset.size;
   delete tileEl.dataset.artUrl;
   delete tileEl.dataset.assetId;
-  
+
   // 5. Remove occupancy/glow classes
   tileEl.classList.remove("occupied", "has-art", "filled", "hasImage", "hasArtwork", "glow", "lit", "has-asset");
-  
+
   // 6. Clear any inline background styles
   tileEl.style.backgroundImage = "";
-  
+
   // Tile is now in default empty state with visible label
 }
 
-// RENDER ENTRY POINT
-// Called by: initial load hydration, undo restore, tile assignment
-// Single source of truth for applying artwork to a tile; use everywhere.
+// LEGACY: Pre-Phase 2 tile asset application function
+// Not used by renderWallFromState() (which builds inline)
+// Kept for backward compatibility with exported window.applyAssetToTile
+// RENDER ENTRY POINT (legacy)
 function applyAssetToTile(tileEl, asset) {
   // 1. Always reset first to guarantee clean baseline
   resetTileToEmpty(tileEl);
-  
+
   // 2. Create art image with proper structure: .art-frame > .art-imgwrap > img.tile-art
   const img = document.createElement("img");
   img.src = asset.tile_url;
   img.classList.add("tile-art");
   img.alt = asset.artwork_name || "Artwork";
-  
+
   // Create dedicated shadow layer
   const shadow = document.createElement("div");
   shadow.classList.add("art-shadow");
-  
+
   const wrap = document.createElement("div");
   wrap.classList.add("art-imgwrap");
   wrap.appendChild(shadow);  // Shadow first (z-index: 0)
   wrap.appendChild(img);     // Image on top (z-index: 1)
-  
+
   // Calculate artwork dimensions (tile minus frame padding)
   const tileSize = parseInt(tileEl.style.width) || 85;
   const framePadding = 6; // Default padding, overridden by CSS for different sizes
   const artworkSize = tileSize - (framePadding * 2);
   wrap.style.width = artworkSize + "px";
   wrap.style.height = artworkSize + "px";
-  
+
   const frame = document.createElement("div");
   frame.classList.add("art-frame");
   frame.appendChild(wrap);
-  
+
   // Wrap in shell to provide shadow allowance space
   const shell = document.createElement("div");
   shell.classList.add("art-shell");
   shell.appendChild(frame);
-  
+
   // 3. Mark tile as having asset for cursor styling
   tileEl.classList.add("has-asset");
-  
+
   // 4. Insert art-shell before label (ensures label doesn't overlay art)
   const label = tileEl.querySelector(".tile-label");
   if (label) {
@@ -523,27 +526,27 @@ function applyAssetToTile(tileEl, asset) {
   } else {
     tileEl.appendChild(shell);
   }
-  
+
   // 4. Set occupancy dataset fields
   tileEl.dataset.occupied = "1";
   tileEl.dataset.tileUrl = asset.tile_url;
   tileEl.dataset.popupUrl = asset.popup_url;
   tileEl.dataset.artworkName = asset.artwork_name || asset.title || "";
   tileEl.dataset.artistName = asset.artist_name || "";
-  
+
   // Optional metadata
   if (asset.medium) tileEl.dataset.medium = asset.medium;
   if (asset.size) tileEl.dataset.size = asset.size;
   if (asset.asset_id) tileEl.dataset.assetId = asset.asset_id;
-  
+
   // 5. Apply occupied class (triggers glow via CSS)
   tileEl.classList.add("occupied");
-  
+
   // 6. Apply admin tile label if toggle is ON
   if (typeof applyAdminTileLabel === 'function') {
     applyAdminTileLabel(tileEl);
   }
-  
+
   // Rendering complete - tile now displays artwork with metadata
 }
 
@@ -553,7 +556,7 @@ window.resetTileToEmpty = resetTileToEmpty;
 
 /**
  * Select a random empty XS tile from the gallery.
- * 
+ *
  * @returns {HTMLElement|null} - The selected tile element, or null if none available
  */
 function selectRandomEmptyXSTile() {
@@ -576,10 +579,10 @@ function selectRandomEmptyXSTile() {
   // Select randomly
   const randomIndex = Math.floor(Math.random() * emptyXSTiles.length);
   const selectedTile = emptyXSTiles[randomIndex];
-  
+
   const tileId = selectedTile.dataset.id;
   if (DEBUG) console.log("[selectRandomEmptyXSTile] Selected tile:", tileId);
-  
+
   return selectedTile;
 }
 
@@ -600,14 +603,14 @@ function sizeWallOverlays(wall) {
 function finalizeAfterRender(wall) {
   // Force synchronous layout read (stabilizes clipping/compositing after Undo)
   void wall.offsetWidth;
-  
+
   // Clear any lingering transforms that could cause shift/clipping
   wall.querySelectorAll('.art-imgwrap, .art-imgwrap img, img.tile-art').forEach(el => {
     if (el && el.style && el.style.transform && el.style.transform !== 'none') {
       el.style.transform = 'none';
     }
   });
-  
+
   // Ensure overlays cover full wall dimensions
   sizeWallOverlays(wall);
 }
@@ -740,7 +743,7 @@ function renderWallFromState() {
     console.error('[renderWallFromState] Gallery wall not found');
     return;
   }
-  
+
   // Calculate wall dimensions from state
   let maxRight = 0;
   let maxBottom = 0;
@@ -751,31 +754,31 @@ function renderWallFromState() {
     maxRight = Math.max(maxRight, tile.x + w);
     maxBottom = Math.max(maxBottom, tile.y + h);
   });
-  
+
   wallState.metadata.width = maxRight;
   wallState.metadata.height = maxBottom;
-  
+
   // PHASE 1: Complete wall clear (preserve nothing)
   wall.innerHTML = '';
   wall.style.position = 'relative';
   wall.style.width = maxRight + 'px';
   wall.style.height = maxBottom + 'px';
-  
+
   // PHASE 2: Insert wall lighting overlays
   const colorOverlay = document.createElement('div');
   colorOverlay.className = 'wall-light wall-color-layer';
   wall.appendChild(colorOverlay);
-  
+
   const spotlightOverlay = document.createElement('div');
   spotlightOverlay.className = 'wall-light wall-spotlight';
   wall.appendChild(spotlightOverlay);
-  
+
   // PHASE 3: Render all tiles from state
   Object.entries(wallState.tiles).forEach(([tileId, tileData]) => {
     const units = sizeToUnits(tileData.size);
     const w = units * BASE_UNIT;
     const h = units * BASE_UNIT;
-    
+
     const el = document.createElement('div');
     el.classList.add('tile');
     el.dataset.size = tileData.size;
@@ -785,7 +788,7 @@ function renderWallFromState() {
     el.style.top = tileData.y + 'px';
     el.style.width = w + 'px';
     el.style.height = h + 'px';
-    
+
     // Create public tile label (if enabled)
     if (SHOW_PUBLIC_TILE_LABELS) {
       const label = document.createElement('span');
@@ -793,9 +796,9 @@ function renderWallFromState() {
       label.textContent = tileId;
       el.appendChild(label);
     }
-    
+
     wall.appendChild(el);
-    
+
     // PHASE 4: Apply asset if tile has one
     if (tileData.asset && tileData.assetId) {
       // Inline asset application (avoid external function for now)
@@ -804,38 +807,38 @@ function renderWallFromState() {
       el.removeAttribute('data-popup-url');
       el.removeAttribute('data-artwork-name');
       el.removeAttribute('data-artist-name');
-      
+
       // 2. Create artwork DOM structure
       const img = document.createElement('img');
       img.src = tileData.asset.tile_url;
       img.alt = tileData.asset.artwork_name || 'Artwork';
       img.classList.add('art-img');
-      
+
       const shadow = document.createElement('div');
       shadow.classList.add('art-shadow');
-      
+
       const wrap = document.createElement('div');
       wrap.classList.add('art-imgwrap');
       wrap.appendChild(shadow);
       wrap.appendChild(img);
-      
+
       const tileSize = parseInt(el.style.width) || 85;
       const framePadding = 6;
       const artworkSize = tileSize - (framePadding * 2);
       wrap.style.width = artworkSize + 'px';
       wrap.style.height = artworkSize + 'px';
-      
+
       const frame = document.createElement('div');
       frame.classList.add('art-frame');
       frame.appendChild(wrap);
-      
+
       const shell = document.createElement('div');
       shell.classList.add('art-shell');
       shell.appendChild(frame);
-      
+
       // 3. Mark tile as having asset
       el.classList.add('has-asset');
-      
+
       // 4. Insert shell
       const label = el.querySelector('.tile-label');
       if (label) {
@@ -843,26 +846,26 @@ function renderWallFromState() {
       } else {
         el.appendChild(shell);
       }
-      
+
       // 5. Set metadata
       el.dataset.popupUrl = tileData.asset.popup_url || tileData.asset.tile_url;
       el.dataset.artworkName = tileData.asset.artwork_name || '';
       el.dataset.artistName = tileData.asset.artist_name || '';
       if (tileData.assetId) el.dataset.assetId = tileData.assetId;
-      
+
       // 6. Apply occupied class
       el.classList.add('occupied');
     }
   });
-  
+
   // PHASE 5: Refresh admin overlays if admin is active
   if (typeof refreshAdminOverlays === 'function') {
     refreshAdminOverlays();
   }
-  
+
   // PHASE 6: Finalize layout
   finalizeAfterRender(wall);
-  
+
   // PHASE 7: Diagnostic canary (dev-only)
   console.log('[RENDER] renderWallFromState');
   if (__DEV__) checkForImageShift('renderWallFromState');
@@ -876,8 +879,10 @@ function commitWallStateChange(reason) {
   if (__DEV__) checkForImageShift(reason);
 }
 
-// RENDER ENTRY POINT
-// Called by: initial load, shuffle
+// LEGACY: Pre-Phase 2 tile rendering function
+// Not used by boot() or any operation (replaced by renderWallFromState)
+// Kept for reference during migration
+// RENDER ENTRY POINT (legacy)
 function renderTiles(wall, layoutTiles) {
   // ⚠️ PHASE 1 AUDIT: direct DOM mutation (clear tiles in render pipeline)
   // Clear only tiles, preserve wall lighting overlays
@@ -909,7 +914,7 @@ function renderTiles(wall, layoutTiles) {
     }
 
     wall.appendChild(el);
-    
+
     // If tile has artwork, apply it using centralized function
     if (tile.artUrl) {
       applyAssetToTile(el, {
@@ -920,7 +925,7 @@ function renderTiles(wall, layoutTiles) {
       });
     }
   });
-  
+
   console.log('[RENDER] renderTiles completed');
   checkForImageShift('renderTiles completed');
 }
@@ -963,7 +968,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let showTileLabels = false;  // Admin toggle for tile ID overlays
 
   // ========== Admin Helper Functions ==========
-  
+
   // Check if admin session is active (PIN accepted)
   function isAdminActive() {
     return adminUnlocked === true;
@@ -980,7 +985,7 @@ document.addEventListener("DOMContentLoaded", () => {
         last_shuffle_id: data.last_shuffle_id ?? null
       };
     }
-    
+
     // Legacy format: single history_count
     if (data.history_count !== undefined) {
       return {
@@ -990,7 +995,7 @@ document.addEventListener("DOMContentLoaded", () => {
         last_shuffle_id: null
       };
     }
-    
+
     // Empty/unknown format
     return {
       shuffle_count: 0,
@@ -1013,7 +1018,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Toggle OFF: clear labels
       clearAllAdminTileLabels();
     }
-    
+
     // Update debug footer if enabled
     if (ADMIN_DEBUG && isAdminActive()) {
       const data = historyData || window.lastHistoryData || {};
@@ -1085,7 +1090,7 @@ document.addEventListener("DOMContentLoaded", () => {
     adminControlsPanel?.classList.remove("hidden");
 
     colorPicker?.focus();
-    
+
     // Apply tile labels if toggle is already ON (handles timing edge cases)
     setTimeout(() => {
       if (showTileLabels) {
@@ -1136,16 +1141,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // Helper to show status message in admin modal
   function showAdminStatus(message, type = "info") {
     if (!adminStatus) return;
-    
+
     adminStatus.textContent = message;
     adminStatus.classList.remove("hidden", "error", "success");
-    
+
     if (type === "error") {
       adminStatus.classList.add("error");
     } else if (type === "success") {
       adminStatus.classList.add("success");
     }
-    
+
     // Auto-hide after 5 seconds
     setTimeout(() => {
       adminStatus.classList.add("hidden");
@@ -1159,19 +1164,19 @@ document.addEventListener("DOMContentLoaded", () => {
       // Fetch current state
       const response = await fetch('/api/wall_state');
       if (!response.ok) throw new Error(`Failed to fetch wall_state: ${response.status}`);
-      
+
       const data = await response.json();
       const assignments = data.assignments || [];
-      
+
       if (DEBUG) console.log('Refreshed wall state, assignments:', assignments.length);
-      
+
       // Update state with new assignments (preserve existing layout)
       Object.keys(wallState.tiles).forEach(tileId => {
         // Clear all assets first
         wallState.tiles[tileId].assetId = null;
         wallState.tiles[tileId].asset = null;
       });
-      
+
       // Apply new assignments to state
       assignments.forEach(assignment => {
         const tileId = assignment.tile_id;
@@ -1185,7 +1190,7 @@ document.addEventListener("DOMContentLoaded", () => {
           };
         }
       });
-      
+
       // PHASE 3: Single render after state update (refreshAdminOverlays called inside)
       commitWallStateChange('refreshWallFromServer');
     } catch (err) {
@@ -1206,14 +1211,14 @@ document.addEventListener("DOMContentLoaded", () => {
         non_shuffle_count: nonShuffleCount
       });
     }
-    
+
     // Update Undo button (non-shuffle actions)
     if (undoBtn) {
       undoBtn.disabled = counts.non_shuffle_count === 0;
       undoBtn.title = counts.non_shuffle_count === 0 ? "No undoable actions after the last shuffle" : "";
       if (DEBUG) console.log('Undo button state:', counts.non_shuffle_count > 0 ? 'enabled' : 'disabled', `(non_shuffle_count=${counts.non_shuffle_count})`);
     }
-    
+
     // Update Undo Shuffle button
     const undoShuffleBtn = $("undoShuffleBtn");
     if (undoShuffleBtn) {
@@ -1226,12 +1231,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Helper to fetch history status and update undo button
   async function fetchHistoryStatus() {
     if (!isAdminActive()) return;
-    
+
     try {
       const response = await fetch('/api/admin/history_status', {
         headers: { 'X-Admin-Pin': ADMIN_PIN }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         // Store full data for overlays
@@ -1249,15 +1254,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // Helper to update admin debug footer (development only)
   function updateAdminDebugFooter(shuffle_count, non_shuffle_count) {
     if (!ADMIN_DEBUG) return;
-    
+
     const footer = $("adminDebugFooter");
     if (!footer) return;
-    
+
     // Get additional data from last history fetch if available
     const data = window.lastHistoryData || {};
     const non_shuffle_total = data.non_shuffle_total ?? '?';
     const last_shuffle_id = data.last_shuffle_id ?? 'none';
-    
+
     // Format: "Undo: 0 eligible / 3 total | Shuffle Undo: 1 | Last Shuffle ID: 42"
     footer.textContent = `Undo: ${non_shuffle_count} eligible / ${non_shuffle_total} total | Shuffle Undo: ${shuffle_count} | Last Shuffle ID: ${last_shuffle_id}`;
     footer.style.display = 'block';
@@ -1268,7 +1273,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // For bulk label updates, use updateAllAdminTileLabels() which reconciles all labels.
   function applyAdminTileLabel(tileEl) {
     if (!isAdminActive() || !showTileLabels) return;
-    
+
     // Check if label already exists
     let label = tileEl.querySelector('.admin-tile-label');
     if (label) {
@@ -1277,7 +1282,7 @@ document.addEventListener("DOMContentLoaded", () => {
       label.style.display = 'block';
       return;
     }
-    
+
     // Create new label overlay
     label = document.createElement('div');
     label.classList.add('admin-tile-label');
@@ -1301,12 +1306,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // (refreshAdminOverlays handles those cases)
       return;
     }
-    
+
     const allTiles = wall.querySelectorAll('.tile');
     allTiles.forEach(tile => {
       // Find any existing label overlays in this tile
       const existingLabels = tile.querySelectorAll('.admin-tile-label');
-      
+
       // Ensure exactly 1 label with correct text on every tile
       if (existingLabels.length === 0) {
         // No label exists, create one
@@ -1331,7 +1336,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Clear Single Tile (with tile_info lookup and confirmation)
   clearTileBtn?.addEventListener("click", async () => {
     const tileId = (adminClearTileIdInput?.value || "").trim().toUpperCase();
-    
+
     if (!tileId) {
       showAdminStatus("Enter a tile ID", "error");
       return;
@@ -1384,12 +1389,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await response.json();
       if (DEBUG) console.log('Cleared tile:', tileId);
-      
+
       // Update buttons with returned counts
       updateUndoButton(result);
       // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
       await refreshWallFromServer();
-      
+
       showAdminStatus(`Cleared ${tileId}`, "success");
       if (adminClearTileIdInput) adminClearTileIdInput.value = "";
     } catch (err) {
@@ -1420,12 +1425,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await response.json();
       if (DEBUG) console.log('Cleared all tiles');
-      
+
       // Update buttons with returned counts
       updateUndoButton(result);
       // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
       await refreshWallFromServer();
-      
+
       showAdminStatus("Cleared all tiles", "success");
     } catch (err) {
       console.error('Failed to clear all tiles:', err);
@@ -1465,7 +1470,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!sizeMatches) {
       // Store move parameters for confirmation
       window.pendingMove = { fromId, toId };
-      
+
       // Show override confirmation modal
       const overrideModal = $("moveOverrideModal");
       if (overrideModal) {
@@ -1571,12 +1576,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await response.json();
       if (DEBUG) console.log('Moved artwork:', fromId, '→', toId, override ? '(override)' : '');
-      
+
       // Update buttons with returned counts
       updateUndoButton(result);
       // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
       await refreshWallFromServer();
-      
+
       showAdminStatus(`Moved ${fromId} → ${toId}${override ? ' (override)' : ''}`, "success");
       if (adminMoveFromInput) adminMoveFromInput.value = "";
       if (adminMoveToInput) adminMoveToInput.value = "";
@@ -1603,14 +1608,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const result = await response.json();
-      
+
       if (!result.ok) {
         showAdminStatus(result.message || "Nothing to undo", "error");
         return;
       }
 
       if (DEBUG) console.log('Undo successful');
-      
+
       // Update buttons with returned counts
       updateUndoButton(result);
       // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
@@ -1670,11 +1675,11 @@ document.addEventListener("DOMContentLoaded", () => {
       // Called by: initial boot (DOMContentLoaded)
       const response = await fetch('/api/wall_state');
       const data = await response.json();
-      
+
       if (DEBUG) console.log('wall_state response:', data);
       const assignments = data.assignments || [];
       if (DEBUG) console.log('wall_state assignments:', assignments.length);
-      
+
       // PHASE 2: Hydrate state, then render from state
       hydrateWallStateFromExistingData(layoutTiles, assignments);
       // PHASE 3: Single render after state hydration
@@ -1774,19 +1779,19 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           const result = await response.json();
-          
+
           if (!result.ok) {
             alert(result.message || "Nothing to undo");
             return;
           }
 
           if (DEBUG) console.log('Undo shuffle successful:', result.action);
-          
+
           // Update buttons with returned counts
           updateUndoButton(result);
           // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
           await refreshWallFromServer();
-          
+
           alert("Shuffle undone successfully");
         } catch (err) {
           console.error('Failed to undo shuffle:', err);
@@ -1827,37 +1832,37 @@ document.addEventListener("DOMContentLoaded", () => {
           // Get PIN from admin input field
           const pinEl = $("adminPinInput");
           const pin = (pinEl?.value || "").trim();
-          
+
           if (!pin) {
             alert("Enter admin PIN first.");
             return;
           }
-          
+
           // PHASE 2: Capture state snapshot before mutation
           captureStateSnapshot();
-          
+
           try {
             const response = await fetch("/shuffle", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ pin })
             });
-            
+
             if (response.status === 403 || response.status === 401) {
               alert("Forbidden: invalid admin PIN.");
               return;
             }
-            
+
             if (!response.ok) {
               alert("Shuffle failed: " + response.status);
               return;
             }
-            
+
             const result = await response.json();
-            
+
             // Update undo button state with returned counts
             updateUndoButton(result);
-            
+
             // PHASE 3: Single render after shuffle (refreshAdminOverlays called inside renderWallFromState)
             await refreshWallFromServer();
           } catch (err) {

@@ -27,7 +27,7 @@
   --artShadowY: 4px;
   --artShadowBlur: 3px;
   --artShadowAlpha: 0.5;
-  
+
   /* Artwork padding allowance (space between art and tile boundary) */
   --artPad: 14px;
 
@@ -240,7 +240,7 @@ label {
 .wall-spotlight {
   z-index: var(--spotZ);
   opacity: calc(var(--spotEnabled) * var(--spotOpacity));
-  background: 
+  background:
     /* Spotlight A: upper hotspot */
     radial-gradient(
       ellipse 70% 55% at 35% 18%,
