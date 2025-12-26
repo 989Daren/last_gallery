@@ -545,6 +545,32 @@ label {
   display: block;
 }
 
+/* ================================
+   Cropper: Block Android long-press
+   ================================ */
+
+#uploadModal .cropper-container,
+#uploadModal .cropper-container * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#uploadModal .cropper-container {
+  touch-action: none;
+}
+
+#uploadModal .cropper-container img,
+#uploadModal .cropper-canvas,
+#uploadModal .cropper-wrap-box,
+#uploadModal .cropper-drag-box,
+#uploadModal .cropper-crop-box,
+#uploadModal .cropper-face {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Upload modal — mobile responsiveness */
 @media (max-width: 768px) {
   .modalCard {
