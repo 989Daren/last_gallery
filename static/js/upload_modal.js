@@ -110,6 +110,11 @@ document.addEventListener("DOMContentLoaded", () => {
     modal.classList.remove("hidden");
     uploadInFlight = false;
     setPrimaryButtonState("disabled");
+    
+    // Notify back button guard that upload modal is opening
+    if (window.UI_BACK_GUARD) {
+      window.UI_BACK_GUARD.noteLayerOpened("upload");
+    }
   }
 
   function closeModal() {
