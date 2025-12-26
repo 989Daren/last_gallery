@@ -16,6 +16,30 @@ document.addEventListener("DOMContentLoaded", () => {
   let cropper = null;
   let uploadInFlight = false;  // Guard to ensure "Uploading..." only shows during actual upload
 
+  // ================================
+  // Cropper: Block Android "Copy image"
+  // ================================
+  let cropperContextMenuBlocker = null;
+
+  function enableCropperContextMenuBlocker() {
+    if (cropperContextMenuBlocker) return;
+
+    cropperContextMenuBlocker = (e) => {
+      const inCropper = e.target && e.target.closest && e.target.closest(".cropper-container");
+      if (inCropper) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener("contextmenu", cropperContextMenuBlocker, true);
+  }
+
+  function disableCropperContextMenuBlocker() {
+    if (!cropperContextMenuBlocker) return;
+    document.removeEventListener("contextmenu", cropperContextMenuBlocker, true);
+    cropperContextMenuBlocker = null;
+  }
+
   // ===== Constants =====
   const LOG_PREFIX = "[upload_modal]";
   const SUPPORTED_TYPES_RE = /^image\/(png|jpeg)$/;
@@ -82,7 +106,9 @@ document.addEventListener("DOMContentLoaded", () => {
       guides: true,
       center: true,
       highlight: true,
-      background: false
+      background: false,
+      minCropBoxWidth: 30,
+      minCropBoxHeight: 30
     });
   }
 
@@ -110,17 +136,14 @@ document.addEventListener("DOMContentLoaded", () => {
     modal.classList.remove("hidden");
     uploadInFlight = false;
     setPrimaryButtonState("disabled");
-    
-    // Notify back button guard that upload modal is opening
-    if (window.UI_BACK_GUARD) {
-      window.UI_BACK_GUARD.noteLayerOpened("upload");
-    }
+    enableCropperContextMenuBlocker();
   }
 
   function closeModal() {
     modal.classList.add("hidden");
     destroyCropper();
     resetModalState();
+    disableCropperContextMenuBlocker();
   }
 
   // ===== Generate tile image (square crop from Cropper) =====
