@@ -1,3 +1,5 @@
+// Back-button control: ConicalNav (conical hashes) — single implementation, prior experiments removed.
+
 // === Debug toggle ===
 const DEBUG = false;
 const ADMIN_DEBUG = false;  // Show admin debug footer with undo state details
@@ -29,6 +31,127 @@ const ENDPOINTS = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+/*
+==============================
+Conical Hash Navigation Contract
+==============================
+Hash encodes the UI stack (conical hash), e.g.:
+  ""             (base)
+  #art
+  #art/ribbon
+  #upload        (standalone)
+
+RULES:
+- OPEN actions MUST call: ConicalNav.pushToMatchUi() (pushes a new hash history step)
+- UI CLOSE actions MUST call: ConicalNav.popFromUiClose() (history.back with ignore flag)
+- hashchange handler MUST ONLY close layers to match the new hash; it must NEVER call history.back()
+*/
+
+// ==============================
+// Conical Hash Back Button Control
+// Hash encodes layer stack, e.g.:
+//   ""              (base)
+//   "#art"
+//   "#art/ribbon"
+//   "#upload"
+// ==============================
+const ConicalNav = {
+  ignoreNextHashChange: false,
+
+  // ---- Update these selectors / checks to match your actual UI ----
+  isRibbonOpen() {
+    return (typeof isInfoRibbonOpen === "function") ? isInfoRibbonOpen() : false;
+  },
+  isArtOpen() {
+    return (typeof isArtworkPopupOpen === "function") ? isArtworkPopupOpen() : false;
+  },
+  isUploadOpen() {
+    return (typeof isUploadModalOpen === "function") ? isUploadModalOpen() : false;
+  },
+
+  // Choose the desired conical hash based on current UI state
+  // Priority order matches requested close order: ribbon -> art -> upload
+  desiredHash() {
+    // If ribbon is open, art is assumed open underneath
+    if (this.isRibbonOpen()) return "#art/ribbon";
+    if (this.isArtOpen()) return "#art";
+    if (this.isUploadOpen()) return "#upload";
+    return "";
+  },
+
+  // PUSH a new hash state (creates a history step)
+  pushToMatchUi() {
+    const target = this.desiredHash();
+    if (location.hash === target) return;
+    location.hash = target; // PUSH
+  },
+
+  // UI close should POP the current hash step
+  popFromUiClose() {
+    // Avoid double-close when hashchange fires from history.back()
+    this.ignoreNextHashChange = true;
+    history.back();
+  },
+
+  // Parse hash to stack array: "#art/ribbon" -> ["art","ribbon"]
+  parseHash(hashStr) {
+    const h = (hashStr || "").replace(/^#/, "").trim();
+    if (!h) return [];
+    return h.split("/").filter(Boolean);
+  },
+
+  // Enforce UI matches the NEW hash stack after Back/Forward
+  syncUiToHash() {
+    const stack = this.parseHash(location.hash);
+
+    const wantsArt = stack.includes("art");
+    const wantsRibbon = stack.includes("ribbon");
+    const wantsUpload = stack.includes("upload");
+
+    // If you used "#upload" as standalone, detect it:
+    const standaloneUpload = (location.hash === "#upload");
+
+    // Close ribbon if hash no longer includes ribbon
+    if (!wantsRibbon && this.isRibbonOpen()) {
+      try { closeInfoRibbon(true); } catch (e) {}
+    }
+
+    // Close art if hash no longer includes art
+    if (!wantsArt && this.isArtOpen()) {
+      try { closeArtworkPopup(true); } catch (e) {}
+    }
+
+    // Close upload if hash no longer includes upload/standalone upload
+    if (!wantsUpload && !standaloneUpload && this.isUploadOpen()) {
+      try { closeUploadModal(true); } catch (e) {}
+    }
+
+    // NOTE: We do NOT auto-open layers on forward navigation.
+    // Forward may restore hash; we only guarantee "Back closes layers".
+  },
+
+  onHashChange() {
+    if (this.ignoreNextHashChange) {
+      this.ignoreNextHashChange = false;
+      return;
+    }
+    this.syncUiToHash();
+  },
+
+  init() {
+    window.addEventListener("hashchange", () => this.onHashChange(), true);
+
+    // Optional: On first load, ensure hash matches current UI (usually none)
+    setTimeout(() => {
+      // If UI has layers open on load (rare), push hash
+      this.pushToMatchUi();
+    }, 0);
+  }
+};
+
+ConicalNav.init();
+window.ConicalNav = ConicalNav;
 
 // ========================================
 // Repeated selector/ID/API string constants
@@ -71,8 +194,9 @@ const LOG = {
 };
 
 // ========================================
-// PHASE 2: Canonical wall state (single source of truth)
+// Wall State Management
 // ========================================
+// Canonical wall state (single source of truth)
 const wallState = {
   tiles: {
     // Structure: tileId -> { assetId, size, x, y, asset }
@@ -86,7 +210,7 @@ const wallState = {
   }
 };
 
-// PHASE 2: State history for undo (replaces DOM snapshots)
+// State history for undo (replaces DOM snapshots)
 const stateHistory = {
   snapshots: [],
   maxSnapshots: 50
@@ -194,6 +318,12 @@ function ribbonVisible(overlayEl) {
          !overlayEl.classList.contains("hide-info");
 }
 
+function isArtworkPopupOpen() {
+  const overlay = $(IDS.popupOverlay);
+  return !!overlay && overlay.classList.contains("is-open");
+}
+window.isArtworkPopupOpen = isArtworkPopupOpen;
+
 function openArtworkPopup({ imgSrc, title, artist, infoText }) {
   const overlay = ensurePopupDom();
 
@@ -220,10 +350,17 @@ function openArtworkPopup({ imgSrc, title, artist, infoText }) {
   // Sequence: image pops (is-open) → title fades → bg slides → text pops
   popupTimers.push(setTimeout(() => overlay.classList.add("show-title"), 0));
   popupTimers.push(setTimeout(() => overlay.classList.add("stage-info-bg"), 1000));
-popupTimers.push(setTimeout(() => overlay.classList.add("stage-info-text"), 2000));
+  popupTimers.push(setTimeout(() => {
+    overlay.classList.add("stage-info-text");
+    // ConicalNav: Ribbon opened, update hash to #art/ribbon
+    window.ConicalNav && window.ConicalNav.pushToMatchUi();
+  }, 2000));
+
+  // ConicalNav: Art popup opened, update hash to #art
+  window.ConicalNav && window.ConicalNav.pushToMatchUi();
 }
 
-function closeArtworkPopup() {
+function closeArtworkPopup(silent) {
   const overlay = $(IDS.popupOverlay);
   if (!overlay) return;
 
@@ -233,6 +370,11 @@ function closeArtworkPopup() {
 
   const imgEl = $(IDS.popupImg);
   if (imgEl) imgEl.src = "";
+
+  // ConicalNav: Pop history on UI close (unless called from hashchange)
+  if (!silent) {
+    window.ConicalNav && window.ConicalNav.popFromUiClose();
+  }
 }
 
 function wirePopupEventsOnce() {
@@ -240,7 +382,7 @@ function wirePopupEventsOnce() {
   if (overlay.__wired) return;
   overlay.__wired = true;
 
-  // STEP 1: Helper functions for state detection
+  // Helper functions for state detection
   function isPopupOpen() {
     return overlay.classList.contains("is-open");
   }
@@ -249,16 +391,26 @@ function wirePopupEventsOnce() {
     return ribbonVisible(overlay);
   }
 
-  // STEP 1: Centralized close functions
-  function closeInfoRibbon() {
+  // Global helper for ConicalNav
+  window.isInfoRibbonOpen = function() {
+    return ribbonVisible(overlay);
+  };
+
+  // Centralized close functions
+  function closeInfoRibbon(silent) {
     overlay.classList.add("hide-info");
+    // ConicalNav: Pop history on UI close (unless called from hashchange)
+    if (!silent) {
+      window.ConicalNav && window.ConicalNav.popFromUiClose();
+    }
   }
+  window.closeInfoRibbon = closeInfoRibbon;
 
   function closeImagePopup() {
     closeArtworkPopup();
   }
 
-  // STEP 3: Unified state-machine click handler
+  // Unified state-machine click handler
   // Implements two-click dismiss: first click closes ribbon, second closes popup
   overlay.addEventListener("click", (e) => {
     const popupOpen = isPopupOpen();
@@ -275,9 +427,6 @@ function wirePopupEventsOnce() {
     // Second click: close popup
     closeImagePopup();
   });
-
-  // STEP 4: No stopPropagation - let all clicks bubble to unified handler
-  // (removed all previous stopPropagation calls)
 }
 
 // Map size string → units (square tiles, N × N)
