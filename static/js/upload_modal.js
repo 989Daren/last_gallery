@@ -21,6 +21,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // ================================
   let cropperContextMenuBlocker = null;
 
+  // Global helpers for ConicalNav
+  window.isUploadModalOpen = function() {
+    return modal && !modal.classList.contains("hidden");
+  };
+
+  window.closeUploadModal = function(silent) {
+    closeModal(silent);
+  };
+
   function enableCropperContextMenuBlocker() {
     if (cropperContextMenuBlocker) return;
 
@@ -137,13 +146,19 @@ document.addEventListener("DOMContentLoaded", () => {
     uploadInFlight = false;
     setPrimaryButtonState("disabled");
     enableCropperContextMenuBlocker();
+    // ConicalNav: Upload modal opened, update hash to #upload
+    window.ConicalNav && window.ConicalNav.pushToMatchUi();
   }
 
-  function closeModal() {
+  function closeModal(silent) {
     modal.classList.add("hidden");
     destroyCropper();
     resetModalState();
     disableCropperContextMenuBlocker();
+    // ConicalNav: Pop history on UI close (unless called from hashchange)
+    if (!silent) {
+      window.ConicalNav && window.ConicalNav.popFromUiClose();
+    }
   }
 
   // ===== Generate tile image (square crop from Cropper) =====
