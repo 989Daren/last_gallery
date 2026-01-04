@@ -2,10 +2,10 @@
 
 // === Debug toggle ===
 const DEBUG = false;
-const ADMIN_DEBUG = false;  // Show admin debug footer with undo state details
-const __DEV__ = true;  // Enable dev-only features (canary, extra logging)
-const log  = (...args) => DEBUG && console.log(...args);
-const warn = (...args) => DEBUG && console.warn(...args);
+const ADMIN_DEBUG = false; // Admin debug footer
+const DEV_MODE = true; // Dev-only behavior/logs
+const log = (...args) => { if (DEBUG) console.log(...args); };
+const warn = (...args) => { if (DEBUG) console.warn(...args); };
 const error = (...args) => console.error(...args);
 
 // === Kill-switch for demo/test art auto-population ===
@@ -16,10 +16,7 @@ const ENABLE_DEMO_AUTOFILL = false;
 // Set to false to hide white tile ID labels from public view (admin labels unaffected)
 const SHOW_PUBLIC_TILE_LABELS = false;
 
-// main.js
-// SVG → grid renderer using runtime parsing guide.
-// Preserves existing header defined in HTML.
-// No redundant UI creation; this file only wires behavior and renders tiles into #galleryWall.
+// main.js — The Last Gallery (state-driven wall renderer + admin tools)
 
 const SVG_GRID_PATH = "/static/grid_full.svg";
 const BASE_UNIT = 85;
@@ -32,29 +29,57 @@ const ENDPOINTS = {
 
 const $ = (id) => document.getElementById(id);
 
-/*
-==============================
-Conical Hash Navigation Contract
-==============================
-Hash encodes the UI stack (conical hash), e.g.:
-  ""             (base)
-  #art
-  #art/ribbon
-  #upload        (standalone)
+// ============================
+// Simple Welcome Banner
+// Shown after boot hydration (policy can be changed later)
+// ============================
+function initSimpleWelcomeAlways() {
+  // Prevent double-init if called more than once
+  if (window.__simpleWelcomeInit) return;
+  window.__simpleWelcomeInit = true;
 
-RULES:
-- OPEN actions MUST call: ConicalNav.pushToMatchUi() (pushes a new hash history step)
-- UI CLOSE actions MUST call: ConicalNav.popFromUiClose() (history.back with ignore flag)
-- hashchange handler MUST ONLY close layers to match the new hash; it must NEVER call history.back()
-*/
+  const overlay = $("simpleWelcome");
+  if (!overlay) {
+    if (DEBUG) console.warn("[WELCOME] #simpleWelcome not found");
+    return;
+  }
+  const enterBtn = $("simpleWelcomeEnterBtn");
+
+  const open = () => {
+    overlay.classList.remove("hidden");
+    // Prevent background scroll while open
+    document.body.style.overflow = "hidden";
+  };
+
+  const close = () => {
+    overlay.classList.add("hidden");
+    document.body.style.overflow = "";
+  };
+
+  // Always show on load
+  open();
+
+  // Wire "Enter Gallery" to close
+  enterBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    close();
+  }, { passive: false });
+
+  // Click backdrop to close (optional)
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+
+  // Escape key to close (optional)
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !overlay.classList.contains("hidden")) close();
+  });
+}
 
 // ==============================
-// Conical Hash Back Button Control
-// Hash encodes layer stack, e.g.:
-//   ""              (base)
-//   "#art"
-//   "#art/ribbon"
-//   "#upload"
+// ConicalNav: Back button closes UI layers (no history weirdness).
+// Hash encodes layer stack: "", "#art", "#art/ribbon", "#upload".
 // ==============================
 const ConicalNav = {
   ignoreNextHashChange: false,
@@ -603,12 +628,9 @@ function applyGridColor(color) {
   document.documentElement.style.setProperty("--wallColor", color);
 }
 
-function assignArtworkUrls(tiles) {
-  // DISABLED: No auto-population of demo/test art
-  // Tiles start empty - artwork only comes from database hydration via upload system
-  // Server placement is also disabled to prevent any auto-fill on load
-
-  log("assignArtworkUrls: Skipping all auto-population (disabled)");
+function assignArtworkUrls() {
+  // Intentionally disabled: no demo/test auto-population.
+  log("assignArtworkUrls disabled");
 }
 
 function buildLayoutTiles(tiles, totalHeight) {
@@ -804,124 +826,11 @@ function finalizeAfterRender(wall) {
   sizeWallOverlays(wall);
 }
 
-// Async version for delayed finalize (ensures all renders complete)
-function finalizeAfterRenderAsync(wall) {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      finalizeAfterRender(wall);
-    });
-  });
-}
-
-// Wait for all wall images to decode before finalizing
-function waitForWallImagesDecode() {
-  const wall = document.querySelector(SEL.wallQuery);
-  if (!wall) return Promise.resolve();
-
-  const imgs = Array.from(wall.querySelectorAll('img'));
-  if (!imgs.length) return Promise.resolve();
-
-  return Promise.allSettled(
-    imgs.map(img => {
-      if (img.decode) return img.decode().catch(() => {});
-      if (img.complete) return Promise.resolve();
-      return new Promise(res => {
-        img.addEventListener('load', () => res(), { once: true });
-        img.addEventListener('error', () => res(), { once: true });
-      });
-    })
-  );
-}
-
-// Forces a repaint/composite reset WITHOUT replacing elements
-function nudgeWallComposite() {
-  const wall = document.querySelector(SEL.wallQuery);
-  if (!wall) return;
-
-  // 1) force layout
-  void wall.offsetWidth;
-
-  // 2) force a composite/layer invalidation (cheap + reversible)
-  wall.style.transform = 'translateZ(0)';
-  wall.style.willChange = 'transform';
-
-  // 3) remove it next frame so you don't change real layout
-  requestAnimationFrame(() => {
-    wall.style.transform = '';
-    wall.style.willChange = '';
-  });
-}
-
-// Main finalize after Undo restore (no DOM replacement)
-async function finalizeWallAfterUndoRestore() {
-  // Let DOM mutations settle
-  await new Promise(r => requestAnimationFrame(r));
-  await new Promise(r => requestAnimationFrame(r));
-
-  // Wait for images to actually decode/paint
-  await waitForWallImagesDecode();
-
-  // Then force a composite reset
-  nudgeWallComposite();
-}
-
-// =====================================================
-// DEV CANARY — Detect inner image drift
-// =====================================================
-// Baseline storage for image shift detection (persists across calls)
-let imageShiftBaseline = null;
-
-function checkForImageShift(label = '') {
-  const tiles = Array.from(
-    document.querySelectorAll(SEL.tileHasAsset)
-  ).slice(0, 3); // sample a few
-
-  if (!tiles.length) return;
-
-  tiles.forEach((tile, i) => {
-    const wrap =
-      tile.querySelector(SEL.artImgwrap) ||
-      tile.querySelector('img');
-
-    if (!wrap) return;
-
-    // Compare against .art-frame (parent of .art-imgwrap), fall back to tile
-    const frame = tile.querySelector(SEL.artFrame);
-    const reference = frame || tile;
-
-    const refRect = reference.getBoundingClientRect();
-    const wr = wrap.getBoundingClientRect();
-
-    const dx = Math.round(wr.left - refRect.left);
-    const dy = Math.round(wr.top  - refRect.top);
-
-    // Initialize baseline on first successful measurement
-    if (imageShiftBaseline === null) {
-      imageShiftBaseline = { dx, dy };
-      if (DEBUG) console.log('[checkForImageShift] Baseline recorded:', imageShiftBaseline);
-      return;
-    }
-
-    // Compare against baseline to detect regressions
-    const deltaDx = dx - imageShiftBaseline.dx;
-    const deltaDy = dy - imageShiftBaseline.dy;
-
-    // Warn only if position changed relative to baseline (tolerance ±1px)
-    if (Math.abs(deltaDx) > 1 || Math.abs(deltaDy) > 1) {
-      console.warn(
-        `⚠️ IMAGE SHIFT REGRESSION ${label}`,
-        {
-          tileIndex: i,
-          baseline: { dx: imageShiftBaseline.dx, dy: imageShiftBaseline.dy },
-          current: { dx, dy },
-          delta: { dx: deltaDx, dy: deltaDy },
-          tile,
-          wrap
-        }
-      );
-    }
-  });
-}
+// ========================================
+// Dev canary (optional)
+// ========================================
+const DEV_CANARY = false; // set true to log drift regressions
+function checkForImageShift() { /* optional dev-only canary (disabled) */ }
 
 // ========================================
 // PHASE 2: New state-driven render pipeline
@@ -1057,7 +966,7 @@ function renderWallFromState() {
 
   // PHASE 7: Diagnostic canary (dev-only)
   console.log(LOG.render, 'renderWallFromState');
-  if (__DEV__) checkForImageShift('renderWallFromState');
+  if (DEV_MODE && DEV_CANARY) checkForImageShift();
 }
 
 // PHASE 3: Single render choke point for explicit state changes
@@ -1065,58 +974,7 @@ function commitWallStateChange(reason) {
   if (DEBUG) console.log('[PHASE 3] commitWallStateChange:', reason);
   renderWallFromState();
   console.log(LOG.render, 'commitWallStateChange:', reason);
-  if (__DEV__) checkForImageShift(reason);
-}
-
-// LEGACY: Pre-Phase 2 tile rendering function
-// Not used by boot() or any operation (replaced by renderWallFromState)
-// Kept for reference during migration
-// RENDER ENTRY POINT (legacy)
-function renderTiles(wall, layoutTiles) {
-  // ⚠️ PHASE 1 AUDIT: direct DOM mutation (clear tiles in render pipeline)
-  // Clear only tiles, preserve wall lighting overlays
-  const tiles = wall.querySelectorAll(SEL.tile);
-  tiles.forEach(tile => tile.remove());
-
-  layoutTiles.forEach(tile => {
-    const units = sizeToUnits(tile.size);
-    const w = units * BASE_UNIT;
-    const h = units * BASE_UNIT;
-
-    const el = document.createElement("div");
-    el.classList.add("tile");
-    el.dataset.size = tile.size;
-    el.dataset.id = tile.id;
-
-    el.style.position = "absolute";
-    el.style.left = tile.x + "px";
-    el.style.top = tile.y + "px";
-    el.style.width = w + "px";
-    el.style.height = h + "px";
-
-    // Create public tile label (if enabled)
-    if (SHOW_PUBLIC_TILE_LABELS) {
-      const label = document.createElement("span");
-      label.classList.add("tile-label");
-      label.textContent = tile.id;
-      el.appendChild(label);
-    }
-
-    wall.appendChild(el);
-
-    // If tile has artwork, apply it using centralized function
-    if (tile.artUrl) {
-      applyAssetToTile(el, {
-        tile_url: tile.artUrl,
-        popup_url: tile.artUrl,
-        artwork_name: "",
-        artist_name: ""
-      });
-    }
-  });
-
-  console.log(LOG.render, 'renderTiles completed');
-  checkForImageShift('renderTiles completed');
+  if (DEV_MODE && DEV_CANARY) checkForImageShift();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1873,6 +1731,8 @@ document.addEventListener("DOMContentLoaded", () => {
       hydrateWallStateFromExistingData(layoutTiles, assignments);
       // PHASE 3: Single render after state hydration
       commitWallStateChange('boot hydration');
+      // Show welcome banner AFTER boot hydration/render has completed
+      requestAnimationFrame(() => initSimpleWelcomeAlways());
 
       // Tile click → open popup (delegated; only for tiles with uploaded artwork)
       wall.addEventListener("click", (e) => {
