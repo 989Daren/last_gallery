@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_from_directory
+from flask import Flask, render_template, send_from_directory, jsonify
 import os
 import json
 
@@ -163,6 +163,23 @@ def index():
         grid_color = DEFAULT_GRID_COLOR
     
     return render_template("index.html", grid_color=grid_color)
+
+
+@app.route("/__debug/static_check")
+def debug_static_check():
+    """Debug endpoint to verify Flask can see grid_full.svg."""
+    import os
+    p = os.path.join(app.static_folder, "grid_full.svg")
+    exists = os.path.exists(p)
+    size = os.path.getsize(p) if exists else None
+    return {
+        "static_folder": app.static_folder,
+        "static_url_path": app.static_url_path,
+        "cwd": os.getcwd(),
+        "grid_full_svg_path": p,
+        "exists": exists,
+        "size": size,
+    }, 200
 
 
 @app.route("/api/grid-color", methods=["POST"])
