@@ -8,7 +8,7 @@ import json
 # from datetime import datetime
 # from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static", static_url_path="/static")
 
 # ---- Debug toggle ----
 SERVER_DEBUG = False
