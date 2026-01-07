@@ -1,43 +1,24 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, send_from_directory
 import os
 import json
-import re
-import random
-import uuid
-import sqlite3
-from datetime import datetime
-import xml.etree.ElementTree as ET
-from werkzeug.utils import secure_filename
+
+# ===== PURGED: SQLite imports removed =====
+# import sqlite3
+# import uuid
+# from datetime import datetime
+# from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
 # ---- Debug toggle ----
 SERVER_DEBUG = False
 
-# ---- Temporary debug flag for SQLite undo audit ----
-# Set to True to log SQLite snapshot operations (push/pop) and wall state save/load paths.
-# How to verify:
-#   1. Run Flask server
-#   2. Upload artwork and place it on wall
-#   3. Click "Clear Grid" or "Clear Tile"
-#   4. Click "Undo" button
-#   5. Observe console logs showing:
-#      - UNDO: attempting pop_latest_snapshot()
-#      - UNDO: popped snapshot id=X action=... tiles=N
-#      - SAVE_WALL_STATE: SQLITE mode, tiles=N
-#   6. Refresh page to confirm persistence via LOAD_WALL_STATE: SQLITE mode
-DEBUG_DB_TRACE = True
+# ===== PURGED: All SQLite and upload flags removed =====
+# USE_SQLITE_PLACEMENTS = False (always use JSON)
+# USE_SQLITE_ASSETS = False (no assets stored)
+# ENABLE_DEMO_AUTOFILL = False (no demo art)
+# DEBUG_DB_TRACE = False (no DB operations)
 
-# ---- Kill-switch for demo/test art auto-population ----
-# Set to False to disable all auto-generation of placeholder artwork
-ENABLE_DEMO_AUTOFILL = False
-
-# ---- SQLite persistence toggle (only affects wall placements) ----
-# Set to True to use SQLite instead of JSON for wall_state persistence
-USE_SQLITE_PLACEMENTS = True
-
-# ---- SQLite assets metadata toggle ----
-# Set to True to store artwork metadata (title, artist) in SQLite instead of assets.json
 # Auto-migrates existing assets.json to SQLite on first run
 USE_SQLITE_ASSETS = True
 
@@ -75,291 +56,14 @@ def load_grid_color():
             return DEFAULT_GRID_COLOR
     return DEFAULT_GRID_COLOR
 
-def init_db():
-    """Initialize SQLite database for wall placements and undo snapshots.
-
-    Creates data/gallery.db and required tables if they don't exist.
-    """
-    os.makedirs("data", exist_ok=True)
-    conn = sqlite3.connect(GALLERY_DB)
-    cursor = conn.cursor()
-
-    # Placements table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS placements (
-            tile_id TEXT PRIMARY KEY,
-            asset_id TEXT NOT NULL,
-            placed_at TEXT NOT NULL
-        )
-    """)
-
-    # Undo snapshots table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS placement_snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            action TEXT NOT NULL,
-            state_json TEXT NOT NULL
-        )
-    """)
-
-    # Indexes for placement_snapshots (performance optimization)
-    # Index on action column for filtered counts and WHERE clauses
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_snapshots_action
-        ON placement_snapshots(action)
-    """)
-
-    # Composite index for "latest per action type" queries
-    # Supports: WHERE action='shuffle' ORDER BY id DESC
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_snapshots_action_id
-        ON placement_snapshots(action, id DESC)
-    """)
-
-    # Assets metadata table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS assets (
-            asset_id TEXT PRIMARY KEY,
-            created_at TEXT NOT NULL,
-            tile_url TEXT NOT NULL,
-            popup_url TEXT NOT NULL,
-            artwork_name TEXT NOT NULL,
-            artist_name TEXT NOT NULL,
-            notes TEXT,
-            paid INTEGER DEFAULT 0
-        )
-    """)
-
-    conn.commit()
-    conn.close()
+# ===== PURGED: All database functions removed =====
 
 def save_grid_color(color: str):
     """Persist the chosen grid color so all visitors see it."""
+    COLOR_CONFIG = os.path.join("data", "grid_color.json")
+    os.makedirs("data", exist_ok=True)
     with open(COLOR_CONFIG, "w") as f:
         json.dump({"color": color}, f)
-
-
-def load_placement():
-    """Load the placement mapping from data/placement.json.
-
-    Returns a dict. If the file is missing or contains invalid JSON,
-    an empty dict is returned and no exception is raised.
-    """
-    if os.path.exists(PLACEMENT_FILE):
-        try:
-            with open(PLACEMENT_FILE, "r", encoding="utf-8") as f:
-                return json.load(f) or {}
-        except Exception:
-            # If file is unreadable or contains invalid JSON, return empty mapping
-            return {}
-    return {}
-
-
-def save_placement(mapping):
-    """Save the placement mapping to data/placement.json safely.
-
-    Ensures the `data/` directory exists before writing.
-    """
-    os.makedirs(os.path.dirname(PLACEMENT_FILE), exist_ok=True)
-    with open(PLACEMENT_FILE, "w", encoding="utf-8") as f:
-        json.dump(mapping or {}, f, indent=2)
-
-
-def load_assets():
-    """Load assets metadata from SQLite or data/assets.json.
-
-    If USE_SQLITE_ASSETS is True, loads from SQLite database with auto-migration.
-    Otherwise loads from data/assets.json.
-    Returns a dict keyed by asset_id. If file/db is missing or invalid, returns {}.
-    """
-    if USE_SQLITE_ASSETS:
-        try:
-            init_db()
-            migrate_assets_json_to_sqlite_if_needed()
-            result = sqlite_load_assets()
-            if DEBUG_DB_TRACE:
-                print(f"LOAD_ASSETS: SQLITE mode, assets={len(result)}")
-            return result
-        except Exception as e:
-            if SERVER_DEBUG:
-                print(f"Error loading assets from SQLite: {e}")
-            return {}
-    else:
-        # Existing JSON logic
-        if DEBUG_DB_TRACE:
-            print(f"LOAD_ASSETS: JSON mode")
-        if os.path.exists(ASSETS_FILE):
-            try:
-                with open(ASSETS_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f) or {}
-            except Exception:
-                return {}
-        return {}
-
-
-def save_assets(assets_dict):
-    """Save assets metadata to SQLite or data/assets.json.
-
-    If USE_SQLITE_ASSETS is True, saves to SQLite database.
-    Otherwise saves to data/assets.json.
-    Ensures the data/ directory exists before writing.
-    """
-    if USE_SQLITE_ASSETS:
-        if DEBUG_DB_TRACE:
-            print(f"SAVE_ASSETS: SQLITE mode, assets={len(assets_dict or {})}")
-        try:
-            init_db()
-            for asset_id, asset_data in (assets_dict or {}).items():
-                sqlite_insert_asset(
-                    asset_id=asset_id,
-                    tile_url=asset_data.get("tile_url", ""),
-                    popup_url=asset_data.get("popup_url", ""),
-                    artwork_name=asset_data.get("artwork_name", "Untitled"),
-                    artist_name=asset_data.get("artist_name", "Anonymous"),
-                    created_at=asset_data.get("created_at"),
-                    notes=asset_data.get("notes"),
-                    paid=asset_data.get("paid", 0)
-                )
-        except Exception as e:
-            if SERVER_DEBUG:
-                print(f"Error saving assets to SQLite: {e}")
-            raise
-    else:
-        # Existing JSON logic
-        if DEBUG_DB_TRACE:
-            print(f"SAVE_ASSETS: JSON mode, assets={len(assets_dict or {})}")
-        os.makedirs(os.path.dirname(ASSETS_FILE), exist_ok=True)
-        with open(ASSETS_FILE, "w", encoding="utf-8") as f:
-            json.dump(assets_dict or {}, f, indent=2)
-
-
-def sqlite_assets_count():
-    """Return the number of assets in SQLite assets table."""
-    init_db()
-    conn = sqlite3.connect(GALLERY_DB)
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM assets")
-    count = cursor.fetchone()[0]
-    conn.close()
-    return count
-
-
-def sqlite_insert_asset(asset_id, tile_url, popup_url, artwork_name, artist_name, created_at=None, notes=None, paid=0):
-    """Insert or replace an asset in SQLite assets table.
-
-    Args:
-        asset_id: UUID string
-        tile_url: URL path to tile image
-        popup_url: URL path to popup image
-        artwork_name: Title of artwork
-        artist_name: Name of artist
-        created_at: ISO timestamp (defaults to now)
-        notes: Optional notes
-        paid: Payment status (0 or 1)
-    """
-    init_db()
-    conn = sqlite3.connect(GALLERY_DB)
-    cursor = conn.cursor()
-
-    if created_at is None:
-        created_at = datetime.utcnow().isoformat()
-
-    cursor.execute("""
-        INSERT OR REPLACE INTO assets
-        (asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid))
-
-    conn.commit()
-    conn.close()
-
-
-def sqlite_load_assets():
-    """Load all assets from SQLite database.
-
-    Returns dict keyed by asset_id with same structure as JSON load_assets().
-    """
-    init_db()
-    conn = sqlite3.connect(GALLERY_DB)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid
-        FROM assets
-    """)
-    rows = cursor.fetchall()
-    conn.close()
-
-    assets = {}
-    for row in rows:
-        asset_id, created_at, tile_url, popup_url, artwork_name, artist_name, notes, paid = row
-        assets[asset_id] = {
-            "asset_id": asset_id,
-            "tile_url": tile_url,
-            "popup_url": popup_url,
-            "artwork_name": artwork_name,
-            "artist_name": artist_name,
-            "created_at": created_at,
-            "notes": notes,
-            "paid": paid
-        }
-
-    return assets
-
-
-def migrate_assets_json_to_sqlite_if_needed():
-    """Auto-migrate existing assets.json to SQLite on first run.
-
-    Only runs when:
-    - USE_SQLITE_ASSETS is True
-    - assets.json exists
-    - SQLite assets table is empty
-    """
-    if not USE_SQLITE_ASSETS:
-        return
-
-    # Check if migration is needed
-    if not os.path.exists(ASSETS_FILE):
-        return
-
-    if sqlite_assets_count() > 0:
-        return
-
-    # Load JSON assets
-    try:
-        with open(ASSETS_FILE, "r", encoding="utf-8") as f:
-            json_assets = json.load(f) or {}
-    except Exception:
-        return
-
-    if not json_assets:
-        return
-
-    # Migrate each asset
-    migration_time = datetime.utcnow().isoformat()
-    for asset_id, asset_data in json_assets.items():
-        created_at = asset_data.get("created_at") or asset_data.get("created") or migration_time
-        tile_url = asset_data.get("tile_url", "")
-        popup_url = asset_data.get("popup_url", "")
-        artwork_name = asset_data.get("artwork_name", "Untitled")
-        artist_name = asset_data.get("artist_name", "Anonymous")
-        notes = asset_data.get("notes")
-        paid = asset_data.get("paid", 0)
-
-        sqlite_insert_asset(
-            asset_id=asset_id,
-            tile_url=tile_url,
-            popup_url=popup_url,
-            artwork_name=artwork_name,
-            artist_name=artist_name,
-            created_at=created_at,
-            notes=notes,
-            paid=paid
-        )
-
-    if DEBUG_DB_TRACE:
-        print(f"MIGRATION: Migrated {len(json_assets)} assets from assets.json to SQLite")
 
 
 def load_wall_state():
@@ -881,44 +585,9 @@ def set_grid_color():
     return jsonify({"status": "ok", "color": color})
 
 
-@app.route("/api/wall_state", methods=["GET"])
-def get_wall_state():
-    """Return the current wall state as JSON.
-
-    Response format:
-    {
-      "assignments": [
-        {
-          "tile_id": "X1",
-          "tile_url": "/uploads/tile_123.png",
-          "popup_url": "/uploads/popup_123.png",
-          "artwork_name": "Title",
-          "artist_name": "Artist",
-          "asset_id": "123"
-        }
-      ]
-    }
-
-    If no assignments exist, returns {"assignments": []}.
-    No demo fallback logic.
-    """
-    wall_state = load_wall_state()
-    assets = load_assets()
-
-    assignments = []
-    for tile_id, asset_id in wall_state.items():
-        asset = assets.get(asset_id)
-        if asset:
-            assignments.append({
-                "tile_id": tile_id,
-                "tile_url": asset["tile_url"],
-                "popup_url": asset["popup_url"],
-                "artwork_name": asset["artwork_name"],
-                "artist_name": asset["artist_name"],
-                "asset_id": asset_id
-            })
-
-    return jsonify({"assignments": assignments}), 200
+# ===== PURGED: Wall State API (no DB) =====
+# @app.route("/api/wall_state", methods=["GET"])
+# ... (removed for cropper-only demo)
 
 
 @app.route("/uploads/<path:filename>")
@@ -927,108 +596,10 @@ def uploads(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
 
-@app.route("/api/upload_assets", methods=["POST"])
-def upload_assets():
-    """Handle asset upload (tile and popup images with metadata).
-
-    Accepts multipart/form-data with:
-    - tile_image: file
-    - popup_image: file
-    - artwork_name: string
-    - artist_name: string
-
-    Returns JSON:
-    {
-      "asset_id": "uuid",
-      "tile_url": "/uploads/tile_uuid.ext",
-      "popup_url": "/uploads/popup_uuid.ext",
-      "artwork_name": "Title",
-      "artist_name": "Artist"
-    }
-    """
-    if 'tile_image' not in request.files or 'popup_image' not in request.files:
-        return jsonify({"ok": False, "error": "Missing required files"}), 400
-
-    tile_file = request.files['tile_image']
-    popup_file = request.files['popup_image']
-    artwork_name = request.form.get('artwork_name', 'Untitled')
-    artist_name = request.form.get('artist_name', 'Anonymous')
-
-    if tile_file.filename == '' or popup_file.filename == '':
-        return jsonify({"ok": False, "error": "Empty filename"}), 400
-
-    # Generate unique asset_id
-    asset_id = str(uuid.uuid4())
-
-    # Get file extensions
-    tile_ext = os.path.splitext(secure_filename(tile_file.filename))[1]
-    popup_ext = os.path.splitext(secure_filename(popup_file.filename))[1]
-
-    # Create unique filenames
-    tile_filename = f"tile_{asset_id}{tile_ext}"
-    popup_filename = f"popup_{asset_id}{popup_ext}"
-
-    # Save files
-    tile_path = os.path.join(UPLOAD_DIR, tile_filename)
-    popup_path = os.path.join(UPLOAD_DIR, popup_filename)
-    tile_file.save(tile_path)
-    popup_file.save(popup_path)
-
-    # Create asset metadata
-    tile_url = f"/uploads/{tile_filename}"
-    popup_url = f"/uploads/{popup_filename}"
-    created_at = datetime.utcnow().isoformat()
-
-    asset_data = {
-        "tile_url": tile_url,
-        "popup_url": popup_url,
-        "artwork_name": artwork_name,
-        "artist_name": artist_name,
-        "created_at": created_at
-    }
-
-    # Save to assets backend (SQLite or JSON based on USE_SQLITE_ASSETS flag)
-    assets = load_assets()
-    assets[asset_id] = asset_data
-    save_assets(assets)
-
-    # Return asset info
-    return jsonify({
-        "asset_id": asset_id,
-        **asset_data
-    }), 200
-
-
-@app.route("/api/assign_tile", methods=["POST"])
-def assign_tile():
-    """Assign an asset to a tile.
-
-    Expects JSON:
-    {
-      "tile_id": "X1",
-      "asset_id": "uuid"
-    }
-
-    Returns {"ok": true} on success.
-    """
-    data = request.get_json(silent=True) or {}
-    tile_id = data.get('tile_id')
-    asset_id = data.get('asset_id')
-
-    if not tile_id or not asset_id:
-        return jsonify({"ok": False, "error": "Missing tile_id or asset_id"}), 400
-
-    # Verify asset exists
-    assets = load_assets()
-    if asset_id not in assets:
-        return jsonify({"ok": False, "error": "Asset not found"}), 404
-
-    # Save tile assignment
-    wall_state = load_wall_state()
-    wall_state[tile_id] = asset_id
-    save_wall_state(wall_state)
-
-    return jsonify({"ok": True}), 200
+# ===== PURGED: Upload & Assignment Routes (no DB) =====
+# @app.route("/api/upload_assets", methods=["POST"])
+# @app.route("/api/assign_tile", methods=["POST"])
+# ... (removed for cropper-only demo)
 
 
 @app.route("/api/admin/clear_tile", methods=["POST"])
