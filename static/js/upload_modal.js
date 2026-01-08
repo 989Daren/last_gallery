@@ -238,7 +238,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await postWithFallback(formData);
       console.log(`${LOG_PREFIX} Upload success:`, result);
-      console.warn("[UPLOAD] upload complete reached");  // TEMP DEBUG
 
       // Store tile_id and open Tier-2 metadata modal
       if (result && result.tile_id) {
@@ -355,7 +354,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       console.log(`${LOG_PREFIX} Metadata saved successfully:`, result);
-      console.warn("[META] metadata save success reached");  // TEMP DEBUG
       
       // Show success briefly
       if (metaSuccess) {
