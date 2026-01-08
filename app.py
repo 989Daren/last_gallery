@@ -5,7 +5,7 @@ import uuid
 import re
 import xml.etree.ElementTree as ET
 from werkzeug.utils import secure_filename
-from db import init_db
+from db import init_db, get_db
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 
@@ -344,6 +344,135 @@ def upload_assets():
             "popup_url": popup_url,
         },
     })
+
+
+@app.route("/api/tile/<tile_id>/metadata", methods=["POST"])
+def save_tile_metadata(tile_id):
+    """
+    Create a new asset record and assign it to a tile.
+    
+    Input JSON body:
+        {
+            "artist_name": "string",
+            "artwork_title": "string"
+        }
+    
+    Returns:
+        {
+            "ok": true,
+            "tile_id": "<tile_id>",
+            "asset_id": <asset_id>,
+            "artist_name": "<artist_name>",
+            "artwork_title": "<artwork_title>"
+        }
+    """
+    try:
+        # Read and normalize JSON input
+        data = request.get_json() or {}
+        artist_name = (data.get("artist_name") or "").strip()
+        artwork_title = (data.get("artwork_title") or "").strip()
+        
+        # Get database connection
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Ensure tile row exists
+        cursor.execute(
+            "INSERT OR IGNORE INTO tiles(tile_id, asset_id) VALUES(?, NULL)",
+            (tile_id,)
+        )
+        
+        # Insert asset row
+        cursor.execute(
+            "INSERT INTO assets(artist_name, artwork_title) VALUES(?, ?)",
+            (artist_name, artwork_title)
+        )
+        asset_id = cursor.lastrowid
+        
+        # Assign asset to tile
+        cursor.execute(
+            "UPDATE tiles SET asset_id=?, updated_at=datetime('now') WHERE tile_id=?",
+            (asset_id, tile_id)
+        )
+        
+        # Commit changes
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "ok": True,
+            "tile_id": tile_id,
+            "asset_id": asset_id,
+            "artist_name": artist_name,
+            "artwork_title": artwork_title
+        })
+        
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route("/api/tile/<tile_id>/metadata", methods=["GET"])
+def get_tile_metadata(tile_id):
+    """
+    Fetch the currently assigned asset metadata (artist/title) for a tile.
+    
+    Returns:
+        {
+            "ok": true,
+            "tile_id": "<tile_id>",
+            "asset_id": <asset_id> or null,
+            "artist_name": "<artist_name>" or "",
+            "artwork_title": "<artwork_title>" or ""
+        }
+    """
+    try:
+        # Get database connection
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Query tile and asset data
+        cursor.execute("""
+            SELECT t.tile_id, t.asset_id, a.artist_name, a.artwork_title
+            FROM tiles t
+            LEFT JOIN assets a ON a.asset_id = t.asset_id
+            WHERE t.tile_id = ?
+        """, (tile_id,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        # If no tiles row exists, return empty values
+        if not row:
+            return jsonify({
+                "ok": True,
+                "tile_id": tile_id,
+                "asset_id": None,
+                "artist_name": "",
+                "artwork_title": ""
+            })
+        
+        # Return data (use empty strings for null values)
+        return jsonify({
+            "ok": True,
+            "tile_id": row["tile_id"],
+            "asset_id": row["asset_id"],
+            "artist_name": row["artist_name"] or "",
+            "artwork_title": row["artwork_title"] or ""
+        })
+        
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
 
 
 if __name__ == "__main__":
