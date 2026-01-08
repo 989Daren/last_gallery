@@ -1075,6 +1075,22 @@ label {
   white-space: pre-line;
 }
 
+/* Ribbon metadata content */
+.ribbon-title {
+  font-size: clamp(14px, 2vw, 18px);
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.ribbon-artist {
+  font-size: clamp(12px, 1.5vw, 14px);
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.75);
+  font-style: italic;
+}
+
 .popup-overlay.stage-info-text .popup-info-text {
   opacity: 1;
   transform: translateY(0) scale(1);
