@@ -1,19 +1,19 @@
-from flask import Flask, render_template, send_from_directory, jsonify
+from flask import Flask, render_template, send_from_directory, jsonify, request
 import os
 import json
-
-# ===== PURGED: SQLite imports removed =====
-# import sqlite3
-# import uuid
-# from datetime import datetime
-# from werkzeug.utils import secure_filename
+import uuid
+import re
+import xml.etree.ElementTree as ET
+from werkzeug.utils import secure_filename
+from db import init_db
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 
+# Initialize database schema on startup
+init_db()
+
 # ---- Debug toggle ----
 SERVER_DEBUG = False
-
-# ===== PURGED: All SQLite and upload flags removed =====
 
 # ---- Grid color config ----
 COLOR_CONFIG = "grid_color.json"
@@ -22,41 +22,73 @@ DEFAULT_GRID_COLOR = "#b84c27"
 # ---- File paths (absolute) ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+DATA_DIR = os.path.join(BASE_DIR, "data")
+WALL_STATE_PATH = os.path.join(DATA_DIR, "wall_state.json")
 
-# Ensure uploads directory exists
+# Ensure folders exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# Minimal admin pin (only used if you later re-enable admin routes)
+ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "0000")
 
 
 def load_grid_color():
     """Read the current grid color from a small JSON file, or fall back to default."""
+    # legacy path support
     if os.path.exists(COLOR_CONFIG):
         try:
             with open(COLOR_CONFIG, "r") as f:
                 data = json.load(f)
                 return data.get("color", DEFAULT_GRID_COLOR)
         except Exception:
-            # If file is corrupted or unreadable, just use the default
             return DEFAULT_GRID_COLOR
+
+    # current path
+    color_path = os.path.join(DATA_DIR, "grid_color.json")
+    if os.path.exists(color_path):
+        try:
+            with open(color_path, "r") as f:
+                data = json.load(f)
+                return data.get("color", DEFAULT_GRID_COLOR)
+        except Exception:
+            return DEFAULT_GRID_COLOR
+
     return DEFAULT_GRID_COLOR
 
-# ===== PURGED: All database functions removed =====
 
 def save_grid_color(color: str):
     """Persist the chosen grid color so all visitors see it."""
-    color_path = os.path.join("data", "grid_color.json")
-    os.makedirs("data", exist_ok=True)
+    color_path = os.path.join(DATA_DIR, "grid_color.json")
     with open(color_path, "w") as f:
         json.dump({"color": color}, f)
-# ===== PURGED: All wall state and database functions removed =====
-# (No persistence, no undo history, cropper-only demo)
+
+
+def load_wall_state():
+    """Load wall state from JSON. No SQLite. Safe if missing/corrupted."""
+    if not os.path.exists(WALL_STATE_PATH):
+        return {"assignments": []}
+    try:
+        with open(WALL_STATE_PATH, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {"assignments": []}
+        assignments = data.get("assignments", [])
+        if not isinstance(assignments, list):
+            assignments = []
+        return {"assignments": assignments}
+    except Exception:
+        return {"assignments": []}
+
+
+def save_wall_state(state: dict):
+    """Persist wall state to JSON."""
+    with open(WALL_STATE_PATH, "w") as f:
+        json.dump(state, f)
 
 
 def check_admin_pin():
-    """Check if request has valid X-Admin-Pin header.
-
-    Returns:
-        tuple: (bool: is_valid, response or None)
-    """
+    """Check if request has valid X-Admin-Pin header."""
     pin = request.headers.get("X-Admin-Pin")
     if pin != ADMIN_PIN:
         return False, (jsonify({"ok": False, "error": "Unauthorized"}), 401)
@@ -121,7 +153,6 @@ def _parse_svg_tiles(svg_path):
     min_left = min(r['design_left'] for r in rects)
     min_top = min(r['design_top'] for r in rects)
 
-    BASE_UNIT = 85
     def classify(w):
         if w >= 60 and w < 128: return 'xs'
         if w >= 128 and w < 213: return 's'
@@ -150,25 +181,69 @@ def _parse_svg_tiles(svg_path):
     return tiles
 
 
-# ===== PURGED: Demo placement generator removed =====
+_TILE_CACHE = None
+
+
+def get_tiles_from_svg():
+    global _TILE_CACHE
+    if _TILE_CACHE is not None:
+        return _TILE_CACHE
+    svg_path = os.path.join(app.static_folder, "grid_full.svg")
+    tiles = _parse_svg_tiles(svg_path)
+    _TILE_CACHE = tiles
+    return tiles
+
+
+def pick_next_xs_tile_id():
+    """Pick the first unoccupied XS tile ID."""
+    state = load_wall_state()
+    used = set()
+    for a in state.get("assignments", []):
+        tid = a.get("tile_id")
+        if tid:
+            used.add(tid)
+
+    tiles = get_tiles_from_svg()
+    xs_tiles = [t["id"] for t in tiles if t.get("size") == "xs"]
+    for tid in xs_tiles:
+        if tid not in used:
+            return tid
+    return None
+
+
+def _allowed_ext(filename: str):
+    ext = os.path.splitext(filename)[1].lower()
+    return ext in (".jpg", ".jpeg", ".png", ".webp")
+
+
+def _save_upload_file(fs, prefix: str, asset_id: str):
+    """Save an uploaded file storage to UPLOAD_DIR with a stable name."""
+    original = secure_filename(fs.filename or "")
+    ext = os.path.splitext(original)[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        # default to .jpg if client doesn't provide a sane extension
+        ext = ".jpg"
+    filename = f"{prefix}_{asset_id}{ext}"
+    path = os.path.join(UPLOAD_DIR, filename)
+    fs.save(path)
+    return filename
 
 
 # ---- Routes ----
 @app.route("/")
 def index():
-    """Render the main gallery page with grid color only (no database)."""
+    """Render the main gallery page with grid color only (no SQLite)."""
     try:
         grid_color = load_grid_color()
     except Exception:
         grid_color = DEFAULT_GRID_COLOR
-    
+
     return render_template("index.html", grid_color=grid_color)
 
 
 @app.route("/__debug/static_check")
 def debug_static_check():
     """Debug endpoint to verify Flask can see grid_full.svg."""
-    import os
     p = os.path.join(app.static_folder, "grid_full.svg")
     exists = os.path.exists(p)
     size = os.path.getsize(p) if exists else None
@@ -196,9 +271,11 @@ def set_grid_color():
     return jsonify({"status": "ok", "color": color})
 
 
-# ===== PURGED: Wall State API (no DB) =====
-# @app.route("/api/wall_state", methods=["GET"])
-# ... (removed for cropper-only demo)
+@app.route("/api/wall_state", methods=["GET"])
+def wall_state():
+    """Return wall state from JSON (no DB)."""
+    state = load_wall_state()
+    return jsonify({"ok": True, "assignments": state.get("assignments", [])})
 
 
 @app.route("/uploads/<path:filename>")
@@ -207,20 +284,66 @@ def uploads(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
 
-# ===== PURGED: Upload & Assignment Routes (no DB) =====
-# @app.route("/api/upload_assets", methods=["POST"])
-# @app.route("/api/assign_tile", methods=["POST"])
-# ... (removed for cropper-only demo)
+@app.route("/api/upload_assets", methods=["POST"])
+@app.route("/api/upload_asset", methods=["POST"])
+def upload_assets():
+    """Upload cropped tile image + popup image and place into next available XS tile.
 
-# ===== PURGED: Admin routes that depend on database =====
-# @app.route("/api/admin/clear_tile", methods=["POST"])
-# @app.route("/api/admin/clear_all_tiles", methods=["POST"])
-# @app.route("/api/admin/undo", methods=["POST"])
-# @app.route("/api/admin/history_status", methods=["GET"])
-# @app.route("/api/admin/tile_info", methods=["GET"])
-# @app.route("/api/admin/move_tile_asset", methods=["POST"])
-# @app.route("/api/admin/shuffle", methods=["POST"])
-# ... (all removed for cropper-only demo)
+    Expected multipart form fields:
+    - tile_image: required
+    - popup_image: required (if missing, we reuse tile_image)
+    This is intentionally minimal: no metadata, no SQLite.
+    """
+    tile_fs = request.files.get("tile_image")
+    popup_fs = request.files.get("popup_image")
+
+    if not tile_fs:
+        return jsonify({"ok": False, "error": "missing tile_image"}), 400
+    if popup_fs is None:
+        popup_fs = tile_fs
+
+    # Basic type check (by extension only)
+    if tile_fs.filename and not _allowed_ext(tile_fs.filename):
+        return jsonify({"ok": False, "error": "unsupported tile_image type"}), 400
+    if popup_fs.filename and not _allowed_ext(popup_fs.filename):
+        return jsonify({"ok": False, "error": "unsupported popup_image type"}), 400
+
+    tile_id = pick_next_xs_tile_id()
+    if not tile_id:
+        return jsonify({"ok": False, "error": "no available XS tile"}), 409
+
+    asset_id = str(uuid.uuid4())
+
+    tile_filename = _save_upload_file(tile_fs, "tile", asset_id)
+    popup_filename = _save_upload_file(popup_fs, "popup", asset_id)
+
+    tile_url = f"/uploads/{tile_filename}"
+    popup_url = f"/uploads/{popup_filename}"
+
+    # Persist placement in wall_state.json
+    state = load_wall_state()
+    assignments = state.get("assignments", [])
+    assignments.append({
+        "tile_id": tile_id,
+        "asset_id": asset_id,
+        "tile_url": tile_url,
+        "popup_url": popup_url,
+        # keep legacy keys present but empty so older JS won't break
+        "artwork_name": "",
+        "artist_name": "",
+    })
+    state["assignments"] = assignments
+    save_wall_state(state)
+
+    return jsonify({
+        "ok": True,
+        "tile_id": tile_id,
+        "asset": {
+            "asset_id": asset_id,
+            "tile_url": tile_url,
+            "popup_url": popup_url,
+        },
+    })
 
 
 if __name__ == "__main__":
