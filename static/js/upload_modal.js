@@ -264,14 +264,13 @@ document.addEventListener("DOMContentLoaded", () => {
     uploadCroppedAndRefresh();
   });
 
-  // ===== Helper: Refresh wall =====
+  // ===== Helper: Soft refresh wall (NO page reload) =====
   async function refreshWall() {
+    // Always use soft refresh - fetch wall_state and re-render
     if (typeof window.refreshWallFromServer === "function") {
       await window.refreshWallFromServer();
-    } else if (typeof window.loadWallState === "function") {
-      await window.loadWallState();
     } else {
-      window.location.reload();
+      console.warn('[refreshWall] refreshWallFromServer not available');
     }
   }
 
