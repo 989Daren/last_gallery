@@ -281,17 +281,7 @@ function titleFromFilename(urlOrPath) {
 }
 
 function demoInfoHeadersOnly() {
-  return [
-    "Art Name:",
-    "",
-    "Medium:",
-    "",
-    "Date of Creation:",
-    "",
-    "Artist's Note:",
-    "",
-    "Contact:",
-  ].join("\n");
+  return "";
 }
 
 // -------------------------------
@@ -357,13 +347,13 @@ function openArtworkPopup({ imgSrc, title, artist, infoText }) {
   const imgEl    = $(IDS.popupImg);
   const infoEl   = $(IDS.popupInfoText);
 
-  if (titleEl)  titleEl.textContent  = title || "";
-  if (artistEl) artistEl.textContent = artist || "";
+  if (titleEl)  titleEl.textContent  = "";
+  if (artistEl) artistEl.textContent = "";
   if (imgEl) {
     imgEl.src = imgSrc;
     imgEl.alt = title || "Artwork";
   }
-  if (infoEl) infoEl.textContent = infoText || "";
+  if (infoEl) infoEl.textContent = "";
 
   // Reset state
   overlay.classList.remove("show-title", "stage-info-bg", "stage-info-text", "hide-info");
@@ -1208,12 +1198,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // Helper to re-render wall from server (used by admin operations)
   async function refreshWallFromServer() {
     try {
-      // Fetch current state
-      const response = await fetch(API.wallState);
-      if (!response.ok) throw new Error(`Failed to fetch wall_state: ${response.status}`);
-
-      const data = await response.json();
-      const assignments = data.assignments || [];
+      // Fetch current state (safe: allow DB/API to be unwired during development)
+      let assignments = [];
+      try {
+        const response = await fetch(API.wallState, { cache: "no-store" });
+        if (response.ok) {
+          const data = await response.json();
+          assignments = data.assignments || [];
+        } else {
+          if (DEBUG) console.warn('[refreshWallFromServer] wall_state unavailable:', response.status);
+        }
+      } catch (err) {
+        if (DEBUG) console.warn('[refreshWallFromServer] wall_state fetch failed:', err);
+      }
 
       if (DEBUG) console.log('Refreshed wall state, assignments:', assignments.length);
 
@@ -1720,17 +1717,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // PHASE 2: Fetch wall state from server and hydrate
       // Called by: initial boot (DOMContentLoaded)
-      const response = await fetch(API.wallState);
-      const data = await response.json();
-
-      if (DEBUG) console.log('wall_state response:', data);
-      const assignments = data.assignments || [];
-      if (DEBUG) console.log('wall_state assignments:', assignments.length);
+      //
+      // IMPORTANT: During development, we may temporarily "unwire" the DB and/or API.
+      // If /api/wall_state is unavailable or returns non-JSON, we still want the grid
+      // to render (as empty tiles) instead of failing the entire boot sequence.
+      let assignments = [];
+      try {
+        const response = await fetch(API.wallState, { cache: "no-store" });
+        if (response.ok) {
+          const data = await response.json();
+          if (DEBUG) console.log('wall_state response:', data);
+          assignments = data.assignments || [];
+          if (DEBUG) console.log('wall_state assignments:', assignments.length);
+        } else {
+          if (DEBUG) console.warn('wall_state unavailable (continuing with empty state):', response.status);
+        }
+      } catch (err) {
+        if (DEBUG) console.warn('wall_state fetch failed (continuing with empty state):', err);
+      }
 
       // PHASE 2: Hydrate state, then render from state
       hydrateWallStateFromExistingData(layoutTiles, assignments);
       // PHASE 3: Single render after state hydration
-      commitWallStateChange('boot hydration');
+      commitWallStateChange(assignments.length ? 'boot hydration' : 'boot hydration (no-db)');
       // Show welcome banner AFTER boot hydration/render has completed
       requestAnimationFrame(() => initSimpleWelcomeAlways());
 
@@ -1751,17 +1760,14 @@ document.addEventListener("DOMContentLoaded", () => {
         // Only open popup if tile has uploaded artwork (ignore demo artUrl)
         if (!popupUrl) return;
 
-        // Use metadata from dataset with proper fallbacks
-        const displayTitle = artworkName || "Untitled";
-        const displayArtist = artistName || "Anonymous";
-
+        // Metadata is currently PURGED: do not show title/artist/ribbon text.
         openArtworkPopup({
           imgSrc: popupUrl,
-          title: displayTitle,
-          artist: displayArtist,
-          infoText: demoInfoHeadersOnly(),
+          title: "",
+          artist: "",
+          infoText: "",
         });
-      });
+});
 
       // ---- Global color handling (owner-controlled) ----
       const serverColor = window.SERVER_GRID_COLOR || "#b84c27";
