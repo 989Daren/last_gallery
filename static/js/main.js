@@ -1241,6 +1241,9 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error('Failed to refresh wall from server:', err);
     }
   }
+  // Expose for other modules (e.g., upload_modal.js)
+  window.refreshWallFromServer = refreshWallFromServer;
+
 
   // Helper to update undo button state
   function updateUndoButton(dataOrShuffleCount, nonShuffleCount) {
