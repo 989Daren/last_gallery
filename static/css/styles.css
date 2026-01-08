@@ -437,6 +437,186 @@ label {
   display: none;
 }
 
+/* ==========================================
+   Tier-2 Metadata Modal (overlays Tier-1)
+   ========================================== */
+
+/* Tier-2 overlay - higher z-index than Tier-1 */
+.modal-overlay-tier2 {
+  position: fixed;
+  inset: 0;
+  z-index: 8200;  /* 200 above Tier-1 (8000) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(2px);
+}
+
+.modal-overlay-tier2.hidden {
+  display: none;
+}
+
+/* Tier-2 card */
+.modal-card-tier2 {
+  position: relative;
+  width: min(480px, 92%);
+  max-width: 500px;
+  background: #1a1a1a;
+  color: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Tier-2 header */
+.modal-header-tier2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modal-header-tier2 h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.modal-header-tier2 .close-btn {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.modal-header-tier2 .close-btn:hover {
+  color: #fff;
+}
+
+/* Tier-2 body */
+.modal-body-tier2 {
+  margin-bottom: 20px;
+}
+
+.modal-body-tier2 label {
+  display: block;
+  margin-bottom: 6px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.modal-body-tier2 label:first-child {
+  margin-top: 0;
+}
+
+.modal-body-tier2 input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 1rem;
+  background: #0a0a0a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #fff;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.modal-body-tier2 input[type="text"]:focus {
+  outline: none;
+  border-color: #666;
+}
+
+.modal-body-tier2 .error-text {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(220, 53, 69, 0.15);
+  border-left: 3px solid #dc3545;
+  color: #ff6b7a;
+  font-size: 0.9rem;
+  border-radius: 4px;
+}
+
+.modal-body-tier2 .success-text {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(40, 167, 69, 0.15);
+  border-left: 3px solid #28a745;
+  color: #5fda7d;
+  font-size: 0.9rem;
+  border-radius: 4px;
+}
+
+/* Tier-2 actions */
+.modal-actions-tier2 {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.modal-actions-tier2 button {
+  padding: 10px 20px;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+  font-weight: 500;
+}
+
+.modal-actions-tier2 .secondary-btn {
+  background: #333;
+  color: #ccc;
+}
+
+.modal-actions-tier2 .secondary-btn:hover {
+  background: #444;
+}
+
+.modal-actions-tier2 .primary-btn {
+  background: #007bff;
+  color: #fff;
+}
+
+.modal-actions-tier2 .primary-btn:hover {
+  background: #0056b3;
+}
+
+.modal-actions-tier2 button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .modal-card-tier2 {
+    padding: 20px;
+  }
+  
+  .modal-header-tier2 h2 {
+    font-size: 1.2rem;
+  }
+  
+  .modal-actions-tier2 {
+    flex-direction: column;
+  }
+  
+  .modal-actions-tier2 button {
+    width: 100%;
+  }
+}
+
 /* Modal overlay (shown by default unless .hidden is present) */
 .modalOverlay {
   position: fixed;

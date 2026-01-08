@@ -89,6 +89,32 @@
     </div>
   </div>
 
+  <!-- Tier-2: Artwork Info Modal (overlays Tier-1 upload modal) -->
+  <div id="metaModalOverlay" class="modal-overlay-tier2 hidden" aria-hidden="true">
+    <div id="metaModal" class="modal-card-tier2" role="dialog" aria-modal="true">
+      <div class="modal-header-tier2">
+        <h2>Artwork Info</h2>
+        <button id="metaCloseBtn" type="button" class="close-btn" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body-tier2">
+        <label for="metaArtistInput">Artist Name</label>
+        <input id="metaArtistInput" type="text" maxlength="80" placeholder="Enter artist name" />
+
+        <label for="metaTitleInput">Artwork Title</label>
+        <input id="metaTitleInput" type="text" maxlength="120" placeholder="Enter artwork title" />
+
+        <div id="metaError" class="error-text hidden"></div>
+        <div id="metaSuccess" class="success-text hidden">Saved!</div>
+      </div>
+
+      <div class="modal-actions-tier2">
+        <button id="metaSkipBtn" type="button" class="secondary-btn">Skip for now</button>
+        <button id="metaSaveBtn" type="button" class="primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Admin modal (PIN gated) -->
   <div id="adminModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="adminModalTitle">
     <div class="modalCard" role="document">
