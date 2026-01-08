@@ -239,14 +239,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await postWithFallback(formData);
       console.log(`${LOG_PREFIX} Upload success:`, result);
 
+      // Refresh wall immediately so new image appears before metadata modal
+      await refreshWall();
+
       // Store tile_id and open Tier-2 metadata modal
       if (result && result.tile_id) {
         currentUploadTileId = result.tile_id;
         openMetaModal(result.tile_id);
       } else {
-        // Fallback: close and refresh if no tile_id
+        // Fallback: close if no tile_id (wall already refreshed above)
         closeModal(true);
-        await refreshWall();
       }
     } catch (err) {
       console.error(`${LOG_PREFIX} Upload error:`, err);
@@ -366,10 +368,9 @@ document.addEventListener("DOMContentLoaded", () => {
       // Close Tier-2 modal after short delay
       setTimeout(() => {
         closeMetaModal();
-        // Close Tier-1 upload modal
+        // Close Tier-1 upload modal (wall already refreshed after upload)
         closeModal(true);
-        // Refresh wall
-        refreshWall();
+        // Metadata will be available when user next clicks the tile
       }, 500);
       
     } catch (err) {
@@ -390,18 +391,16 @@ document.addEventListener("DOMContentLoaded", () => {
   if (metaCloseBtn) {
     metaCloseBtn.addEventListener("click", () => {
       closeMetaModal();
-      // Close Tier-1 and refresh
+      // Close Tier-1 (wall already refreshed after upload)
       closeModal(true);
-      refreshWall();
     });
   }
 
   if (metaSkipBtn) {
     metaSkipBtn.addEventListener("click", () => {
       closeMetaModal();
-      // Close Tier-1 and refresh
+      // Close Tier-1 (wall already refreshed after upload)
       closeModal(true);
-      refreshWall();
     });
   }
 
