@@ -21,9 +21,30 @@
     // Tiles start empty - artwork only comes from upload system database
     window.SERVER_PLACEMENT = {};
   </script>
+
+  <!-- DEV: Inline test styles for visible sanity-check text (safe to delete) -->
+  <style>
+    #devTestText {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 9999;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: rgba(255,255,255,0.92);
+      font: 600 12px/1.2 system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+    }
+  </style>
 </head>
 
 <body>
+  <!-- DEV: Test text overlay to confirm template is serving the file you think it is -->
+  <div id="devTestText">DEV TEST: index.html is loading ✅</div>
+
   <!-- Top bar: title (left) + controls (right) -->
   <header class="controls">
     <div id="siteTitle">The Last Gallery</div>

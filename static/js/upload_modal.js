@@ -364,13 +364,15 @@ document.addEventListener("DOMContentLoaded", () => {
           metaSuccess.classList.add("hidden");
         }, 2000);
       }
-      
+
+      // Refresh wall to pick up the new metadata
+      await refreshWall();
+
       // Close Tier-2 modal after short delay
       setTimeout(() => {
         closeMetaModal();
-        // Close Tier-1 upload modal (wall already refreshed after upload)
+        // Close Tier-1 upload modal
         closeModal(true);
-        // Metadata will be available when user next clicks the tile
       }, 500);
       
     } catch (err) {

@@ -36,45 +36,39 @@ def get_db():
 def init_db():
     """
     Initialize database schema.
-    
+
     Creates assets and tiles tables if they don't exist.
-    If old schema exists, drops and recreates tables with new schema.
-    Safe to run repeatedly.
+    Adds missing columns for migration. Safe to run repeatedly.
     """
     conn = get_db()
     cursor = conn.cursor()
-    
+
     # Enable foreign keys
     cursor.execute("PRAGMA foreign_keys = ON")
-    
-    # Check if old assets table exists with wrong schema
-    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='assets'")
-    result = cursor.fetchone()
-    old_schema_detected = False
-    
-    if result and result[0]:
-        # Check if it has the old schema (contains tile_url column)
-        if 'tile_url' in result[0]:
-            old_schema_detected = True
-            print("Old database schema detected - recreating tables with new schema")
-            
-            # Drop old tables
-            cursor.execute("DROP TABLE IF EXISTS tiles")
-            cursor.execute("DROP TABLE IF EXISTS assets")
-            cursor.execute("DROP TABLE IF EXISTS placements")
-            cursor.execute("DROP TABLE IF EXISTS placement_snapshots")
-    
-    # Create assets table with new schema
+
+    # Create assets table (single source of truth for all asset data)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS assets (
             asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
             artist_name TEXT NOT NULL DEFAULT '',
             artwork_title TEXT NOT NULL DEFAULT '',
+            tile_url TEXT NOT NULL DEFAULT '',
+            popup_url TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
-    
-    # Create tiles table with new schema
+
+    # Add URL columns if missing (migration for existing databases)
+    cursor.execute("PRAGMA table_info(assets)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'tile_url' not in columns:
+        cursor.execute("ALTER TABLE assets ADD COLUMN tile_url TEXT NOT NULL DEFAULT ''")
+        print("Added tile_url column to assets table")
+    if 'popup_url' not in columns:
+        cursor.execute("ALTER TABLE assets ADD COLUMN popup_url TEXT NOT NULL DEFAULT ''")
+        print("Added popup_url column to assets table")
+
+    # Create tiles table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tiles (
             tile_id TEXT PRIMARY KEY,
@@ -83,16 +77,13 @@ def init_db():
             FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE SET NULL
         )
     """)
-    
+
     # Create index on tiles.asset_id
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_tiles_asset_id ON tiles(asset_id)
     """)
-    
+
     conn.commit()
     conn.close()
-    
-    if old_schema_detected:
-        print("Database schema recreated successfully")
-    else:
-        print("Database initialized: tables created (if not exists)")
+
+    print("Database initialized: schema ready")
