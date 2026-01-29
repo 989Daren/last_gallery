@@ -118,3 +118,8 @@ Animation sequence: image appears → title fades in → black ribbon slides fro
 - Undo history is in-memory (resets on server restart)
 - Images stored in `/uploads/` directory with UUID filenames
 - No authentication beyond admin PIN for admin functions
+
+## Planned Features
+- **Additional metadata fields**: Medium (paint/pencil/digital/AI), Date Created, Artist Contact
+- These will display on the black ribbon overlay (not above the image)
+- Follow existing patterns for `artist_name`/`artwork_title`
