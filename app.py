@@ -23,14 +23,13 @@ DEFAULT_GRID_COLOR = "#b84c27"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 DATA_DIR = os.path.join(BASE_DIR, "data")
-WALL_STATE_PATH = os.path.join(DATA_DIR, "wall_state.json")
 
 # Ensure folders exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # Minimal admin pin (only used if you later re-enable admin routes)
-ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "0000")
+ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "8375")
 
 
 def load_grid_color():
@@ -62,29 +61,6 @@ def save_grid_color(color: str):
     color_path = os.path.join(DATA_DIR, "grid_color.json")
     with open(color_path, "w") as f:
         json.dump({"color": color}, f)
-
-
-def load_wall_state():
-    """Load wall state from JSON. No SQLite. Safe if missing/corrupted."""
-    if not os.path.exists(WALL_STATE_PATH):
-        return {"assignments": []}
-    try:
-        with open(WALL_STATE_PATH, "r") as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            return {"assignments": []}
-        assignments = data.get("assignments", [])
-        if not isinstance(assignments, list):
-            assignments = []
-        return {"assignments": assignments}
-    except Exception:
-        return {"assignments": []}
-
-
-def save_wall_state(state: dict):
-    """Persist wall state to JSON."""
-    with open(WALL_STATE_PATH, "w") as f:
-        json.dump(state, f)
 
 
 def check_admin_pin():
@@ -195,20 +171,29 @@ def get_tiles_from_svg():
 
 
 def pick_next_xs_tile_id():
-    """Pick the first unoccupied XS tile ID."""
-    state = load_wall_state()
+    """Pick a random unoccupied XS tile ID (queries database)."""
+    import random
+
+    # Get used tile IDs from database
     used = set()
-    for a in state.get("assignments", []):
-        tid = a.get("tile_id")
-        if tid:
-            used.add(tid)
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT tile_id FROM tiles WHERE asset_id IS NOT NULL")
+        for row in cursor.fetchall():
+            used.add(row["tile_id"])
+        conn.close()
+    except Exception:
+        pass
 
     tiles = get_tiles_from_svg()
     xs_tiles = [t["id"] for t in tiles if t.get("size") == "xs"]
-    for tid in xs_tiles:
-        if tid not in used:
-            return tid
-    return None
+    available = [tid for tid in xs_tiles if tid not in used]
+
+    if not available:
+        return None
+
+    return random.choice(available)
 
 
 def _allowed_ext(filename: str):
@@ -273,9 +258,31 @@ def set_grid_color():
 
 @app.route("/api/wall_state", methods=["GET"])
 def wall_state():
-    """Return wall state from JSON (no DB)."""
-    state = load_wall_state()
-    return jsonify({"ok": True, "assignments": state.get("assignments", [])})
+    """Return wall state from database (single source of truth)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT t.tile_id, a.asset_id, a.tile_url, a.popup_url,
+                   a.artist_name, a.artwork_title
+            FROM tiles t
+            JOIN assets a ON a.asset_id = t.asset_id
+            ORDER BY t.tile_id
+        """)
+        assignments = []
+        for row in cursor.fetchall():
+            assignments.append({
+                "tile_id": row["tile_id"],
+                "asset_id": row["asset_id"],
+                "tile_url": row["tile_url"],
+                "popup_url": row["popup_url"],
+                "artist_name": row["artist_name"] or "",
+                "artwork_name": row["artwork_title"] or "",
+            })
+        conn.close()
+        return jsonify({"ok": True, "assignments": assignments})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "assignments": []}), 500
 
 
 @app.route("/uploads/<path:filename>")
@@ -292,7 +299,8 @@ def upload_assets():
     Expected multipart form fields:
     - tile_image: required
     - popup_image: required (if missing, we reuse tile_image)
-    This is intentionally minimal: no metadata, no SQLite.
+
+    All data stored in SQLite database (single source of truth).
     """
     tile_fs = request.files.get("tile_image")
     popup_fs = request.files.get("popup_image")
@@ -312,28 +320,41 @@ def upload_assets():
     if not tile_id:
         return jsonify({"ok": False, "error": "no available XS tile"}), 409
 
-    asset_id = str(uuid.uuid4())
+    # Generate unique ID for filenames
+    file_id = str(uuid.uuid4())
 
-    tile_filename = _save_upload_file(tile_fs, "tile", asset_id)
-    popup_filename = _save_upload_file(popup_fs, "popup", asset_id)
+    tile_filename = _save_upload_file(tile_fs, "tile", file_id)
+    popup_filename = _save_upload_file(popup_fs, "popup", file_id)
 
     tile_url = f"/uploads/{tile_filename}"
     popup_url = f"/uploads/{popup_filename}"
 
-    # Persist placement in wall_state.json
-    state = load_wall_state()
-    assignments = state.get("assignments", [])
-    assignments.append({
-        "tile_id": tile_id,
-        "asset_id": asset_id,
-        "tile_url": tile_url,
-        "popup_url": popup_url,
-        # keep legacy keys present but empty so older JS won't break
-        "artwork_name": "",
-        "artist_name": "",
-    })
-    state["assignments"] = assignments
-    save_wall_state(state)
+    # Persist to database (single source of truth)
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Insert asset with URLs (metadata empty, will be added via metadata modal)
+        cursor.execute(
+            """INSERT INTO assets(artist_name, artwork_title, tile_url, popup_url)
+               VALUES('', '', ?, ?)""",
+            (tile_url, popup_url)
+        )
+        asset_id = cursor.lastrowid
+
+        # Assign asset to tile
+        cursor.execute(
+            "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
+            (tile_id, asset_id)
+        )
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
 
     return jsonify({
         "ok": True,
@@ -349,14 +370,14 @@ def upload_assets():
 @app.route("/api/tile/<tile_id>/metadata", methods=["POST"])
 def save_tile_metadata(tile_id):
     """
-    Create a new asset record and assign it to a tile.
-    
+    Update metadata for the asset assigned to a tile.
+
     Input JSON body:
         {
             "artist_name": "string",
             "artwork_title": "string"
         }
-    
+
     Returns:
         {
             "ok": true,
@@ -371,34 +392,33 @@ def save_tile_metadata(tile_id):
         data = request.get_json() or {}
         artist_name = (data.get("artist_name") or "").strip()
         artwork_title = (data.get("artwork_title") or "").strip()
-        
+
         # Get database connection
         conn = get_db()
         cursor = conn.cursor()
-        
-        # Ensure tile row exists
+
+        # Find the asset assigned to this tile
         cursor.execute(
-            "INSERT OR IGNORE INTO tiles(tile_id, asset_id) VALUES(?, NULL)",
+            "SELECT asset_id FROM tiles WHERE tile_id = ?",
             (tile_id,)
         )
-        
-        # Insert asset row
+        row = cursor.fetchone()
+
+        if not row or not row["asset_id"]:
+            conn.close()
+            return jsonify({"ok": False, "error": "tile has no assigned asset"}), 404
+
+        asset_id = row["asset_id"]
+
+        # Update the asset's metadata
         cursor.execute(
-            "INSERT INTO assets(artist_name, artwork_title) VALUES(?, ?)",
-            (artist_name, artwork_title)
+            "UPDATE assets SET artist_name = ?, artwork_title = ? WHERE asset_id = ?",
+            (artist_name, artwork_title, asset_id)
         )
-        asset_id = cursor.lastrowid
-        
-        # Assign asset to tile
-        cursor.execute(
-            "UPDATE tiles SET asset_id=?, updated_at=datetime('now') WHERE tile_id=?",
-            (asset_id, tile_id)
-        )
-        
-        # Commit changes
+
         conn.commit()
         conn.close()
-        
+
         return jsonify({
             "ok": True,
             "tile_id": tile_id,
@@ -473,6 +493,363 @@ def get_tile_metadata(tile_id):
             "ok": False,
             "error": str(e)
         }), 500
+
+
+# ---- Admin API endpoints ----
+
+# Simple history for undo (in-memory, resets on server restart)
+# Stores database state snapshots as list of (assets_rows, tiles_rows) tuples
+_undo_history = []  # Regular actions
+_shuffle_history = []  # Shuffle actions (separate stack)
+_MAX_HISTORY = 50
+
+
+def _get_db_snapshot():
+    """Get a snapshot of current database state."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT asset_id, artist_name, artwork_title, tile_url, popup_url FROM assets")
+    assets = [dict(row) for row in cursor.fetchall()]
+    cursor.execute("SELECT tile_id, asset_id FROM tiles")
+    tiles = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return {"assets": assets, "tiles": tiles}
+
+
+def _restore_db_snapshot(snapshot):
+    """Restore database to a previous snapshot."""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Clear current data
+    cursor.execute("DELETE FROM tiles")
+    cursor.execute("DELETE FROM assets")
+
+    # Restore assets
+    for a in snapshot["assets"]:
+        cursor.execute(
+            "INSERT INTO assets(asset_id, artist_name, artwork_title, tile_url, popup_url) VALUES(?, ?, ?, ?, ?)",
+            (a["asset_id"], a["artist_name"], a["artwork_title"], a["tile_url"], a["popup_url"])
+        )
+
+    # Restore tiles
+    for t in snapshot["tiles"]:
+        cursor.execute(
+            "INSERT INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
+            (t["tile_id"], t["asset_id"])
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def _save_history_snapshot(is_shuffle=False):
+    """Save current database state to history for undo."""
+    snapshot = _get_db_snapshot()
+    if is_shuffle:
+        _shuffle_history.append(snapshot)
+        if len(_shuffle_history) > _MAX_HISTORY:
+            _shuffle_history.pop(0)
+    else:
+        _undo_history.append(snapshot)
+        if len(_undo_history) > _MAX_HISTORY:
+            _undo_history.pop(0)
+
+
+@app.route("/api/admin/history_status", methods=["GET"])
+def admin_history_status():
+    """Return undo availability."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+    return jsonify({
+        "ok": True,
+        "history_count": len(_undo_history),
+        "shuffle_count": len(_shuffle_history),
+        "non_shuffle_count": len(_undo_history)
+    })
+
+
+@app.route("/api/admin/tile_info", methods=["GET"])
+def admin_tile_info():
+    """Get info about a specific tile from database."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    tile_id = request.args.get("tile_id", "").strip().upper()
+    if not tile_id:
+        return jsonify({"ok": False, "error": "missing tile_id"}), 400
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT t.tile_id, a.asset_id, a.artist_name, a.artwork_title,
+                   a.tile_url, a.popup_url
+            FROM tiles t
+            JOIN assets a ON a.asset_id = t.asset_id
+            WHERE t.tile_id = ?
+        """, (tile_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return jsonify({
+                "ok": True,
+                "tile_id": tile_id,
+                "occupied": True,
+                "asset_id": row["asset_id"],
+                "artwork_name": row["artwork_title"] or "",
+                "artist_name": row["artist_name"] or "",
+                "tile_url": row["tile_url"] or "",
+                "popup_url": row["popup_url"] or ""
+            })
+
+        return jsonify({
+            "ok": True,
+            "tile_id": tile_id,
+            "occupied": False
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/clear_tile", methods=["POST"])
+def admin_clear_tile():
+    """Clear a single tile (database)."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    data = request.get_json() or {}
+    tile_id = (data.get("tile_id") or "").strip().upper()
+    if not tile_id:
+        return jsonify({"ok": False, "error": "missing tile_id"}), 400
+
+    _save_history_snapshot()
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Find and delete the tile assignment
+        cursor.execute("SELECT asset_id FROM tiles WHERE tile_id = ?", (tile_id,))
+        row = cursor.fetchone()
+
+        if not row or not row["asset_id"]:
+            conn.close()
+            return jsonify({"ok": False, "error": "tile not found or already empty"}), 404
+
+        asset_id = row["asset_id"]
+
+        # Delete tile and asset
+        cursor.execute("DELETE FROM tiles WHERE tile_id = ?", (tile_id,))
+        cursor.execute("DELETE FROM assets WHERE asset_id = ?", (asset_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "ok": True,
+            "tile_id": tile_id,
+            "shuffle_count": len(_shuffle_history),
+            "non_shuffle_count": len(_undo_history)
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/clear_all_tiles", methods=["POST"])
+def admin_clear_all_tiles():
+    """Clear all tiles (database)."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    _save_history_snapshot()
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM tiles")
+        cursor.execute("DELETE FROM assets")
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "ok": True,
+            "shuffle_count": len(_shuffle_history),
+            "non_shuffle_count": len(_undo_history)
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/move_tile_asset", methods=["POST"])
+def admin_move_tile_asset():
+    """Move artwork from one tile to another (database)."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    data = request.get_json() or {}
+    from_id = (data.get("from_tile_id") or "").strip().upper()
+    to_id = (data.get("to_tile_id") or "").strip().upper()
+
+    if not from_id or not to_id:
+        return jsonify({"ok": False, "error": "missing from_tile_id or to_tile_id"}), 400
+
+    _save_history_snapshot()
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Check source tile has an asset
+        cursor.execute("SELECT asset_id FROM tiles WHERE tile_id = ?", (from_id,))
+        from_row = cursor.fetchone()
+        if not from_row or not from_row["asset_id"]:
+            conn.close()
+            return jsonify({"ok": False, "error": "source tile is empty"}), 404
+
+        # Check destination tile is empty
+        cursor.execute("SELECT asset_id FROM tiles WHERE tile_id = ?", (to_id,))
+        to_row = cursor.fetchone()
+        if to_row and to_row["asset_id"]:
+            conn.close()
+            return jsonify({"ok": False, "error": "destination tile is occupied"}), 409
+
+        asset_id = from_row["asset_id"]
+
+        # Delete old tile assignment
+        cursor.execute("DELETE FROM tiles WHERE tile_id = ?", (from_id,))
+
+        # Create new tile assignment
+        cursor.execute(
+            "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
+            (to_id, asset_id)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "ok": True,
+            "from_tile_id": from_id,
+            "to_tile_id": to_id,
+            "shuffle_count": len(_shuffle_history),
+            "non_shuffle_count": len(_undo_history)
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/undo", methods=["POST"])
+def admin_undo():
+    """Undo the last action (restores database snapshot)."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    data = request.get_json() or {}
+    action_type = data.get("action_type", "non_shuffle")
+
+    try:
+        if action_type == "shuffle":
+            if not _shuffle_history:
+                return jsonify({"ok": False, "message": "No shuffle to undo"})
+            previous_snapshot = _shuffle_history.pop()
+            _restore_db_snapshot(previous_snapshot)
+            return jsonify({
+                "ok": True,
+                "message": "Shuffle undone",
+                "action": "shuffle",
+                "shuffle_count": len(_shuffle_history),
+                "non_shuffle_count": len(_undo_history)
+            })
+        else:
+            if not _undo_history:
+                return jsonify({"ok": False, "message": "Nothing to undo"})
+            previous_snapshot = _undo_history.pop()
+            _restore_db_snapshot(previous_snapshot)
+            return jsonify({
+                "ok": True,
+                "message": "Undo successful",
+                "action": "non_shuffle",
+                "shuffle_count": len(_shuffle_history),
+                "non_shuffle_count": len(_undo_history)
+            })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/shuffle", methods=["POST"])
+def shuffle_tiles():
+    """Randomly redistribute all images to different tiles (database)."""
+    import random
+
+    data = request.get_json() or {}
+    pin = data.get("pin", "")
+
+    if pin != ADMIN_PIN:
+        return jsonify({"ok": False, "error": "Unauthorized"}), 403
+
+    # Save current state for undo
+    _save_history_snapshot(is_shuffle=True)
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Get current tile assignments
+        cursor.execute("SELECT tile_id, asset_id FROM tiles WHERE asset_id IS NOT NULL")
+        current_tiles = [dict(row) for row in cursor.fetchall()]
+
+        if not current_tiles:
+            conn.close()
+            return jsonify({
+                "ok": True,
+                "message": "No tiles to shuffle",
+                "shuffle_count": len(_shuffle_history),
+                "non_shuffle_count": len(_undo_history)
+            })
+
+        # Get ALL available tiles from SVG (any size)
+        tiles = get_tiles_from_svg()
+        all_tile_ids = [t["id"] for t in tiles]
+
+        num_assignments = len(current_tiles)
+
+        if num_assignments > len(all_tile_ids):
+            conn.close()
+            return jsonify({"ok": False, "error": "More assignments than available tiles"}), 400
+
+        # Randomly select new tile positions from ALL tiles (any size)
+        random.shuffle(all_tile_ids)
+        new_tile_ids = all_tile_ids[:num_assignments]
+
+        # Clear all tile assignments
+        cursor.execute("DELETE FROM tiles")
+
+        # Reassign with new tile IDs
+        for i, old_tile in enumerate(current_tiles):
+            cursor.execute(
+                "INSERT INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
+                (new_tile_ids[i], old_tile["asset_id"])
+            )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "ok": True,
+            "message": f"Shuffled {num_assignments} tiles",
+            "shuffle_count": len(_shuffle_history),
+            "non_shuffle_count": len(_undo_history)
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 if __name__ == "__main__":

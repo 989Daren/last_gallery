@@ -347,13 +347,20 @@ function openArtworkPopup({ imgSrc, title, artist, infoText }) {
   const imgEl    = $(IDS.popupImg);
   const infoEl   = $(IDS.popupInfoText);
 
-  if (titleEl)  titleEl.textContent  = "";
-  if (artistEl) artistEl.textContent = "";
+  if (titleEl)  titleEl.textContent  = title || "";
+  if (artistEl) artistEl.textContent = artist || "";
   if (imgEl) {
     imgEl.src = imgSrc;
     imgEl.alt = title || "Artwork";
   }
-  if (infoEl) infoEl.textContent = "";
+  // Build ribbon content (location 2) - no labels, just title and artist
+  if (infoEl) {
+    const ribbonParts = [];
+    if (title) ribbonParts.push(`<div class="ribbon-title">${title}</div>`);
+    if (artist) ribbonParts.push(`<div class="ribbon-artist">${artist}</div>`);
+    infoEl.innerHTML = ribbonParts.join("");
+    infoEl.classList.remove("is-visible");
+  }
 
   // Reset state
   overlay.classList.remove("show-title", "stage-info-bg", "stage-info-text", "hide-info");
@@ -367,6 +374,11 @@ function openArtworkPopup({ imgSrc, title, artist, infoText }) {
   popupTimers.push(setTimeout(() => overlay.classList.add("stage-info-bg"), 1000));
   popupTimers.push(setTimeout(() => {
     overlay.classList.add("stage-info-text");
+
+    // Reveal ribbon text after background slides in
+    const ribbonText = $(IDS.popupInfoText);
+    if (ribbonText) ribbonText.classList.add("is-visible");
+
     // ConicalNav: Ribbon opened, update hash to #art/ribbon
     window.ConicalNav && window.ConicalNav.pushToMatchUi();
   }, 2000));
@@ -1763,14 +1775,14 @@ document.addEventListener("DOMContentLoaded", () => {
         // Only open popup if tile has uploaded artwork (ignore demo artUrl)
         if (!popupUrl) return;
 
-        // Metadata is currently PURGED: do not show title/artist/ribbon text.
+        // Display metadata from wall_state
         openArtworkPopup({
           imgSrc: popupUrl,
-          title: "",
-          artist: "",
+          title: artworkName || "",
+          artist: artistName || "",
           infoText: "",
         });
-});
+      });
 
       // ---- Global color handling (owner-controlled) ----
       const serverColor = window.SERVER_GRID_COLOR || "#b84c27";
