@@ -63,6 +63,8 @@ function initSimpleWelcomeAlways() {
   const close = () => {
     overlay.classList.add("hidden");
     document.body.style.overflow = "";
+    // Initialize navigation arrows after welcome is dismissed
+    initNavArrows();
   };
 
   // Always show on load
@@ -84,6 +86,152 @@ function initSimpleWelcomeAlways() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !overlay.classList.contains("hidden")) close();
   });
+}
+
+// ============================
+// Navigation Arrows (Visitor Guidance)
+// Pulsing arrows that teach users to scroll; dismiss after 200px scroll
+// ============================
+const NAV_ARROWS = {
+  THRESHOLD: 200,           // pixels scrolled before arrow dismisses
+  THROTTLE_MS: 100,         // scroll event throttle interval
+  rightDismissed: false,
+  downDismissed: false,
+  scrollListener: null,
+  wrapperListener: null,
+  initialized: false,
+};
+
+function initNavArrows() {
+  // Prevent double initialization
+  if (NAV_ARROWS.initialized) return;
+  NAV_ARROWS.initialized = true;
+
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  if (!wrapper) {
+    if (DEBUG) console.warn("[NAV_ARROWS] .gallery-wall-wrapper not found");
+    return;
+  }
+
+  // Check if scrolling is needed in each direction
+  const needsHorizontalScroll = wrapper.scrollWidth > wrapper.clientWidth;
+  const needsVerticalScroll = document.body.scrollHeight > window.innerHeight;
+
+  if (DEBUG) {
+    console.log("[NAV_ARROWS] Horizontal scroll needed:", needsHorizontalScroll,
+      `(${wrapper.scrollWidth} > ${wrapper.clientWidth})`);
+    console.log("[NAV_ARROWS] Vertical scroll needed:", needsVerticalScroll,
+      `(${document.body.scrollHeight} > ${window.innerHeight})`);
+  }
+
+  // Show arrows only for directions that need scrolling
+  if (needsHorizontalScroll) {
+    showNavArrow('right');
+  } else {
+    NAV_ARROWS.rightDismissed = true; // Mark as already handled
+  }
+
+  if (needsVerticalScroll) {
+    showNavArrow('down');
+  } else {
+    NAV_ARROWS.downDismissed = true; // Mark as already handled
+  }
+
+  // Only set up scroll tracking if at least one arrow is shown
+  if (needsHorizontalScroll || needsVerticalScroll) {
+    initNavArrowScrollTracking(wrapper, needsHorizontalScroll, needsVerticalScroll);
+  }
+}
+
+function showNavArrow(direction) {
+  const arrow = document.createElement('div');
+  arrow.className = `gallery-arrow gallery-arrow-${direction}`;
+  arrow.setAttribute('aria-hidden', 'true');
+  arrow.id = `navArrow-${direction}`;
+  document.body.appendChild(arrow);
+  if (DEBUG) console.log(`[NAV_ARROWS] Showing ${direction} arrow`);
+}
+
+function dismissNavArrow(direction) {
+  const arrow = document.getElementById(`navArrow-${direction}`);
+  if (arrow) {
+    arrow.classList.add('dismissing');
+    // Remove from DOM after fade transition
+    setTimeout(() => arrow.remove(), 500);
+    if (DEBUG) console.log(`[NAV_ARROWS] Dismissed ${direction} arrow`);
+  }
+}
+
+function initNavArrowScrollTracking(wrapper, trackHorizontal, trackVertical) {
+  const throttledCheck = throttle(() => {
+    checkNavArrowDismissal(wrapper);
+  }, NAV_ARROWS.THROTTLE_MS);
+
+  // Track vertical scroll on window
+  if (trackVertical) {
+    NAV_ARROWS.scrollListener = throttledCheck;
+    window.addEventListener('scroll', NAV_ARROWS.scrollListener, { passive: true });
+  }
+
+  // Track horizontal scroll on wrapper
+  if (trackHorizontal) {
+    NAV_ARROWS.wrapperListener = throttledCheck;
+    wrapper.addEventListener('scroll', NAV_ARROWS.wrapperListener, { passive: true });
+  }
+}
+
+function checkNavArrowDismissal(wrapper) {
+  // Check horizontal scroll (right arrow)
+  if (!NAV_ARROWS.rightDismissed && wrapper.scrollLeft >= NAV_ARROWS.THRESHOLD) {
+    dismissNavArrow('right');
+    NAV_ARROWS.rightDismissed = true;
+  }
+
+  // Check vertical scroll (down arrow)
+  if (!NAV_ARROWS.downDismissed && window.scrollY >= NAV_ARROWS.THRESHOLD) {
+    dismissNavArrow('down');
+    NAV_ARROWS.downDismissed = true;
+  }
+
+  // Clean up listeners if both arrows are dismissed
+  if (NAV_ARROWS.rightDismissed && NAV_ARROWS.downDismissed) {
+    cleanupNavArrowListeners(wrapper);
+  }
+}
+
+function cleanupNavArrowListeners(wrapper) {
+  if (NAV_ARROWS.scrollListener) {
+    window.removeEventListener('scroll', NAV_ARROWS.scrollListener);
+    NAV_ARROWS.scrollListener = null;
+  }
+  if (NAV_ARROWS.wrapperListener && wrapper) {
+    wrapper.removeEventListener('scroll', NAV_ARROWS.wrapperListener);
+    NAV_ARROWS.wrapperListener = null;
+  }
+  if (DEBUG) console.log("[NAV_ARROWS] Scroll listeners cleaned up");
+}
+
+// Throttle utility for scroll events
+function throttle(func, delay) {
+  let lastExecTime = 0;
+  let timeoutId = null;
+
+  return function(...args) {
+    const now = Date.now();
+    const timeSinceLastExec = now - lastExecTime;
+
+    clearTimeout(timeoutId);
+
+    if (timeSinceLastExec >= delay) {
+      func.apply(this, args);
+      lastExecTime = now;
+    } else {
+      timeoutId = setTimeout(() => {
+        func.apply(this, args);
+        lastExecTime = Date.now();
+      }, delay - timeSinceLastExec);
+    }
+  };
 }
 
 // ==============================
@@ -270,6 +418,7 @@ function ensurePopupDom() {
       </div>
 
       <div class="popup-media">
+        <button class="popup-close-btn" id="popupCloseBtn" aria-label="Close image">&times;</button>
         <img class="popup-img" id="popupImg" alt="">
         <div class="popup-info">
           <div class="popup-info-bg"></div>
@@ -291,6 +440,15 @@ function ensurePopupDom() {
       if (typeof window.closeInfoRibbon === "function") {
         window.closeInfoRibbon();
       }
+    });
+  }
+
+  // Wire up popup close button (above image)
+  const popupCloseBtn = overlay.querySelector("#popupCloseBtn");
+  if (popupCloseBtn) {
+    popupCloseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeArtworkPopup();
     });
   }
 
