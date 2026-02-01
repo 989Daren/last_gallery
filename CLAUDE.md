@@ -136,10 +136,36 @@ Current schema version: **3**
 4. Metadata modal appears → user enters required + optional fields → saved to DB
 5. Wall refreshes to show new image
 
+## Welcome Popup
+- Displays on every page load
+- Text: "Welcome to The Last Gallery", "Scroll to explore", "Click images for full size"
+- Dismissed via "Enter" button, backdrop click, or Escape key
+- Triggers navigation arrows on dismissal
+
+## Navigation Arrows
+Pulsing directional arrows that teach users to scroll in multiple directions.
+
+- **Trigger**: Appear immediately when welcome popup is dismissed
+- **Conditional display**:
+  - Right arrow only shows if horizontal scroll is needed (`wrapper.scrollWidth > wrapper.clientWidth`)
+  - Down arrow only shows if vertical scroll is needed (`body.scrollHeight > window.innerHeight`)
+- **Dismissal**: Each arrow fades out after user scrolls 200px in that direction
+- **Independence**: Arrows operate independently; dismissing one doesn't affect the other
+- **Session behavior**: Resets on page reload (no localStorage/cookies)
+- **Accessibility**: Respects `prefers-reduced-motion`, `aria-hidden="true"`
+- **Responsive**: Smaller arrows on mobile (≤768px)
+
+### Scroll Tracking
+| Direction | Element | Property |
+|-----------|---------|----------|
+| Horizontal | `.gallery-wall-wrapper` | `scrollLeft` |
+| Vertical | `window` | `scrollY` |
+
 ## Popup Overlay
 - **Animation sequence**: image appears → title fades in → black ribbon slides from left → text reveals
 - **Close behavior**: First click hides ribbon, second click closes popup
-- **Ribbon close button**: X button in top-right corner (visible only when ribbon is shown)
+- **Popup close button**: X button above top-right corner of image (always visible when popup is open)
+- **Ribbon close button**: X button in top-right corner of ribbon (visible only when ribbon is shown)
 - **Contact links**: Clickable (email opens mail client, web links open in new tab)
 
 ## Admin PIN
@@ -174,6 +200,9 @@ window.isAdminActive()            // Check admin session (from admin.js)
 - Required field validation for Artist Name and Artwork Title
 - Clickable contact links in ribbon (mailto/https)
 - Ribbon close button (X) with proper visibility states
+- Navigation arrows: pulsing right/down arrows that appear after welcome popup, dismiss after 200px scroll
+- Popup close button (X) above image for clearer dismiss affordance
+- Updated welcome popup text with navigation hints
 
 ### Code Refactoring
 - Extracted `admin.js` from `main.js` (~750 lines moved)
