@@ -1,12 +1,12 @@
 # The Last Gallery - Project Summary
 
 ## Overview
-A Flask-based web gallery application where users can upload artwork images that display on a tiled wall. Each tile can be clicked to view the full-size image with metadata (artist name, artwork title) displayed in an animated overlay.
+A Flask-based web gallery application where users can upload artwork images that display on a tiled wall. Each tile can be clicked to view the full-size image with metadata displayed in an animated overlay ribbon.
 
 ## Tech Stack
 - **Backend**: Python/Flask
-- **Database**: SQLite (single source of truth)
-- **Frontend**: Vanilla JavaScript, CSS
+- **Database**: SQLite (single source of truth) with versioned migrations
+- **Frontend**: Vanilla JavaScript (modular), CSS
 - **Image Processing**: Cropper.js for client-side cropping
 
 ## How to Run
@@ -22,13 +22,14 @@ python app.py
 | File | Purpose |
 |------|---------|
 | `app.py` | Flask application, all API endpoints |
-| `db.py` | Database connection and schema initialization |
-| `data/gallery.db` | SQLite database (assets + tiles tables) |
+| `db.py` | Database connection, schema initialization, versioned migrations |
+| `data/gallery.db` | SQLite database (assets + tiles + schema_version tables) |
 
 ### Frontend
 | File | Purpose |
 |------|---------|
-| `static/js/main.js` | Main gallery rendering, popup overlay, admin functions |
+| `static/js/main.js` | Core gallery rendering, popup overlay, wall state management |
+| `static/js/admin.js` | Admin modal, action handlers (clear/move/undo/shuffle) |
 | `static/js/upload_modal.js` | Image upload flow with cropping and metadata entry |
 | `templates/index.html` | Main HTML template |
 | `static/css/styles.css` | All styling including popup animations |
@@ -37,24 +38,45 @@ python app.py
 ## Database Schema
 
 ```sql
+-- Schema version tracking
+CREATE TABLE schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Assets: stores artwork data (single source of truth)
 CREATE TABLE assets (
     asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
     artist_name TEXT NOT NULL DEFAULT '',
     artwork_title TEXT NOT NULL DEFAULT '',
-    tile_url TEXT NOT NULL DEFAULT '',      -- thumbnail for grid
-    popup_url TEXT NOT NULL DEFAULT '',     -- full-size for popup
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    tile_url TEXT NOT NULL DEFAULT '',
+    popup_url TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- Extended metadata (migration v2)
+    year_created TEXT NOT NULL DEFAULT '',
+    medium TEXT NOT NULL DEFAULT '',
+    dimensions TEXT NOT NULL DEFAULT '',
+    edition_info TEXT NOT NULL DEFAULT '',
+    for_sale TEXT NOT NULL DEFAULT '',      -- 'yes' | 'no' | ''
+    sale_type TEXT NOT NULL DEFAULT '',     -- 'original' | 'print' | 'both' | ''
+    artist_contact TEXT NOT NULL DEFAULT '', -- deprecated, use contact1/contact2
+    -- Contact fields (migration v3)
+    contact1_type TEXT NOT NULL DEFAULT '',  -- 'email' | 'social' | 'website' | ''
+    contact1_value TEXT NOT NULL DEFAULT '',
+    contact2_type TEXT NOT NULL DEFAULT '',
+    contact2_value TEXT NOT NULL DEFAULT ''
 );
 
 -- Tiles: links tile positions to assets
 CREATE TABLE tiles (
-    tile_id TEXT PRIMARY KEY,               -- e.g., 'X1', 'S2', 'M4'
+    tile_id TEXT PRIMARY KEY,
     asset_id INTEGER NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE SET NULL
 );
 ```
+
+Current schema version: **3**
 
 ## API Endpoints
 
@@ -69,7 +91,7 @@ CREATE TABLE tiles (
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/upload_assets` | POST | Upload tile + popup images (multipart form) |
-| `/api/tile/<tile_id>/metadata` | POST | Save artist/title metadata |
+| `/api/tile/<tile_id>/metadata` | POST | Save all metadata fields |
 | `/api/tile/<tile_id>/metadata` | GET | Get metadata for a tile |
 
 ### Admin (requires `X-Admin-Pin: 8375` header)
@@ -83,43 +105,92 @@ CREATE TABLE tiles (
 | `/api/admin/history_status` | GET | Get undo availability counts |
 | `/shuffle` | POST | Randomly redistribute all images (body: `{pin: "8375"}`) |
 
-## Tile Sizes
-Tiles are defined in `grid_full.svg` with sizes: `xs`, `s`, `m`, `lg`, `xlg`
-- New uploads go to random available `xs` tiles
-- Shuffle redistributes to ANY tile size randomly
+## Metadata Fields
+
+### Required Fields
+- **Artist Name** - Required for submission
+- **Artwork Title** - Required for submission
+
+### Optional Fields
+- **Year Created** - e.g., "2024"
+- **Medium** - e.g., "Oil on canvas"
+- **Dimensions** - e.g., "24 x 36 inches"
+- **Edition Info** - e.g., "1/50" or "Artist Proof"
+- **For Sale** - Yes/No checkbox
+- **Sale Type** - Original/Print (grayed out if "No" selected)
+- **Contact Info** - Up to 2 contacts, each with type (Email/Social Media/Website) and value
+
+### Ribbon Display Format
+1. Artist Name (bold, extra spacing below)
+2. Artwork Title (italics) + Year (not italics, same line)
+3. Medium
+4. Dimensions
+5. Edition
+6. Sale availability text (if applicable, ends with "by contacting the owner.")
+7. Contact links (clickable - mailto for email, https for web)
 
 ## Upload Flow
 1. User selects image → Cropper.js allows square crop
 2. Upload sends: `tile_image` (512x512 thumbnail) + `popup_image` (original)
 3. Server saves to `/uploads/` directory, creates DB records
-4. Metadata modal appears → user enters artist/title → saved to DB
+4. Metadata modal appears → user enters required + optional fields → saved to DB
 5. Wall refreshes to show new image
 
 ## Popup Overlay
-Two metadata display locations:
-1. **Above image (top-left)**: `.popup-title` containing `#popupTitle` and `#popupArtist`
-2. **Black ribbon overlay**: `#popupInfoText` with `.ribbon-title` and `.ribbon-artist`
-
-Animation sequence: image appears → title fades in → black ribbon slides from left → text reveals
+- **Animation sequence**: image appears → title fades in → black ribbon slides from left → text reveals
+- **Close behavior**: First click hides ribbon, second click closes popup
+- **Ribbon close button**: X button in top-right corner (visible only when ribbon is shown)
+- **Contact links**: Clickable (email opens mail client, web links open in new tab)
 
 ## Admin PIN
 - Default: `8375`
 - Can be overridden via environment variable `TLG_ADMIN_PIN`
 
-## Recent Changes (2026-01-29)
-- Migrated from `wall_state.json` to SQLite database as single source of truth
-- Added all admin API endpoints
-- Fixed metadata display in popup overlay
-- Shuffle now distributes to any tile size
-- New uploads placed in random XS tiles
-- Database snapshot/restore for undo functionality
+## JavaScript Architecture
+
+### Global Exposure (from main.js)
+```javascript
+window.ADMIN_PIN      // Admin PIN constant
+window.DEBUG          // Debug mode flag
+window.ADMIN_DEBUG    // Admin debug footer flag
+window.SEL            // DOM selector constants
+window.API            // API endpoint constants
+window.refreshWallFromServer()    // Refresh wall from database
+window.captureStateSnapshot()     // Stub for state snapshots
+window.refreshAdminOverlays()     // Refresh admin UI (from admin.js)
+window.isAdminActive()            // Check admin session (from admin.js)
+```
+
+### admin.js Module
+- IIFE pattern with initialization guards
+- Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
+- Guards prevent duplicate event handler registration
+
+## Recent Changes (2026-02-01)
+
+### Features Added
+- Extended metadata fields (year, medium, dimensions, edition, for_sale, sale_type)
+- Dual contact fields with type selection (email/social/website)
+- Required field validation for Artist Name and Artwork Title
+- Clickable contact links in ribbon (mailto/https)
+- Ribbon close button (X) with proper visibility states
+
+### Code Refactoring
+- Extracted `admin.js` from `main.js` (~750 lines moved)
+- Added versioned migration system to `db.py` (SCHEMA_VERSION = 3)
+- Removed legacy code: demo autofill, unused functions, deprecated fields
+- CSS cleanup: removed unused variables (--spotX, --spotY, --spotSize), consolidated duplicate rules
+- Removed `artist_contact` from API responses (deprecated, use contact1/contact2)
+- Removed `artist_contact` from frontend JS (main.js, upload_modal.js) - fully deprecated
+- Simplified upload endpoint (removed fallback logic)
+
+### Bug Fixes
+- Double confirmation dialog bug: Added button disable during async operations + event.stopPropagation() to all admin action handlers. Clear browser cache to apply fix.
+- Metadata loss after admin actions: `refreshWallFromServer()` was only extracting 4 fields (tile_url, popup_url, artwork_name, artist_name) instead of all 14 metadata fields. Now matches `hydrateWallStateFromExistingData()`.
+- Hidden ribbon links capturing taps (mobile): Contact links had `pointer-events: auto` which overrode parent's `none` when ribbon was dismissed. Fixed with `!important` override on `.hide-info` state.
 
 ## Notes
 - Undo history is in-memory (resets on server restart)
 - Images stored in `/uploads/` directory with UUID filenames
 - No authentication beyond admin PIN for admin functions
-
-## Planned Features
-- **Additional metadata fields**: Medium (paint/pencil/digital/AI), Date Created, Artist Contact
-- These will display on the black ribbon overlay (not above the image)
-- Follow existing patterns for `artist_name`/`artwork_title`
+- Schema migrations run automatically on startup

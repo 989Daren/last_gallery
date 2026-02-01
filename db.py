@@ -11,6 +11,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
+# Current schema version (increment when adding migrations)
+SCHEMA_VERSION = 3
+
 
 def get_db():
     """
@@ -33,12 +36,33 @@ def get_db():
     return conn
 
 
+def _get_schema_version(cursor):
+    """Get current schema version from database."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    cursor.execute("SELECT MAX(version) FROM schema_version")
+    row = cursor.fetchone()
+    return row[0] if row[0] is not None else 0
+
+
+def _set_schema_version(cursor, version):
+    """Record that a schema version has been applied."""
+    cursor.execute(
+        "INSERT INTO schema_version(version) VALUES(?)",
+        (version,)
+    )
+
+
 def init_db():
     """
     Initialize database schema.
 
-    Creates assets and tiles tables if they don't exist.
-    Adds missing columns for migration. Safe to run repeatedly.
+    Creates tables and runs migrations. Uses version tracking to only
+    apply new migrations. Safe to run repeatedly.
     """
     conn = get_db()
     cursor = conn.cursor()
@@ -46,44 +70,78 @@ def init_db():
     # Enable foreign keys
     cursor.execute("PRAGMA foreign_keys = ON")
 
-    # Create assets table (single source of truth for all asset data)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS assets (
-            asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            artist_name TEXT NOT NULL DEFAULT '',
-            artwork_title TEXT NOT NULL DEFAULT '',
-            tile_url TEXT NOT NULL DEFAULT '',
-            popup_url TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-    """)
+    # Get current schema version
+    current_version = _get_schema_version(cursor)
 
-    # Add URL columns if missing (migration for existing databases)
-    cursor.execute("PRAGMA table_info(assets)")
-    columns = [row[1] for row in cursor.fetchall()]
-    if 'tile_url' not in columns:
-        cursor.execute("ALTER TABLE assets ADD COLUMN tile_url TEXT NOT NULL DEFAULT ''")
-        print("Added tile_url column to assets table")
-    if 'popup_url' not in columns:
-        cursor.execute("ALTER TABLE assets ADD COLUMN popup_url TEXT NOT NULL DEFAULT ''")
-        print("Added popup_url column to assets table")
+    # Migration 1: Base schema (assets + tiles tables)
+    if current_version < 1:
+        print("Applying migration 1: Base schema...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS assets (
+                asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                artist_name TEXT NOT NULL DEFAULT '',
+                artwork_title TEXT NOT NULL DEFAULT '',
+                tile_url TEXT NOT NULL DEFAULT '',
+                popup_url TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tiles (
+                tile_id TEXT PRIMARY KEY,
+                asset_id INTEGER NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE SET NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tiles_asset_id ON tiles(asset_id)
+        """)
+        _set_schema_version(cursor, 1)
+        print("Migration 1 complete: Base schema created")
 
-    # Create tiles table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tiles (
-            tile_id TEXT PRIMARY KEY,
-            asset_id INTEGER NULL,
-            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE SET NULL
-        )
-    """)
+    # Migration 2: Extended metadata fields
+    if current_version < 2:
+        print("Applying migration 2: Extended metadata fields...")
+        cursor.execute("PRAGMA table_info(assets)")
+        columns = [row[1] for row in cursor.fetchall()]
 
-    # Create index on tiles.asset_id
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_tiles_asset_id ON tiles(asset_id)
-    """)
+        new_columns = [
+            ('year_created', "TEXT NOT NULL DEFAULT ''"),
+            ('medium', "TEXT NOT NULL DEFAULT ''"),
+            ('dimensions', "TEXT NOT NULL DEFAULT ''"),
+            ('edition_info', "TEXT NOT NULL DEFAULT ''"),
+            ('for_sale', "TEXT NOT NULL DEFAULT ''"),
+            ('sale_type', "TEXT NOT NULL DEFAULT ''"),
+            ('artist_contact', "TEXT NOT NULL DEFAULT ''"),
+        ]
+        for col_name, col_def in new_columns:
+            if col_name not in columns:
+                cursor.execute(f"ALTER TABLE assets ADD COLUMN {col_name} {col_def}")
+
+        _set_schema_version(cursor, 2)
+        print("Migration 2 complete: Extended metadata fields added")
+
+    # Migration 3: Contact info fields (type + value for up to 2 contacts)
+    if current_version < 3:
+        print("Applying migration 3: Contact info fields...")
+        cursor.execute("PRAGMA table_info(assets)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        new_columns = [
+            ('contact1_type', "TEXT NOT NULL DEFAULT ''"),
+            ('contact1_value', "TEXT NOT NULL DEFAULT ''"),
+            ('contact2_type', "TEXT NOT NULL DEFAULT ''"),
+            ('contact2_value', "TEXT NOT NULL DEFAULT ''"),
+        ]
+        for col_name, col_def in new_columns:
+            if col_name not in columns:
+                cursor.execute(f"ALTER TABLE assets ADD COLUMN {col_name} {col_def}")
+
+        _set_schema_version(cursor, 3)
+        print("Migration 3 complete: Contact info fields added")
 
     conn.commit()
     conn.close()
 
-    print("Database initialized: schema ready")
+    print(f"Database initialized: schema version {SCHEMA_VERSION}")

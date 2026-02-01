@@ -16,7 +16,6 @@ init_db()
 SERVER_DEBUG = False
 
 # ---- Grid color config ----
-COLOR_CONFIG = "grid_color.json"
 DEFAULT_GRID_COLOR = "#b84c27"
 
 # ---- File paths (absolute) ----
@@ -33,17 +32,7 @@ ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "8375")
 
 
 def load_grid_color():
-    """Read the current grid color from a small JSON file, or fall back to default."""
-    # legacy path support
-    if os.path.exists(COLOR_CONFIG):
-        try:
-            with open(COLOR_CONFIG, "r") as f:
-                data = json.load(f)
-                return data.get("color", DEFAULT_GRID_COLOR)
-        except Exception:
-            return DEFAULT_GRID_COLOR
-
-    # current path
+    """Read the current grid color from JSON file, or fall back to default."""
     color_path = os.path.join(DATA_DIR, "grid_color.json")
     if os.path.exists(color_path):
         try:
@@ -52,7 +41,6 @@ def load_grid_color():
                 return data.get("color", DEFAULT_GRID_COLOR)
         except Exception:
             return DEFAULT_GRID_COLOR
-
     return DEFAULT_GRID_COLOR
 
 
@@ -264,7 +252,11 @@ def wall_state():
         cursor = conn.cursor()
         cursor.execute("""
             SELECT t.tile_id, a.asset_id, a.tile_url, a.popup_url,
-                   a.artist_name, a.artwork_title
+                   a.artist_name, a.artwork_title, a.year_created,
+                   a.medium, a.dimensions, a.edition_info,
+                   a.for_sale, a.sale_type, a.artist_contact,
+                   a.contact1_type, a.contact1_value,
+                   a.contact2_type, a.contact2_value
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
             ORDER BY t.tile_id
@@ -278,6 +270,16 @@ def wall_state():
                 "popup_url": row["popup_url"],
                 "artist_name": row["artist_name"] or "",
                 "artwork_name": row["artwork_title"] or "",
+                "year_created": row["year_created"] or "",
+                "medium": row["medium"] or "",
+                "dimensions": row["dimensions"] or "",
+                "edition_info": row["edition_info"] or "",
+                "for_sale": row["for_sale"] or "",
+                "sale_type": row["sale_type"] or "",
+                "contact1_type": row["contact1_type"] or "",
+                "contact1_value": row["contact1_value"] or "",
+                "contact2_type": row["contact2_type"] or "",
+                "contact2_value": row["contact2_value"] or "",
             })
         conn.close()
         return jsonify({"ok": True, "assignments": assignments})
@@ -375,7 +377,13 @@ def save_tile_metadata(tile_id):
     Input JSON body:
         {
             "artist_name": "string",
-            "artwork_title": "string"
+            "artwork_title": "string",
+            "year_created": "string",
+            "medium": "string",
+            "dimensions": "string",
+            "edition_info": "string",
+            "for_sale": "yes|no|",
+            "sale_type": "original|print|"
         }
 
     Returns:
@@ -383,8 +391,7 @@ def save_tile_metadata(tile_id):
             "ok": true,
             "tile_id": "<tile_id>",
             "asset_id": <asset_id>,
-            "artist_name": "<artist_name>",
-            "artwork_title": "<artwork_title>"
+            ...all fields...
         }
     """
     try:
@@ -392,6 +399,17 @@ def save_tile_metadata(tile_id):
         data = request.get_json() or {}
         artist_name = (data.get("artist_name") or "").strip()
         artwork_title = (data.get("artwork_title") or "").strip()
+        year_created = (data.get("year_created") or "").strip()
+        medium = (data.get("medium") or "").strip()
+        dimensions = (data.get("dimensions") or "").strip()
+        edition_info = (data.get("edition_info") or "").strip()
+        for_sale = (data.get("for_sale") or "").strip()
+        sale_type = (data.get("sale_type") or "").strip()
+        artist_contact = (data.get("artist_contact") or "").strip()
+        contact1_type = (data.get("contact1_type") or "").strip()
+        contact1_value = (data.get("contact1_value") or "").strip()
+        contact2_type = (data.get("contact2_type") or "").strip()
+        contact2_value = (data.get("contact2_value") or "").strip()
 
         # Get database connection
         conn = get_db()
@@ -410,10 +428,18 @@ def save_tile_metadata(tile_id):
 
         asset_id = row["asset_id"]
 
-        # Update the asset's metadata
+        # Update the asset's metadata (all fields)
         cursor.execute(
-            "UPDATE assets SET artist_name = ?, artwork_title = ? WHERE asset_id = ?",
-            (artist_name, artwork_title, asset_id)
+            """UPDATE assets SET
+                artist_name = ?, artwork_title = ?, year_created = ?,
+                medium = ?, dimensions = ?, edition_info = ?,
+                for_sale = ?, sale_type = ?, artist_contact = ?,
+                contact1_type = ?, contact1_value = ?,
+                contact2_type = ?, contact2_value = ?
+               WHERE asset_id = ?""",
+            (artist_name, artwork_title, year_created, medium, dimensions,
+             edition_info, for_sale, sale_type, artist_contact,
+             contact1_type, contact1_value, contact2_type, contact2_value, asset_id)
         )
 
         conn.commit()
@@ -424,7 +450,17 @@ def save_tile_metadata(tile_id):
             "tile_id": tile_id,
             "asset_id": asset_id,
             "artist_name": artist_name,
-            "artwork_title": artwork_title
+            "artwork_title": artwork_title,
+            "year_created": year_created,
+            "medium": medium,
+            "dimensions": dimensions,
+            "edition_info": edition_info,
+            "for_sale": for_sale,
+            "sale_type": sale_type,
+            "contact1_type": contact1_type,
+            "contact1_value": contact1_value,
+            "contact2_type": contact2_type,
+            "contact2_value": contact2_value
         })
         
     except Exception as e:
@@ -440,33 +476,36 @@ def save_tile_metadata(tile_id):
 @app.route("/api/tile/<tile_id>/metadata", methods=["GET"])
 def get_tile_metadata(tile_id):
     """
-    Fetch the currently assigned asset metadata (artist/title) for a tile.
-    
+    Fetch the currently assigned asset metadata for a tile.
+
     Returns:
         {
             "ok": true,
             "tile_id": "<tile_id>",
             "asset_id": <asset_id> or null,
-            "artist_name": "<artist_name>" or "",
-            "artwork_title": "<artwork_title>" or ""
+            ...all metadata fields...
         }
     """
     try:
         # Get database connection
         conn = get_db()
         cursor = conn.cursor()
-        
+
         # Query tile and asset data
         cursor.execute("""
-            SELECT t.tile_id, t.asset_id, a.artist_name, a.artwork_title
+            SELECT t.tile_id, t.asset_id, a.artist_name, a.artwork_title,
+                   a.year_created, a.medium, a.dimensions, a.edition_info,
+                   a.for_sale, a.sale_type, a.artist_contact,
+                   a.contact1_type, a.contact1_value,
+                   a.contact2_type, a.contact2_value
             FROM tiles t
             LEFT JOIN assets a ON a.asset_id = t.asset_id
             WHERE t.tile_id = ?
         """, (tile_id,))
-        
+
         row = cursor.fetchone()
         conn.close()
-        
+
         # If no tiles row exists, return empty values
         if not row:
             return jsonify({
@@ -474,18 +513,38 @@ def get_tile_metadata(tile_id):
                 "tile_id": tile_id,
                 "asset_id": None,
                 "artist_name": "",
-                "artwork_title": ""
+                "artwork_title": "",
+                "year_created": "",
+                "medium": "",
+                "dimensions": "",
+                "edition_info": "",
+                "for_sale": "",
+                "sale_type": "",
+                "contact1_type": "",
+                "contact1_value": "",
+                "contact2_type": "",
+                "contact2_value": ""
             })
-        
+
         # Return data (use empty strings for null values)
         return jsonify({
             "ok": True,
             "tile_id": row["tile_id"],
             "asset_id": row["asset_id"],
             "artist_name": row["artist_name"] or "",
-            "artwork_title": row["artwork_title"] or ""
+            "artwork_title": row["artwork_title"] or "",
+            "year_created": row["year_created"] or "",
+            "medium": row["medium"] or "",
+            "dimensions": row["dimensions"] or "",
+            "edition_info": row["edition_info"] or "",
+            "for_sale": row["for_sale"] or "",
+            "sale_type": row["sale_type"] or "",
+            "contact1_type": row["contact1_type"] or "",
+            "contact1_value": row["contact1_value"] or "",
+            "contact2_type": row["contact2_type"] or "",
+            "contact2_value": row["contact2_value"] or ""
         })
-        
+
     except Exception as e:
         if 'conn' in locals():
             conn.close()
@@ -508,7 +567,11 @@ def _get_db_snapshot():
     """Get a snapshot of current database state."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT asset_id, artist_name, artwork_title, tile_url, popup_url FROM assets")
+    cursor.execute("""SELECT asset_id, artist_name, artwork_title, tile_url, popup_url,
+                             year_created, medium, dimensions, edition_info,
+                             for_sale, sale_type, artist_contact,
+                             contact1_type, contact1_value,
+                             contact2_type, contact2_value FROM assets""")
     assets = [dict(row) for row in cursor.fetchall()]
     cursor.execute("SELECT tile_id, asset_id FROM tiles")
     tiles = [dict(row) for row in cursor.fetchall()]
@@ -525,11 +588,21 @@ def _restore_db_snapshot(snapshot):
     cursor.execute("DELETE FROM tiles")
     cursor.execute("DELETE FROM assets")
 
-    # Restore assets
+    # Restore assets (with all metadata fields, using defaults for missing keys)
     for a in snapshot["assets"]:
         cursor.execute(
-            "INSERT INTO assets(asset_id, artist_name, artwork_title, tile_url, popup_url) VALUES(?, ?, ?, ?, ?)",
-            (a["asset_id"], a["artist_name"], a["artwork_title"], a["tile_url"], a["popup_url"])
+            """INSERT INTO assets(asset_id, artist_name, artwork_title, tile_url, popup_url,
+                                  year_created, medium, dimensions, edition_info,
+                                  for_sale, sale_type, artist_contact,
+                                  contact1_type, contact1_value,
+                                  contact2_type, contact2_value)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (a["asset_id"], a["artist_name"], a["artwork_title"], a["tile_url"], a["popup_url"],
+             a.get("year_created", ""), a.get("medium", ""), a.get("dimensions", ""),
+             a.get("edition_info", ""), a.get("for_sale", ""), a.get("sale_type", ""),
+             a.get("artist_contact", ""),
+             a.get("contact1_type", ""), a.get("contact1_value", ""),
+             a.get("contact2_type", ""), a.get("contact2_value", ""))
         )
 
     # Restore tiles

@@ -99,11 +99,55 @@
       </div>
 
       <div class="modal-body-tier2">
-        <label for="metaArtistInput">Artist Name</label>
-        <input id="metaArtistInput" type="text" maxlength="80" placeholder="Enter artist name" />
+        <div id="metaRequiredError" class="required-error hidden">
+          Artist Name and Artwork Title are required to submit.
+        </div>
 
-        <label for="metaTitleInput">Artwork Title</label>
-        <input id="metaTitleInput" type="text" maxlength="120" placeholder="Enter artwork title" />
+        <label for="metaArtistInput">Artist Name <span class="required-mark">*</span></label>
+        <input id="metaArtistInput" type="text" maxlength="80" placeholder="Enter artist name" required />
+
+        <label for="metaTitleInput">Artwork Title <span class="required-mark">*</span></label>
+        <input id="metaTitleInput" type="text" maxlength="120" placeholder="Enter artwork title" required />
+
+        <label for="metaYearInput">Year of Creation</label>
+        <input id="metaYearInput" type="text" maxlength="10" placeholder="e.g., 2024" />
+
+        <label for="metaMediumInput">Medium</label>
+        <input id="metaMediumInput" type="text" maxlength="100" placeholder="e.g., oil on canvas, digital collage, acrylic on wood" />
+
+        <label for="metaDimensionsInput">Dimensions</label>
+        <input id="metaDimensionsInput" type="text" maxlength="50" placeholder="e.g., 16&quot;x20&quot;, 40cm x 50cm" />
+
+        <label for="metaEditionInput">Edition Information</label>
+        <input id="metaEditionInput" type="text" maxlength="80" placeholder="e.g., 1/10, Artist Proof, Open Edition (optional)" />
+
+        <label class="checkbox-group-label">Artwork available for sale?</label>
+        <div class="checkbox-group">
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="metaForSaleYes" name="forSale" value="yes"> Yes</label>
+            <label><input type="checkbox" id="metaForSaleNo" name="forSale" value="no"> No</label>
+          </div>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="metaSaleOriginal" name="saleType" value="original"> Original</label>
+            <label><input type="checkbox" id="metaSalePrint" name="saleType" value="print"> Print</label>
+          </div>
+        </div>
+
+        <label class="contact-group-label">Contact Info</label>
+        <div class="contact-type-radios">
+          <label><input type="radio" name="contact1Type" value="email"> Email</label>
+          <label><input type="radio" name="contact1Type" value="social"> Social Media</label>
+          <label><input type="radio" name="contact1Type" value="website"> Website</label>
+        </div>
+        <input id="metaContact1Input" type="text" maxlength="120" placeholder="Select a contact type above" />
+
+        <label class="contact-group-label">Additional Contact (optional)</label>
+        <div class="contact-type-radios">
+          <label><input type="radio" name="contact2Type" value="email"> Email</label>
+          <label><input type="radio" name="contact2Type" value="social"> Social Media</label>
+          <label><input type="radio" name="contact2Type" value="website"> Website</label>
+        </div>
+        <input id="metaContact2Input" type="text" maxlength="120" placeholder="Select a contact type above" />
 
         <div id="metaError" class="error-text hidden"></div>
         <div id="metaSuccess" class="success-text hidden">Saved!</div>
@@ -267,6 +311,7 @@
 
   <!-- JS -->
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
   <script src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/upload_modal.js') }}"></script>
 </body>
