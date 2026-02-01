@@ -159,14 +159,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // =========================================================
   // Upload + place (Tier-1 only: image/crop)
   //
-  // Contract (expected):
+  // Contract:
   // POST /api/upload_assets (multipart/form-data)
   //   - tile_image: cropped square (for grid)
   //   - popup_image: cropped square (for popup)
-  // Returns JSON. After success we reload to pull /api/wall_state.
-  //
-  // If your backend uses a different route (e.g. /api/upload_asset),
-  // we try that as a fallback.
+  // Returns JSON. After success we refresh wall via /api/wall_state.
   // =========================================================
 
   function canvasToBlob(canvas, mimeType, quality) {
@@ -180,34 +177,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  async function postWithFallback(formData) {
-    const endpoints = ["/api/upload_assets", "/api/upload_asset"];
-    let lastErr = null;
+  async function postUpload(formData) {
+    const res = await fetch("/api/upload_assets", { method: "POST", body: formData });
 
-    for (const url of endpoints) {
-      try {
-        const res = await fetch(url, { method: "POST", body: formData });
-        if (res.status === 404) {
-          lastErr = new Error(`404 at ${url}`);
-          continue;
-        }
+    const text = await res.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch (_) { /* ignore */ }
 
-        const text = await res.text();
-        let json = null;
-        try { json = JSON.parse(text); } catch (_) { /* ignore */ }
-
-        if (!res.ok) {
-          const msg = (json && (json.error || json.message)) || text || `HTTP ${res.status}`;
-          throw new Error(`Upload failed (${res.status}): ${msg}`);
-        }
-
-        return json || {};
-      } catch (e) {
-        lastErr = e;
-      }
+    if (!res.ok) {
+      const msg = (json && (json.error || json.message)) || text || `HTTP ${res.status}`;
+      throw new Error(`Upload failed (${res.status}): ${msg}`);
     }
 
-    throw lastErr || new Error("Upload failed");
+    return json || {};
   }
 
   async function uploadCroppedAndRefresh() {
@@ -236,7 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
       formData.append("popup_image", selectedFile, selectedFile?.name || `popup_${ts}.jpg`);// Keep metadata empty for now (site is in "metadata purge" mode).
       // If/when re-enabled, append fields here.
 
-      const result = await postWithFallback(formData);
+      const result = await postUpload(formData);
       console.log(`${LOG_PREFIX} Upload success:`, result);
 
       // Refresh wall immediately so new image appears before metadata modal
@@ -289,6 +271,79 @@ document.addEventListener("DOMContentLoaded", () => {
   const metaError = document.getElementById("metaError");
   const metaSuccess = document.getElementById("metaSuccess");
 
+  // Extended metadata field refs
+  const metaYearInput = document.getElementById("metaYearInput");
+  const metaMediumInput = document.getElementById("metaMediumInput");
+  const metaDimensionsInput = document.getElementById("metaDimensionsInput");
+  const metaEditionInput = document.getElementById("metaEditionInput");
+
+  // Contact fields (2 sets with radio buttons)
+  const metaContact1Input = document.getElementById("metaContact1Input");
+  const metaContact2Input = document.getElementById("metaContact2Input");
+  const contact1Radios = document.querySelectorAll('input[name="contact1Type"]');
+  const contact2Radios = document.querySelectorAll('input[name="contact2Type"]');
+
+  // Dynamic placeholder based on contact type selection
+  const contactPlaceholders = {
+    email: "e.g., artist@example.com",
+    social: "e.g., instagram.com/artistname",
+    website: "e.g., www.artistportfolio.com"
+  };
+
+  function updateContactPlaceholder(radios, input) {
+    const selected = Array.from(radios).find(r => r.checked);
+    if (selected && input) {
+      input.placeholder = contactPlaceholders[selected.value] || "Enter contact info";
+    } else if (input) {
+      input.placeholder = "Select a contact type above";
+    }
+  }
+
+  // Wire up radio button change handlers for dynamic placeholders
+  contact1Radios.forEach(radio => {
+    radio.addEventListener("change", () => updateContactPlaceholder(contact1Radios, metaContact1Input));
+  });
+  contact2Radios.forEach(radio => {
+    radio.addEventListener("change", () => updateContactPlaceholder(contact2Radios, metaContact2Input));
+  });
+
+  // For-sale checkbox refs
+  const metaForSaleYes = document.getElementById("metaForSaleYes");
+  const metaForSaleNo = document.getElementById("metaForSaleNo");
+  const metaSaleOriginal = document.getElementById("metaSaleOriginal");
+  const metaSalePrint = document.getElementById("metaSalePrint");
+
+  // Gray out Original/Print when "No" is selected
+  function updateSaleTypeState() {
+    const noSelected = metaForSaleNo && metaForSaleNo.checked;
+    if (metaSaleOriginal) {
+      metaSaleOriginal.disabled = noSelected;
+      metaSaleOriginal.parentElement.classList.toggle("disabled", noSelected);
+    }
+    if (metaSalePrint) {
+      metaSalePrint.disabled = noSelected;
+      metaSalePrint.parentElement.classList.toggle("disabled", noSelected);
+    }
+  }
+
+  // Wire up Yes/No checkbox listeners
+  if (metaForSaleYes) {
+    metaForSaleYes.addEventListener("change", () => {
+      if (metaForSaleYes.checked && metaForSaleNo) {
+        metaForSaleNo.checked = false;
+      }
+      updateSaleTypeState();
+    });
+  }
+  if (metaForSaleNo) {
+    metaForSaleNo.addEventListener("change", () => {
+      if (metaForSaleNo.checked && metaForSaleYes) {
+        metaForSaleYes.checked = false;
+      }
+      updateSaleTypeState();
+    });
+  }
+
   function openMetaModal(tileId) {
     if (!metaOverlay) return;
     
@@ -297,9 +352,28 @@ document.addEventListener("DOMContentLoaded", () => {
     // Clear previous values
     if (metaArtistInput) metaArtistInput.value = "";
     if (metaTitleInput) metaTitleInput.value = "";
+    if (metaYearInput) metaYearInput.value = "";
+    if (metaMediumInput) metaMediumInput.value = "";
+    if (metaDimensionsInput) metaDimensionsInput.value = "";
+    if (metaEditionInput) metaEditionInput.value = "";
+    // Reset contact fields
+    if (metaContact1Input) metaContact1Input.value = "";
+    if (metaContact2Input) metaContact2Input.value = "";
+    contact1Radios.forEach(r => r.checked = false);
+    contact2Radios.forEach(r => r.checked = false);
+    updateContactPlaceholder(contact1Radios, metaContact1Input);
+    updateContactPlaceholder(contact2Radios, metaContact2Input);
     if (metaError) metaError.classList.add("hidden");
     if (metaSuccess) metaSuccess.classList.add("hidden");
+    if (metaRequiredError) metaRequiredError.classList.add("hidden");
     if (metaSaveBtn) metaSaveBtn.disabled = false;
+
+    // Reset for-sale checkboxes
+    if (metaForSaleYes) metaForSaleYes.checked = false;
+    if (metaForSaleNo) metaForSaleNo.checked = false;
+    if (metaSaleOriginal) metaSaleOriginal.checked = false;
+    if (metaSalePrint) metaSalePrint.checked = false;
+    updateSaleTypeState();
     
     // Show overlay
     metaOverlay.classList.remove("hidden");
@@ -322,21 +396,87 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log(`${LOG_PREFIX} Tier-2 metadata modal closed`);
   }
 
+  // Required fields validation
+  const metaRequiredError = document.getElementById("metaRequiredError");
+
+  function validateRequiredFields() {
+    const artistName = (metaArtistInput?.value || "").trim();
+    const artworkTitle = (metaTitleInput?.value || "").trim();
+    const isValid = artistName.length > 0 && artworkTitle.length > 0;
+
+    // Hide error if both fields are valid
+    if (isValid && metaRequiredError) {
+      metaRequiredError.classList.add("hidden");
+    }
+
+    return isValid;
+  }
+
+  // Live validation: hide error as user types if fields become valid
+  if (metaArtistInput) {
+    metaArtistInput.addEventListener("input", validateRequiredFields);
+  }
+  if (metaTitleInput) {
+    metaTitleInput.addEventListener("input", validateRequiredFields);
+  }
+
   async function saveMetaToDb(tileId) {
     if (!tileId) {
       console.error(`${LOG_PREFIX} No tile_id for metadata save`);
       return;
     }
-    
+
     // Get and trim values
     const artistName = (metaArtistInput?.value || "").trim();
     const artworkTitle = (metaTitleInput?.value || "").trim();
-    
+    const yearCreated = (metaYearInput?.value || "").trim();
+    const medium = (metaMediumInput?.value || "").trim();
+    const dimensions = (metaDimensionsInput?.value || "").trim();
+    const editionInfo = (metaEditionInput?.value || "").trim();
+
+    // Get contact fields (type + value)
+    const contact1TypeRadio = Array.from(contact1Radios).find(r => r.checked);
+    const contact1Type = contact1TypeRadio ? contact1TypeRadio.value : "";
+    const contact1Value = (metaContact1Input?.value || "").trim();
+    const contact2TypeRadio = Array.from(contact2Radios).find(r => r.checked);
+    const contact2Type = contact2TypeRadio ? contact2TypeRadio.value : "";
+    const contact2Value = (metaContact2Input?.value || "").trim();
+
+    // Determine for_sale and sale_type from checkboxes
+    let forSale = "";
+    if (metaForSaleYes?.checked) forSale = "yes";
+    else if (metaForSaleNo?.checked) forSale = "no";
+
+    let saleType = "";
+    if (metaSaleOriginal?.checked && metaSalePrint?.checked) saleType = "both";
+    else if (metaSaleOriginal?.checked) saleType = "original";
+    else if (metaSalePrint?.checked) saleType = "print";
+
+    // Validate required fields
+    if (!artistName || !artworkTitle) {
+      // Show required fields error
+      if (metaRequiredError) {
+        metaRequiredError.classList.remove("hidden");
+      }
+      // Focus first missing field
+      if (!artistName && metaArtistInput) {
+        metaArtistInput.focus();
+      } else if (!artworkTitle && metaTitleInput) {
+        metaTitleInput.focus();
+      }
+      return; // Block submission
+    }
+
+    // Hide required error if validation passed
+    if (metaRequiredError) {
+      metaRequiredError.classList.add("hidden");
+    }
+
     // Disable save button
     if (metaSaveBtn) metaSaveBtn.disabled = true;
     if (metaError) metaError.classList.add("hidden");
     if (metaSuccess) metaSuccess.classList.add("hidden");
-    
+
     try {
       const response = await fetch(`/api/tile/${tileId}/metadata`, {
         method: "POST",
@@ -345,7 +485,17 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         body: JSON.stringify({
           artist_name: artistName,
-          artwork_title: artworkTitle
+          artwork_title: artworkTitle,
+          year_created: yearCreated,
+          medium: medium,
+          dimensions: dimensions,
+          edition_info: editionInfo,
+          for_sale: forSale,
+          sale_type: saleType,
+          contact1_type: contact1Type,
+          contact1_value: contact1Value,
+          contact2_type: contact2Type,
+          contact2_value: contact2Value
         })
       });
       

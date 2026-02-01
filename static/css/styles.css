@@ -13,9 +13,6 @@
   /* Wall lighting controls */
   --spotEnabled: 1;
   --spotOpacity: 0.35;
-  --spotX: 55%;
-  --spotY: 20%;
-  --spotSize: 65%;
   --spotZ: 1;
   /* Vignette effect intentionally removed — spotlight effect preferred */
 
@@ -321,9 +318,7 @@ label {
 
 /* Crop layer stacks above shadow */
 .tile.has-asset .art-imgwrap {
-  position: relative;
   z-index: 1;
-  overflow: visible; /* Allow shadow to extend */
 }
 
 /* Dedicated shadow layer behind artwork - sized to artwork box */
@@ -335,29 +330,12 @@ label {
   z-index: 0;
 }
 
-/* Image stacks above shadow */
-.tile.has-asset .art-imgwrap img {
-  position: relative;
-  z-index: 1;
-}
-
 .art-frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
-
-  /* inner glow exaggerated for testing; outer unchanged (bluer tint) */
-  box-shadow: 0 0 6px rgba(200,220,255,0.90), 0 0 20px rgba(200,220,255,0.10);
   display: block;
-}
-
-/* =====================================================
-   LEGACY ARTWORK GLOW DISABLED (replaced by wall lighting)
-   ===================================================== */
-.art-frame img {
-  box-shadow: none !important;
-  filter: none !important;
 }
 
 /* Wrapper so outline draws reliably over image */
@@ -396,11 +374,6 @@ label {
 .art-frame:empty {
   background: transparent;
   box-shadow: none;
-}
-
-/* Hide label when the tile has artwork assigned */
-.tile[data-art-url] .tile-label {
-  display: none;
 }
 
 /* Hide label when tile is occupied */
@@ -521,7 +494,8 @@ label {
   margin-top: 0;
 }
 
-.modal-body-tier2 input[type="text"] {
+.modal-body-tier2 input[type="text"],
+.modal-body-tier2 input[type="email"] {
   width: 100%;
   padding: 10px 12px;
   font-size: 1rem;
@@ -533,9 +507,111 @@ label {
   transition: border-color 0.2s;
 }
 
-.modal-body-tier2 input[type="text"]:focus {
+.modal-body-tier2 input[type="text"]:focus,
+.modal-body-tier2 input[type="email"]:focus {
   outline: none;
   border-color: #666;
+}
+
+.modal-body-tier2 .checkbox-group-label {
+  display: block;
+  margin-bottom: 8px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.modal-body-tier2 .checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-body-tier2 .checkbox-row {
+  display: flex;
+  gap: 20px;
+}
+
+.modal-body-tier2 .checkbox-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.9rem;
+  color: #ddd;
+  cursor: pointer;
+}
+
+.modal-body-tier2 .checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #666;
+  cursor: pointer;
+}
+
+.modal-body-tier2 .checkbox-row label.disabled {
+  color: #555;
+  cursor: not-allowed;
+}
+
+.modal-body-tier2 .checkbox-row label.disabled input[type="checkbox"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Contact type radio buttons */
+.modal-body-tier2 .contact-group-label {
+  display: block;
+  margin-bottom: 6px;
+  margin-top: 14px;
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.modal-body-tier2 .contact-type-radios {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.modal-body-tier2 .contact-type-radios label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #ddd;
+  cursor: pointer;
+}
+
+.modal-body-tier2 .contact-type-radios input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #666;
+  cursor: pointer;
+}
+
+/* Required field indicator */
+.modal-body-tier2 .required-mark {
+  color: #ff6b6b;
+  font-weight: bold;
+}
+
+/* Required fields validation error */
+.modal-body-tier2 .required-error {
+  background: rgba(255, 80, 80, 0.15);
+  border: 2px solid #ff5050;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  color: #ff8080;
+  font-weight: bold;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.modal-body-tier2 .required-error.hidden {
+  display: none;
 }
 
 .modal-body-tier2 .error-text {
@@ -1082,31 +1158,133 @@ label {
   transform: translateX(0);
 }
 
-/* Ribbon metadata content */
-.ribbon-title {
+/* Ribbon metadata content - gallery card style */
+
+/* Line 1: Artist name (bold) */
+.ribbon-artist {
   font-size: clamp(14px, 2vw, 18px);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.2;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
   color: rgba(255, 255, 255, 0.95);
 }
 
-.ribbon-artist {
-  font-size: clamp(12px, 1.5vw, 14px);
-  line-height: 1.2;
-  color: rgba(255, 255, 255, 0.75);
+/* Line 2: Title (italics) + Year (not italics) */
+.ribbon-title-line {
+  font-size: clamp(13px, 1.7vw, 16px);
+  line-height: 1.3;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ribbon-title {
   font-style: italic;
 }
 
+.ribbon-year {
+  font-style: normal;
+}
+
+/* Line 3: Medium */
+.ribbon-medium {
+  font-size: clamp(12px, 1.4vw, 14px);
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 2px;
+}
+
+/* Line 4: Dimensions */
+.ribbon-dimensions {
+  font-size: clamp(12px, 1.4vw, 14px);
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 2px;
+}
+
+/* Line 5: Edition */
+.ribbon-edition {
+  font-size: clamp(12px, 1.4vw, 14px);
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 2px;
+}
+
+/* Line 6: Sale availability */
+.ribbon-sale {
+  font-size: clamp(11px, 1.3vw, 13px);
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* Line 7: Artist contact */
+.ribbon-contact {
+  font-size: clamp(11px, 1.3vw, 13px);
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 4px;
+}
+
+.ribbon-contact-link {
+  color: rgba(180, 210, 255, 0.9);
+  text-decoration: underline;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.2s;
+}
+
+.ribbon-contact-link:hover {
+  color: rgba(220, 240, 255, 1);
+}
+
+/* Ribbon close button (X) - hidden by default */
+.ribbon-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.2s, opacity 0.2s;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Show X only when ribbon is visible */
+.popup-overlay.stage-info-text:not(.hide-info) .ribbon-close-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ribbon-close-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
 /* Dismiss ribbon only */
+.popup-overlay.hide-info .popup-info,
+.popup-overlay.hide-info .popup-info *,
+.popup-overlay.hide-info .ribbon-contact-link {
+  pointer-events: none !important;
+}
+
 .popup-overlay.hide-info .popup-info-bg,
 .popup-overlay.hide-info .popup-info-text {
   opacity: 0;
 
   /* ✅ match direction: slide OUT to the left */
   transform: translateX(-40px);
-
-  pointer-events: none;
 }
 
 /* X close inside gradient (top-right) */
@@ -1164,76 +1342,6 @@ label {
     /* ✅ keep the same clamp; just allow more room on tiny screens */
     width: min(600px, 100%);
   }
-}
-
-/* =====================================================
-   POPUP VIEWER — legacy (kept for now, but not used by new JS)
-   ===================================================== */
-
-.art-popup {
-  position: fixed;
-  inset: 0;
-  display: none;
-  z-index: 6000;  /* Above fixed header (legacy, not currently used) */
-
-  align-items: center;
-  justify-content: center;
-
-  padding: 24px;
-  box-sizing: border-box;
-}
-
-.art-popup.visible {
-  display: flex;
-}
-
-.art-popup-backdrop {
-  position: absolute;
-  inset: 0;
-  background: var(--popup-backdrop);
-}
-
-.art-popup-inner {
-  position: relative;
-  display: flex;
-
-  align-items: center;
-  justify-content: center;
-
-  max-width: min(80vw, 1100px);
-  max-height: min(80vh, 900px);
-
-  pointer-events: none;
-  box-sizing: border-box;
-}
-
-.art-popup-inner img {
-  max-height: 700px;
-  max-width: 100%;
-  width: auto;
-  height: auto;
-
-  object-fit: contain;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
-  border-radius: 4px;
-
-  pointer-events: auto;
-  cursor: zoom-out;
-}
-
-/* =====================================================
-   LEGACY POPUP KILL SWITCH — hide known old modal/popups only
-   (IMPORTANT: do NOT nuke generic .popup/.modal anymore)
-   ===================================================== */
-
-#tilePopup,
-#tileModal,
-.tile-popup,
-.tile-modal {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
 }
 
 /* =========================

@@ -8,10 +8,6 @@ const log = (...args) => { if (DEBUG) console.log(...args); };
 const warn = (...args) => { if (DEBUG) console.warn(...args); };
 const error = (...args) => console.error(...args);
 
-// === Kill-switch for demo/test art auto-population ===
-// Set to false to disable all auto-generation of placeholder artwork
-const ENABLE_DEMO_AUTOFILL = false;
-
 // === Public tile label visibility ===
 // Set to false to hide white tile ID labels from public view (admin labels unaffected)
 const SHOW_PUBLIC_TILE_LABELS = false;
@@ -28,6 +24,19 @@ const ENDPOINTS = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+// Expose globals for admin.js module
+window.ADMIN_PIN = ADMIN_PIN;
+window.DEBUG = DEBUG;
+window.ADMIN_DEBUG = ADMIN_DEBUG;
+
+// HTML escape helper for safe innerHTML insertion
+function escapeHtml(str) {
+  if (!str) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
 
 // ============================
 // Simple Welcome Banner
@@ -210,6 +219,10 @@ const API = {
   historyStatus: '/api/admin/history_status',
 };
 
+// Expose for admin.js module
+window.SEL = SEL;
+window.API = API;
+
 const LOG = {
   render: '[RENDER]',
   admin: '[ADMIN]',
@@ -234,55 +247,6 @@ const wallState = {
     height: 0
   }
 };
-
-// State history for undo (replaces DOM snapshots)
-const stateHistory = {
-  snapshots: [],
-  maxSnapshots: 50
-};
-
-// Take a deep copy snapshot of current state before mutations
-function captureStateSnapshot() {
-  const snapshot = JSON.parse(JSON.stringify(wallState));
-  stateHistory.snapshots.push(snapshot);
-
-  // Limit history size
-  if (stateHistory.snapshots.length > stateHistory.maxSnapshots) {
-    stateHistory.snapshots.shift();
-  }
-
-  if (DEBUG) console.log('State snapshot captured, history depth:', stateHistory.snapshots.length);
-}
-
-// Restore state from last snapshot
-function restoreStateSnapshot() {
-  if (stateHistory.snapshots.length === 0) {
-    console.warn('No state snapshots available for restore');
-    return false;
-  }
-
-  const snapshot = stateHistory.snapshots.pop();
-
-  // Deep copy back to wallState
-  wallState.tiles = JSON.parse(JSON.stringify(snapshot.tiles));
-  wallState.metadata = JSON.parse(JSON.stringify(snapshot.metadata));
-
-  if (DEBUG) console.log('State snapshot restored, remaining depth:', stateHistory.snapshots.length);
-  return true;
-}
-
-// -------------------------------
-// Popup demo metadata helpers
-// -------------------------------
-function titleFromFilename(urlOrPath) {
-  const clean = (urlOrPath || "").split("?")[0];
-  const file = clean.split("/").pop() || "";
-  return file.replace(/\.[^.]+$/, "");
-}
-
-function demoInfoHeadersOnly() {
-  return "";
-}
 
 // -------------------------------
 // Popup system (created only if missing)
@@ -310,6 +274,7 @@ function ensurePopupDom() {
         <div class="popup-info">
           <div class="popup-info-bg"></div>
           <div class="popup-info-text" id="popupInfoText"></div>
+          <button class="ribbon-close-btn" id="ribbonCloseBtn" aria-label="Close info">&times;</button>
         </div>
       </div>
     </div>
@@ -317,6 +282,18 @@ function ensurePopupDom() {
 
   // ⚠️ PHASE 1 AUDIT: appendChild mutation (non-render, UI setup)
   document.body.appendChild(overlay);
+
+  // Wire up ribbon close button
+  const ribbonCloseBtn = overlay.querySelector("#ribbonCloseBtn");
+  if (ribbonCloseBtn) {
+    ribbonCloseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (typeof window.closeInfoRibbon === "function") {
+        window.closeInfoRibbon();
+      }
+    });
+  }
+
   return overlay;
 }
 
@@ -339,7 +316,7 @@ function isArtworkPopupOpen() {
 }
 window.isArtworkPopupOpen = isArtworkPopupOpen;
 
-function openArtworkPopup({ imgSrc, title, artist, infoText }) {
+function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value }) {
   const overlay = ensurePopupDom();
 
   const titleEl  = $(IDS.popupTitle);
@@ -353,13 +330,79 @@ function openArtworkPopup({ imgSrc, title, artist, infoText }) {
     imgEl.src = imgSrc;
     imgEl.alt = title || "Artwork";
   }
-  // Build ribbon content (location 2) - no labels, just title and artist
+
+  // Build ribbon content - gallery wall card style
+  // Left-justified, no labels, no extra spaces for absent metadata
   if (infoEl) {
     const ribbonParts = [];
-    if (title) ribbonParts.push(`<div class="ribbon-title">${title}</div>`);
-    if (artist) ribbonParts.push(`<div class="ribbon-artist">${artist}</div>`);
+
+    // Line 1: Artist name (bold)
+    if (artist) ribbonParts.push(`<div class="ribbon-artist">${escapeHtml(artist)}</div>`);
+
+    // Line 2: Artwork title (italics) + year created (not italics, same line)
+    if (title || yearCreated) {
+      let line2 = "";
+      if (title) line2 += `<span class="ribbon-title">${escapeHtml(title)}</span>`;
+      if (title && yearCreated) line2 += ", ";
+      if (yearCreated) line2 += `<span class="ribbon-year">${escapeHtml(yearCreated)}</span>`;
+      ribbonParts.push(`<div class="ribbon-title-line">${line2}</div>`);
+    }
+
+    // Line 3: Medium
+    if (medium) ribbonParts.push(`<div class="ribbon-medium">${escapeHtml(medium)}</div>`);
+
+    // Line 4: Dimensions
+    if (dimensions) ribbonParts.push(`<div class="ribbon-dimensions">${escapeHtml(dimensions)}</div>`);
+
+    // Line 5: Edition
+    if (editionInfo) ribbonParts.push(`<div class="ribbon-edition">${escapeHtml(editionInfo)}</div>`);
+
+    // Line 6: Sale availability text
+    if (forSale === "yes" && saleType) {
+      let saleText = "";
+      if (saleType === "original") {
+        saleText = "This original creative work is available for sale by contacting the owner.";
+      } else if (saleType === "print") {
+        saleText = "A high quality print of this creative work is available for sale by contacting the owner.";
+      } else if (saleType === "both") {
+        saleText = "This original creative work and high quality prints are available for sale by contacting the owner.";
+      }
+      if (saleText) ribbonParts.push(`<div class="ribbon-sale">${saleText}</div>`);
+    } else if (forSale === "no") {
+      ribbonParts.push(`<div class="ribbon-sale">This creative work is currently not available for sale.</div>`);
+    }
+
+    // Line 7: Contact info (clickable links)
+    function buildContactLink(type, value) {
+      if (!type || !value) return null;
+      const escaped = escapeHtml(value);
+      if (type === "email") {
+        return `<a href="mailto:${escaped}" class="ribbon-contact-link" target="_blank" rel="noopener noreferrer">${escaped}</a>`;
+      } else if (type === "website" || type === "social") {
+        // Ensure URL has protocol
+        let url = value;
+        if (!/^https?:\/\//i.test(url)) {
+          url = "https://" + url;
+        }
+        return `<a href="${escapeHtml(url)}" class="ribbon-contact-link" target="_blank" rel="noopener noreferrer">${escaped}</a>`;
+      }
+      return escaped;
+    }
+
+    const contact1Html = buildContactLink(contact1Type, contact1Value);
+    const contact2Html = buildContactLink(contact2Type, contact2Value);
+    if (contact1Html) ribbonParts.push(`<div class="ribbon-contact">${contact1Html}</div>`);
+    if (contact2Html) ribbonParts.push(`<div class="ribbon-contact">${contact2Html}</div>`);
+
     infoEl.innerHTML = ribbonParts.join("");
     infoEl.classList.remove("is-visible");
+
+    // Prevent contact links from closing the ribbon
+    infoEl.querySelectorAll(".ribbon-contact-link").forEach(link => {
+      link.addEventListener("click", (e) => {
+        e.stopPropagation();
+      });
+    });
   }
 
   // Reset state
@@ -440,6 +483,11 @@ function wirePopupEventsOnce() {
   // Unified state-machine click handler
   // Implements two-click dismiss: first click closes ribbon, second closes popup
   overlay.addEventListener("click", (e) => {
+    // Allow contact links to work without closing ribbon
+    if (e.target.closest(".ribbon-contact-link")) {
+      return; // Let the link handle the click
+    }
+
     const popupOpen = isPopupOpen();
     const ribbonOpen = isRibbonOpen();
 
@@ -617,7 +665,17 @@ function hydrateWallStateFromExistingData(layoutTiles, assignments = []) {
         tile_url: assignment.tile_url,
         popup_url: assignment.popup_url,
         artwork_name: assignment.artwork_name,
-        artist_name: assignment.artist_name
+        artist_name: assignment.artist_name,
+        year_created: assignment.year_created || "",
+        medium: assignment.medium || "",
+        dimensions: assignment.dimensions || "",
+        edition_info: assignment.edition_info || "",
+        for_sale: assignment.for_sale || "",
+        sale_type: assignment.sale_type || "",
+        contact1_type: assignment.contact1_type || "",
+        contact1_value: assignment.contact1_value || "",
+        contact2_type: assignment.contact2_type || "",
+        contact2_value: assignment.contact2_value || ""
       };
     }
   });
@@ -630,11 +688,6 @@ function applyGridColor(color) {
   document.documentElement.style.setProperty("--wallColor", color);
 }
 
-function assignArtworkUrls() {
-  // Intentionally disabled: no demo/test auto-population.
-  log("assignArtworkUrls disabled");
-}
-
 function buildLayoutTiles(tiles, totalHeight) {
   // Single vertical flip at render time
   return tiles.map(tile => {
@@ -643,129 +696,6 @@ function buildLayoutTiles(tiles, totalHeight) {
     return { ...tile, y: totalHeight - h - tile.y };
   });
 }
-
-// LEGACY: Pre-Phase 2 tile clearing function
-// Not used by renderWallFromState() (which rebuilds from scratch)
-// Kept for backward compatibility with exported window.resetTileToEmpty
-// ⚠️ PHASE 1 AUDIT: direct DOM mutation (bypasses render pipeline)
-function resetTileToEmpty(tileEl) {
-  // 1. Remove art image container and all images inside
-  const artFrame = tileEl.querySelector(SEL.artFrame);
-  if (artFrame) {
-    artFrame.remove();
-  }
-
-  // 2. Remove any standalone art images (fallback)
-  const artImages = tileEl.querySelectorAll("img.tile-art, .art-imgwrap img");
-  artImages.forEach(img => img.remove());
-
-  // 3. Remove occupancy data attributes
-  tileEl.removeAttribute("data-occupied");
-  tileEl.removeAttribute("data-tile-url");
-  tileEl.removeAttribute("data-popup-url");
-  tileEl.removeAttribute("data-artwork-name");
-  tileEl.removeAttribute("data-artist-name");
-  tileEl.removeAttribute("data-medium");
-  tileEl.removeAttribute("data-size");
-  tileEl.removeAttribute("data-art-url");
-  tileEl.removeAttribute("data-asset-id");
-
-  // 4. Clear dataset properties (camelCase accessors)
-  delete tileEl.dataset.occupied;
-  delete tileEl.dataset.tileUrl;
-  delete tileEl.dataset.popupUrl;
-  delete tileEl.dataset.artworkName;
-  delete tileEl.dataset.artistName;
-  delete tileEl.dataset.medium;
-  delete tileEl.dataset.size;
-  delete tileEl.dataset.artUrl;
-  delete tileEl.dataset.assetId;
-
-  // 5. Remove occupancy/glow classes
-  tileEl.classList.remove("occupied", "has-art", "filled", "hasImage", "hasArtwork", "glow", "lit", "has-asset");
-
-  // 6. Clear any inline background styles
-  tileEl.style.backgroundImage = "";
-
-  // Tile is now in default empty state with visible label
-}
-
-// LEGACY: Pre-Phase 2 tile asset application function
-// Not used by renderWallFromState() (which builds inline)
-// Kept for backward compatibility with exported window.applyAssetToTile
-// RENDER ENTRY POINT (legacy)
-function applyAssetToTile(tileEl, asset) {
-  // 1. Always reset first to guarantee clean baseline
-  resetTileToEmpty(tileEl);
-
-  // 2. Create art image with proper structure: .art-frame > .art-imgwrap > img.tile-art
-  const img = document.createElement("img");
-  img.src = asset.tile_url;
-  img.classList.add("tile-art");
-  img.alt = asset.artwork_name || "Artwork";
-
-  // Create dedicated shadow layer
-  const shadow = document.createElement("div");
-  shadow.classList.add("art-shadow");
-
-  const wrap = document.createElement("div");
-  wrap.classList.add("art-imgwrap");
-  wrap.appendChild(shadow);  // Shadow first (z-index: 0)
-  wrap.appendChild(img);     // Image on top (z-index: 1)
-
-  // Calculate artwork dimensions (tile minus frame padding)
-  const tileSize = parseInt(tileEl.style.width) || 85;
-  const framePadding = 6; // Default padding, overridden by CSS for different sizes
-  const artworkSize = tileSize - (framePadding * 2);
-  wrap.style.width = artworkSize + "px";
-  wrap.style.height = artworkSize + "px";
-
-  const frame = document.createElement("div");
-  frame.classList.add("art-frame");
-  frame.appendChild(wrap);
-
-  // Wrap in shell to provide shadow allowance space
-  const shell = document.createElement("div");
-  shell.classList.add("art-shell");
-  shell.appendChild(frame);
-
-  // 3. Mark tile as having asset for cursor styling
-  tileEl.classList.add("has-asset");
-
-  // 4. Insert art-shell before label (ensures label doesn't overlay art)
-  const label = tileEl.querySelector(SEL.tileLabel);
-  if (label) {
-    tileEl.insertBefore(shell, label);
-  } else {
-    tileEl.appendChild(shell);
-  }
-
-  // 4. Set occupancy dataset fields
-  tileEl.dataset.occupied = "1";
-  tileEl.dataset.tileUrl = asset.tile_url;
-  tileEl.dataset.popupUrl = asset.popup_url;
-  tileEl.dataset.artworkName = asset.artwork_name || asset.title || "";
-  tileEl.dataset.artistName = asset.artist_name || "";
-
-  // Optional metadata
-  if (asset.medium) tileEl.dataset.medium = asset.medium;
-  if (asset.size) tileEl.dataset.size = asset.size;
-  if (asset.asset_id) tileEl.dataset.assetId = asset.asset_id;
-
-  // 5. Apply occupied class (triggers glow via CSS)
-  tileEl.classList.add("occupied");
-
-  // 6. Apply admin tile label if toggle is ON
-  if (typeof applyAdminTileLabel === 'function') {
-    applyAdminTileLabel(tileEl);
-  }
-
-  // Rendering complete - tile now displays artwork with metadata
-}
-
-// Export for use by other scripts (e.g., upload_modal.js)
-window.applyAssetToTile = applyAssetToTile;
-window.resetTileToEmpty = resetTileToEmpty;
 
 /**
  * Select a random empty XS tile from the gallery.
@@ -951,6 +881,16 @@ function renderWallFromState() {
       el.dataset.popupUrl = tileData.asset.popup_url || tileData.asset.tile_url;
       el.dataset.artworkName = tileData.asset.artwork_name || '';
       el.dataset.artistName = tileData.asset.artist_name || '';
+      el.dataset.yearCreated = tileData.asset.year_created || '';
+      el.dataset.medium = tileData.asset.medium || '';
+      el.dataset.dimensions = tileData.asset.dimensions || '';
+      el.dataset.editionInfo = tileData.asset.edition_info || '';
+      el.dataset.forSale = tileData.asset.for_sale || '';
+      el.dataset.saleType = tileData.asset.sale_type || '';
+      el.dataset.contact1Type = tileData.asset.contact1_type || '';
+      el.dataset.contact1Value = tileData.asset.contact1_value || '';
+      el.dataset.contact2Type = tileData.asset.contact2_type || '';
+      el.dataset.contact2Value = tileData.asset.contact2_value || '';
       if (tileData.assetId) el.dataset.assetId = tileData.assetId;
 
       // 6. Apply occupied class
@@ -1003,211 +943,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Ensure popup is present and wired (safe even if you later move it into HTML)
   wirePopupEventsOnce();
 
-  // --- Admin modal wiring (PIN-gated) ---
-  const adminBtn = $("adminBtn");
-  const adminModal = $("adminModal");
-  const adminCloseBtn = $("adminCloseBtn");
-  const adminPinGate = $("adminPinGate");
-  const adminPinInput = $("adminPinInput");
-  const adminPinSubmit = $("adminPinSubmit");
-  const adminPinError = $("adminPinError");
-  const adminControlsPanel = $("adminControlsPanel");
-
-  let adminUnlocked = false;
-  let showTileLabels = false;  // Admin toggle for tile ID overlays
-
-  // ========== Admin Helper Functions ==========
-
-  // Check if admin session is active (PIN accepted)
-  function isAdminActive() {
-    return adminUnlocked === true;
-  }
-
-  // Normalize history counts for both new timeline-aware and legacy formats
-  function normalizeHistoryCounts(data) {
-    // New format: separate counts
-    if (data.shuffle_count !== undefined && data.non_shuffle_count !== undefined) {
-      return {
-        shuffle_count: data.shuffle_count,
-        non_shuffle_count: data.non_shuffle_count,
-        non_shuffle_total: data.non_shuffle_total ?? data.non_shuffle_count,
-        last_shuffle_id: data.last_shuffle_id ?? null
-      };
-    }
-
-    // Legacy format: single history_count
-    if (data.history_count !== undefined) {
-      return {
-        shuffle_count: data.history_count,
-        non_shuffle_count: data.history_count,
-        non_shuffle_total: data.history_count,
-        last_shuffle_id: null
-      };
-    }
-
-    // Empty/unknown format
-    return {
-      shuffle_count: 0,
-      non_shuffle_count: 0,
-      non_shuffle_total: 0,
-      last_shuffle_id: null
-    };
-  }
-
-  // Centralized admin overlay refresh (tile labels + debug footer)
-  function refreshAdminOverlays(historyData) {
-    // Handle tile labels based on admin state and toggle
-    if (!isAdminActive()) {
-      // Admin session not active, clear all labels
-      clearAllAdminTileLabels();
-    } else if (showTileLabels) {
-      // Toggle ON: apply labels
-      updateAllAdminTileLabels();
-    } else {
-      // Toggle OFF: clear labels
-      clearAllAdminTileLabels();
-    }
-
-    // Update debug footer if enabled
-    if (ADMIN_DEBUG && isAdminActive()) {
-      const data = historyData || window.lastHistoryData || {};
-      const normalized = normalizeHistoryCounts(data);
-      updateAdminDebugFooter(normalized.shuffle_count, normalized.non_shuffle_count);
-    }
-  }
-
-  // Explicitly remove all admin tile label overlays from DOM
-  function clearAllAdminTileLabels() {
-    // ⚠️ PHASE 1 AUDIT: direct DOM mutation (admin UI only, not render)
-    const allLabels = document.querySelectorAll('.admin-tile-label');
-    allLabels.forEach(label => label.remove());
-  }
-
-  // ========== Admin Modal Functions ==========
-
-  function openAdminModal() {
-    if (!adminModal) return;
-    adminModal.classList.remove("hidden");
-
-    // Reset gate UI each open unless already unlocked
-    if (!adminUnlocked) {
-      adminPinGate?.classList.remove("hidden");
-      adminControlsPanel?.classList.add("hidden");
-      adminPinError?.classList.add("hidden");
-
-      if (adminPinInput) {
-        adminPinInput.value = "";
-        adminPinInput.focus();
-      }
-    } else {
-      adminPinGate?.classList.add("hidden");
-      adminControlsPanel?.classList.remove("hidden");
-    }
-  }
-
-  function closeAdminModal() {
-    adminModal?.classList.add("hidden");
-  }
-
-  function showPinError(msg = "Incorrect PIN") {
-    if (!adminPinError) return;
-    adminPinError.textContent = msg;
-    adminPinError.classList.remove("hidden");
-  }
-
-  function hidePinError() {
-    adminPinError?.classList.add("hidden");
-  }
-
-  function tryUnlockAdmin() {
-    const pin = (adminPinInput?.value || "").trim();
-
-    if (!/^\d{4}$/.test(pin)) {
-      showPinError("Enter 4 digits");
-      return;
-    }
-
-    if (pin !== ADMIN_PIN) {
-      showPinError("Incorrect PIN");
-      return;
-    }
-
-    adminUnlocked = true;
-    hidePinError();
-
-    adminPinGate?.classList.add("hidden");
-    adminControlsPanel?.classList.remove("hidden");
-
-    colorPicker?.focus();
-
-    // Apply tile labels if toggle is already ON (handles timing edge cases)
-    setTimeout(() => {
-      if (showTileLabels) {
-        refreshAdminOverlays();
-      }
-    }, 0);
-  }
-
-  adminBtn?.addEventListener("click", openAdminModal);
-  adminCloseBtn?.addEventListener("click", closeAdminModal);
-
-  if (adminModal) {
-    // click backdrop to close (but don't close when clicking inside card)
-    adminModal.addEventListener("click", (e) => {
-      if (e.target === adminModal) closeAdminModal();
-    });
-  }
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && adminModal && !adminModal.classList.contains("hidden")) {
-      closeAdminModal();
-    }
-  });
-
-  adminPinSubmit?.addEventListener("click", tryUnlockAdmin);
-
-  if (adminPinInput) {
-    adminPinInput.addEventListener("input", hidePinError);
-    adminPinInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") tryUnlockAdmin();
-    });
-  }
-
-  // --- Track selected tile for admin operations ---
-  window.selectedTileId = null;
-
-  // --- Admin action handlers ---
-  const clearTileBtn = $("clearTileBtn");
-  const clearAllTilesBtn = $("clearAllTilesBtn");
-  const undoBtn = $("undoBtn");
-  const moveArtworkBtn = $("moveArtworkBtn");
-  const adminStatus = $("adminStatus");
-
-  const adminClearTileIdInput = $("adminClearTileIdInput");
-  const adminMoveFromInput = $("adminMoveFromInput");
-  const adminMoveToInput = $("adminMoveToInput");
-
-  // Helper to show status message in admin modal
-  function showAdminStatus(message, type = "info") {
-    if (!adminStatus) return;
-
-    adminStatus.textContent = message;
-    adminStatus.classList.remove("hidden", "error", "success");
-
-    if (type === "error") {
-      adminStatus.classList.add("error");
-    } else if (type === "success") {
-      adminStatus.classList.add("success");
-    }
-
-    // Auto-hide after 5 seconds
-    setTimeout(() => {
-      adminStatus.classList.add("hidden");
-    }, 5000);
-  }
-
-  // PHASE 2: converted to state-driven render
-  // Helper to re-render wall from server (used by admin operations)
+  // ========================================
+  // Wall Refresh (used by admin.js and upload_modal.js)
+  // ========================================
   async function refreshWallFromServer() {
     try {
       // Fetch current state (safe: allow DB/API to be unwired during development)
@@ -1233,7 +971,7 @@ document.addEventListener("DOMContentLoaded", () => {
         wallState.tiles[tileId].asset = null;
       });
 
-      // Apply new assignments to state
+      // Apply new assignments to state (all metadata fields)
       assignments.forEach(assignment => {
         const tileId = assignment.tile_id;
         if (wallState.tiles[tileId]) {
@@ -1242,7 +980,17 @@ document.addEventListener("DOMContentLoaded", () => {
             tile_url: assignment.tile_url,
             popup_url: assignment.popup_url,
             artwork_name: assignment.artwork_name,
-            artist_name: assignment.artist_name
+            artist_name: assignment.artist_name,
+            year_created: assignment.year_created || "",
+            medium: assignment.medium || "",
+            dimensions: assignment.dimensions || "",
+            edition_info: assignment.edition_info || "",
+            for_sale: assignment.for_sale || "",
+            sale_type: assignment.sale_type || "",
+            contact1_type: assignment.contact1_type || "",
+            contact1_value: assignment.contact1_value || "",
+            contact2_type: assignment.contact2_type || "",
+            contact2_value: assignment.contact2_value || ""
           };
         }
       });
@@ -1253,449 +1001,13 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error('Failed to refresh wall from server:', err);
     }
   }
-  // Expose for other modules (e.g., upload_modal.js)
+  // Expose for other modules (e.g., upload_modal.js, admin.js)
   window.refreshWallFromServer = refreshWallFromServer;
 
-
-  // Helper to update undo button state
-  function updateUndoButton(dataOrShuffleCount, nonShuffleCount) {
-    // Support both object format and separate parameters
-    let counts;
-    if (typeof dataOrShuffleCount === 'object') {
-      counts = normalizeHistoryCounts(dataOrShuffleCount);
-    } else {
-      // Legacy: separate parameters (shuffleCount, nonShuffleCount)
-      counts = normalizeHistoryCounts({
-        shuffle_count: dataOrShuffleCount,
-        non_shuffle_count: nonShuffleCount
-      });
-    }
-
-    // Update Undo button (non-shuffle actions)
-    if (undoBtn) {
-      undoBtn.disabled = counts.non_shuffle_count === 0;
-      undoBtn.title = counts.non_shuffle_count === 0 ? "No undoable actions after the last shuffle" : "";
-      if (DEBUG) console.log('Undo button state:', counts.non_shuffle_count > 0 ? 'enabled' : 'disabled', `(non_shuffle_count=${counts.non_shuffle_count})`);
-    }
-
-    // Update Undo Shuffle button
-    const undoShuffleBtn = $("undoShuffleBtn");
-    if (undoShuffleBtn) {
-      undoShuffleBtn.disabled = counts.shuffle_count === 0;
-      undoShuffleBtn.title = counts.shuffle_count === 0 ? "No shuffle to undo" : "";
-      if (DEBUG) console.log('Undo Shuffle button state:', counts.shuffle_count > 0 ? 'enabled' : 'disabled', `(shuffle_count=${counts.shuffle_count})`);
-    }
-  }
-
-  // Helper to fetch history status and update undo button
-  async function fetchHistoryStatus() {
-    if (!isAdminActive()) return;
-
-    try {
-      const response = await fetch(API.historyStatus, {
-        headers: { 'X-Admin-Pin': ADMIN_PIN }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Store full data for overlays
-        window.lastHistoryData = data;
-        // Update undo buttons
-        updateUndoButton(data);
-        // Refresh admin overlays (tile labels + debug footer)
-        refreshAdminOverlays(data);
-      }
-    } catch (err) {
-      if (DEBUG) console.warn('Failed to fetch history status:', err);
-    }
-  }
-
-  // Helper to update admin debug footer (development only)
-  function updateAdminDebugFooter(shuffle_count, non_shuffle_count) {
-    if (!ADMIN_DEBUG) return;
-
-    const footer = $("adminDebugFooter");
-    if (!footer) return;
-
-    // Get additional data from last history fetch if available
-    const data = window.lastHistoryData || {};
-    const non_shuffle_total = data.non_shuffle_total ?? '?';
-    const last_shuffle_id = data.last_shuffle_id ?? 'none';
-
-    // Format: "Undo: 0 eligible / 3 total | Shuffle Undo: 1 | Last Shuffle ID: 42"
-    footer.textContent = `Undo: ${non_shuffle_count} eligible / ${non_shuffle_total} total | Shuffle Undo: ${shuffle_count} | Last Shuffle ID: ${last_shuffle_id}`;
-    footer.style.display = 'block';
-  }
-
-  // Helper to apply admin tile label overlay (click-through)
-  // Note: This is called from applyAssetToTile when artwork is added to a tile.
-  // For bulk label updates, use updateAllAdminTileLabels() which reconciles all labels.
-  function applyAdminTileLabel(tileEl) {
-    if (!isAdminActive() || !showTileLabels) return;
-
-    // Check if label already exists
-    let label = tileEl.querySelector(SEL.adminTileLabel);
-    if (label) {
-      // Update existing label text and ensure visible
-      label.textContent = tileEl.dataset.id;
-      label.style.display = 'block';
-      return;
-    }
-
-    // Create new label overlay
-    label = document.createElement('div');
-    label.classList.add('admin-tile-label');
-    label.textContent = tileEl.dataset.id;
-    // ⚠️ PHASE 1 AUDIT: appendChild mutation (admin UI only, not render)
-    tileEl.appendChild(label);
-  }
-
-  // Helper to remove/hide admin tile label overlay
-  function removeAdminTileLabel(tileEl) {
-    const label = tileEl.querySelector('.admin-tile-label');
-    if (label) {
-      label.style.display = 'none';
-    }
-  }
-
-  // Helper to update all admin tile labels based on current state
-  function updateAllAdminTileLabels() {
-    if (!isAdminActive() || !showTileLabels) {
-      // Should not be called when admin inactive or toggle OFF
-      // (refreshAdminOverlays handles those cases)
-      return;
-    }
-
-    const allTiles = wall.querySelectorAll(SEL.tile);
-    allTiles.forEach(tile => {
-      // Find any existing label overlays in this tile
-      const existingLabels = tile.querySelectorAll(SEL.adminTileLabel);
-
-      // Ensure exactly 1 label with correct text on every tile
-      if (existingLabels.length === 0) {
-        // No label exists, create one
-        const label = document.createElement('div');
-        label.classList.add('admin-tile-label');
-        label.textContent = tile.dataset.id;
-        // ⚠️ PHASE 1 AUDIT: appendChild mutation (admin UI only, not render)
-        tile.appendChild(label);
-      } else {
-        // Label(s) exist - keep first, update text, remove duplicates
-        existingLabels[0].textContent = tile.dataset.id;
-        existingLabels[0].style.display = 'block';
-        // ⚠️ PHASE 1 AUDIT: direct DOM mutation (admin UI cleanup, not render)
-        // Remove any duplicate labels
-        for (let i = 1; i < existingLabels.length; i++) {
-          existingLabels[i].remove();
-        }
-      }
-    });
-  }
-
-  // Clear Single Tile (with tile_info lookup and confirmation)
-  clearTileBtn?.addEventListener("click", async () => {
-    const tileId = (adminClearTileIdInput?.value || "").trim().toUpperCase();
-
-    if (!tileId) {
-      showAdminStatus("Enter a tile ID", "error");
-      return;
-    }
-
-    // Validate tile exists in DOM
-    const tileEl = wall.querySelector(`${SEL.tile}[data-id="${tileId}"]`);
-    if (!tileEl) {
-      showAdminStatus("Tile ID not found", "error");
-      return;
-    }
-
-    try {
-      // Fetch tile info
-      const infoResponse = await fetch(`${API.tileInfo}?tile_id=${encodeURIComponent(tileId)}`, {
-        headers: { 'X-Admin-Pin': ADMIN_PIN }
-      });
-
-      if (!infoResponse.ok) {
-        throw new Error(`Failed to fetch tile info: ${infoResponse.status}`);
-      }
-
-      const tileInfo = await infoResponse.json();
-
-      if (!tileInfo.occupied) {
-        showAdminStatus("Tile is empty", "error");
-        return;
-      }
-
-      // Confirm with artwork details
-      const confirmMsg = `Remove "${tileInfo.artwork_name}" by ${tileInfo.artist_name} from ${tileId}?`;
-      if (!confirm(confirmMsg)) return;
-
-      // PHASE 2: Capture state snapshot before mutation
-      captureStateSnapshot();
-
-      // Clear the tile
-      const response = await fetch(API.clearTile, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Pin': ADMIN_PIN
-        },
-        body: JSON.stringify({ tile_id: tileId })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Clear tile failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (DEBUG) console.log('Cleared tile:', tileId);
-
-      // Update buttons with returned counts
-      updateUndoButton(result);
-      // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
-      await refreshWallFromServer();
-
-      showAdminStatus(`Cleared ${tileId}`, "success");
-      if (adminClearTileIdInput) adminClearTileIdInput.value = "";
-    } catch (err) {
-      console.error('Failed to clear tile:', err);
-      showAdminStatus('Failed to clear tile', "error");
-    }
-  });
-
-  // Clear All Tiles
-  clearAllTilesBtn?.addEventListener("click", async () => {
-    if (!confirm("Clear all tiles? This can be undone.")) return;
-
-    // PHASE 2: Capture state snapshot before mutation
-    captureStateSnapshot();
-
-    try {
-      const response = await fetch(API.clearAll, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Pin': ADMIN_PIN
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Clear all failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (DEBUG) console.log('Cleared all tiles');
-
-      // Update buttons with returned counts
-      updateUndoButton(result);
-      // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
-      await refreshWallFromServer();
-
-      showAdminStatus("Cleared all tiles", "success");
-    } catch (err) {
-      console.error('Failed to clear all tiles:', err);
-      showAdminStatus('Failed to clear all tiles', "error");
-    }
-  });
-
-  // Move Artwork (with size validation and confirmation)
-  moveArtworkBtn?.addEventListener("click", async () => {
-    const fromId = (adminMoveFromInput?.value || "").trim().toUpperCase();
-    const toId = (adminMoveToInput?.value || "").trim().toUpperCase();
-
-    if (!fromId || !toId) {
-      showAdminStatus("Enter both tile IDs", "error");
-      return;
-    }
-
-    // Validate both tiles exist in DOM
-    const fromTileEl = wall.querySelector(`${SEL.tile}[data-id="${fromId}"]`);
-    const toTileEl = wall.querySelector(`${SEL.tile}[data-id="${toId}"]`);
-
-    if (!fromTileEl || !toTileEl) {
-      showAdminStatus("Tile ID not found", "error");
-      return;
-    }
-
-    // Validate size match using getBoundingClientRect
-    const fromRect = fromTileEl.getBoundingClientRect();
-    const toRect = toTileEl.getBoundingClientRect();
-    const TOLERANCE = 2;
-
-    const widthMatch = Math.abs(fromRect.width - toRect.width) <= TOLERANCE;
-    const heightMatch = Math.abs(fromRect.height - toRect.height) <= TOLERANCE;
-    const sizeMatches = widthMatch && heightMatch;
-
-    // If size doesn't match, show override confirmation modal
-    if (!sizeMatches) {
-      // Store move parameters for confirmation
-      window.pendingMove = { fromId, toId };
-
-      // Show override confirmation modal
-      const overrideModal = $("moveOverrideModal");
-      if (overrideModal) {
-        overrideModal.classList.remove("hidden");
-      }
-      return;
-    }
-
-    // Size matches - proceed with standard flow
-    await executeTileMove(fromId, toId, false);
-  });
-
-  // Override confirmation modal handlers
-  const moveOverrideModal = $("moveOverrideModal");
-  const moveOverrideProceedBtn = $("moveOverrideProceedBtn");
-  const moveOverrideCancelBtn = $("moveOverrideCancelBtn");
-
-  moveOverrideProceedBtn?.addEventListener("click", async () => {
-    // Hide modal
-    if (moveOverrideModal) {
-      moveOverrideModal.classList.add("hidden");
-    }
-
-    // Execute move with override flag
-    if (window.pendingMove) {
-      const { fromId, toId } = window.pendingMove;
-      await executeTileMove(fromId, toId, true);
-      window.pendingMove = null;
-    }
-  });
-
-  moveOverrideCancelBtn?.addEventListener("click", () => {
-    // Hide modal and cancel move
-    if (moveOverrideModal) {
-      moveOverrideModal.classList.add("hidden");
-    }
-    window.pendingMove = null;
-    showAdminStatus("Move cancelled", "error");
-  });
-
-  // Helper function to execute tile move
-  async function executeTileMove(fromId, toId, override) {
-    try {
-      // Fetch source tile info
-      const fromInfoResponse = await fetch(`${API.tileInfo}?tile_id=${encodeURIComponent(fromId)}`, {
-        headers: { 'X-Admin-Pin': ADMIN_PIN }
-      });
-
-      if (!fromInfoResponse.ok) {
-        throw new Error(`Failed to fetch source tile info: ${fromInfoResponse.status}`);
-      }
-
-      const fromInfo = await fromInfoResponse.json();
-
-      if (!fromInfo.occupied) {
-        showAdminStatus("Source tile is empty", "error");
-        return;
-      }
-
-      // Fetch destination tile info
-      const toInfoResponse = await fetch(`${API.tileInfo}?tile_id=${encodeURIComponent(toId)}`, {
-        headers: { 'X-Admin-Pin': ADMIN_PIN }
-      });
-
-      if (!toInfoResponse.ok) {
-        throw new Error(`Failed to fetch destination tile info: ${toInfoResponse.status}`);
-      }
-
-      const toInfo = await toInfoResponse.json();
-
-      if (toInfo.occupied) {
-        showAdminStatus("Destination tile is occupied", "error");
-        return;
-      }
-
-      // Confirm move (only if not already confirmed via override modal)
-      if (!override) {
-        const confirmMsg = `Move "${fromInfo.artwork_name}" by ${fromInfo.artist_name} from ${fromId} to ${toId}?`;
-        if (!confirm(confirmMsg)) return;
-      }
-
-      // PHASE 2: Capture state snapshot before mutation
-      captureStateSnapshot();
-
-      // Execute move
-      const response = await fetch(API.moveTile, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Pin': ADMIN_PIN
-        },
-        body: JSON.stringify({
-          from_tile_id: fromId,
-          to_tile_id: toId,
-          override: override
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Move failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (DEBUG) console.log('Moved artwork:', fromId, '→', toId, override ? '(override)' : '');
-
-      // Update buttons with returned counts
-      updateUndoButton(result);
-      // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
-      await refreshWallFromServer();
-
-      showAdminStatus(`Moved ${fromId} → ${toId}${override ? ' (override)' : ''}`, "success");
-      if (adminMoveFromInput) adminMoveFromInput.value = "";
-      if (adminMoveToInput) adminMoveToInput.value = "";
-    } catch (err) {
-      console.error('Failed to move artwork:', err);
-      showAdminStatus(err.message || 'Failed to move artwork', "error");
-    }
-  }
-
-  // Undo (PHASE 3: hardened with guards)
-  undoBtn?.addEventListener("click", async () => {
-    try {
-      const response = await fetch(API.undo, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Pin': ADMIN_PIN
-        },
-        body: JSON.stringify({ action_type: 'non_shuffle' })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Undo failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (!result.ok) {
-        showAdminStatus(result.message || "Nothing to undo", "error");
-        return;
-      }
-
-      if (DEBUG) console.log('Undo successful');
-
-      // Update buttons with returned counts
-      updateUndoButton(result);
-      // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
-      await refreshWallFromServer();
-      showAdminStatus("Undo successful", "success");
-    } catch (err) {
-      console.error('Failed to undo:', err);
-      showAdminStatus('Failed to undo', 'error');
-    }
-  });
-
-  // Fetch history status when admin is unlocked
-  const originalTryUnlockAdmin = tryUnlockAdmin;
-  tryUnlockAdmin = function() {
-    originalTryUnlockAdmin();
-    if (adminUnlocked) {
-      fetchHistoryStatus();
-    }
+  // Expose captureStateSnapshot stub (admin.js may call it)
+  window.captureStateSnapshot = function() {
+    // State snapshots handled server-side via undo history
   };
-
-  // --- End admin modal wiring ---
 
   if (!wall) {
     error("galleryWall element not found");
@@ -1720,11 +1032,6 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         `;
         return;
-      }
-
-      // GATED: Only assign demo artwork if ENABLE_DEMO_AUTOFILL is true
-      if (ENABLE_DEMO_AUTOFILL) {
-        assignArtworkUrls(tiles);
       }
 
       const { width, height } = computeWallDimensions(tiles);
@@ -1775,12 +1082,21 @@ document.addEventListener("DOMContentLoaded", () => {
         // Only open popup if tile has uploaded artwork (ignore demo artUrl)
         if (!popupUrl) return;
 
-        // Display metadata from wall_state
+        // Display metadata from wall_state (all fields)
         openArtworkPopup({
           imgSrc: popupUrl,
           title: artworkName || "",
           artist: artistName || "",
-          infoText: "",
+          yearCreated: tileEl.dataset.yearCreated || "",
+          medium: tileEl.dataset.medium || "",
+          dimensions: tileEl.dataset.dimensions || "",
+          editionInfo: tileEl.dataset.editionInfo || "",
+          forSale: tileEl.dataset.forSale || "",
+          saleType: tileEl.dataset.saleType || "",
+          contact1Type: tileEl.dataset.contact1Type || "",
+          contact1Value: tileEl.dataset.contact1Value || "",
+          contact2Type: tileEl.dataset.contact2Type || "",
+          contact2Value: tileEl.dataset.contact2Value || ""
         });
       });
 
@@ -1814,133 +1130,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       outlineToggle?.addEventListener("change", updateOutlineState);
       updateOutlineState();
-
-      // ---- Undo Shuffle handling ----
-      const undoShuffleBtn = $("undoShuffleBtn");
-      const undoShuffleModal = $("undoShuffleModal");
-      const undoShuffleProceedBtn = $("undoShuffleProceedBtn");
-      const undoShuffleCancelBtn = $("undoShuffleCancelBtn");
-
-      undoShuffleBtn?.addEventListener("click", () => {
-        // Show confirmation modal
-        if (undoShuffleModal) {
-          undoShuffleModal.classList.remove("hidden");
-        }
-      });
-
-      undoShuffleProceedBtn?.addEventListener("click", async () => {
-        // Hide modal
-        if (undoShuffleModal) {
-          undoShuffleModal.classList.add("hidden");
-        }
-
-        try {
-          const response = await fetch(API.undo, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Admin-Pin': ADMIN_PIN
-            },
-            body: JSON.stringify({ action_type: 'shuffle' })
-          });
-
-          if (!response.ok) {
-            throw new Error(`Undo shuffle failed: ${response.status}`);
-          }
-
-          const result = await response.json();
-
-          if (!result.ok) {
-            alert(result.message || "Nothing to undo");
-            return;
-          }
-
-          if (DEBUG) console.log('Undo shuffle successful:', result.action);
-
-          // Update buttons with returned counts
-          updateUndoButton(result);
-          // PHASE 3: Single render (refreshAdminOverlays called inside renderWallFromState)
-          await refreshWallFromServer();
-
-          alert("Shuffle undone successfully");
-        } catch (err) {
-          console.error('Failed to undo shuffle:', err);
-          alert('Failed to undo shuffle: ' + err.message);
-        }
-      });
-
-      undoShuffleCancelBtn?.addEventListener("click", () => {
-        // Hide modal and cancel
-        if (undoShuffleModal) {
-          undoShuffleModal.classList.add("hidden");
-        }
-      });
-
-      // ---- Show Tile Labels toggle ----
-      const showTileLabelsToggle = $("showTileLabelsToggle");
-      if (showTileLabelsToggle) {
-        showTileLabelsToggle.addEventListener("change", (e) => {
-          showTileLabels = e.target.checked;
-          // Apply or clear immediately
-          refreshAdminOverlays();
-          // Defer second pass only for ON (timing/DOM readiness)
-          if (showTileLabels) {
-            setTimeout(() => {
-              if (showTileLabels === e.target.checked) {
-                refreshAdminOverlays();
-              }
-            }, 0);
-          }
-          if (DEBUG) console.log('Show Tile Labels:', showTileLabels);
-        });
-      }
-
-      // ---- Shuffle handling (admin modal button) ----
-      const shuffleButton = $("shuffleButton");
-      if (shuffleButton) {
-        shuffleButton.addEventListener("click", async () => {
-          // Get PIN from admin input field
-          const pinEl = $("adminPinInput");
-          const pin = (pinEl?.value || "").trim();
-
-          if (!pin) {
-            alert("Enter admin PIN first.");
-            return;
-          }
-
-          // PHASE 2: Capture state snapshot before mutation
-          captureStateSnapshot();
-
-          try {
-            const response = await fetch("/shuffle", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ pin })
-            });
-
-            if (response.status === 403 || response.status === 401) {
-              alert("Forbidden: invalid admin PIN.");
-              return;
-            }
-
-            if (!response.ok) {
-              alert("Shuffle failed: " + response.status);
-              return;
-            }
-
-            const result = await response.json();
-
-            // Update undo button state with returned counts
-            updateUndoButton(result);
-
-            // PHASE 3: Single render after shuffle (refreshAdminOverlays called inside renderWallFromState)
-            await refreshWallFromServer();
-          } catch (err) {
-            console.error("Shuffle error:", err);
-            alert("Shuffle failed: " + err.message);
-          }
-        });
-      }
 
       // Size overlays on resize and orientation change (mobile support)
       window.addEventListener('resize', () => finalizeAfterRender(wall));
