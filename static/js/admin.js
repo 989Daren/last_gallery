@@ -252,7 +252,12 @@
     }
     _modalInitialized = true;
 
-    const adminBtn = $("adminBtn");
+    // Hamburger menu elements
+    const hamburgerBtn = $("hamburger-btn");
+    const hamburgerMenu = $("hamburger-menu");
+    const menuItemAdmin = $("menu-item-admin");
+
+    // Admin modal elements
     const adminModal = $("adminModal");
     const adminCloseBtn = $("adminCloseBtn");
     const adminPinGate = $("adminPinGate");
@@ -261,6 +266,50 @@
     const adminPinError = $("adminPinError");
     const adminControlsPanel = $("adminControlsPanel");
     const colorPicker = $("gridColorPicker");
+
+    // ========================================
+    // Hamburger Menu Toggle
+    // ========================================
+
+    function openHamburgerMenu() {
+      if (!hamburgerMenu || !hamburgerBtn) return;
+      hamburgerMenu.classList.add("open");
+      hamburgerBtn.setAttribute("aria-expanded", "true");
+      hamburgerMenu.setAttribute("aria-hidden", "false");
+    }
+
+    function closeHamburgerMenu() {
+      if (!hamburgerMenu || !hamburgerBtn) return;
+      hamburgerMenu.classList.remove("open");
+      hamburgerBtn.setAttribute("aria-expanded", "false");
+      hamburgerMenu.setAttribute("aria-hidden", "true");
+    }
+
+    function toggleHamburgerMenu() {
+      if (hamburgerMenu?.classList.contains("open")) {
+        closeHamburgerMenu();
+      } else {
+        openHamburgerMenu();
+      }
+    }
+
+    // Hamburger button click toggles menu
+    hamburgerBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleHamburgerMenu();
+    });
+
+    // Click outside to close menu
+    document.addEventListener("click", (e) => {
+      if (!hamburgerMenu?.classList.contains("open")) return;
+      if (hamburgerBtn?.contains(e.target)) return;
+      if (hamburgerMenu?.contains(e.target)) return;
+      closeHamburgerMenu();
+    });
+
+    // ========================================
+    // Admin Modal Functions
+    // ========================================
 
     function openAdminModal() {
       if (!adminModal) return;
@@ -324,8 +373,17 @@
       }, 0);
     }
 
-    // Wire events
-    adminBtn?.addEventListener("click", openAdminModal);
+    // ========================================
+    // Wire Menu Item Events
+    // ========================================
+
+    // "Admin" menu item opens the admin modal
+    menuItemAdmin?.addEventListener("click", () => {
+      closeHamburgerMenu();
+      openAdminModal();
+    });
+
+    // Wire admin modal events
     adminCloseBtn?.addEventListener("click", closeAdminModal);
 
     if (adminModal) {
@@ -334,9 +392,18 @@
       });
     }
 
+    // Escape key handling: close hamburger menu first, then admin modal
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && adminModal && !adminModal.classList.contains("hidden")) {
-        closeAdminModal();
+      if (e.key === "Escape") {
+        // Close hamburger menu if open
+        if (hamburgerMenu?.classList.contains("open")) {
+          closeHamburgerMenu();
+          return;
+        }
+        // Close admin modal if open
+        if (adminModal && !adminModal.classList.contains("hidden")) {
+          closeAdminModal();
+        }
       }
     });
 
