@@ -1,2 +1,15 @@
 uploads/
 __pycache__/
+
+# Local data files
+data/grid_color.json
+data/gallery.db
+
+# Claude Code working directory
+.claude/
+
+# Working docs/specs (not for repo)
+adminlook.md
+pulldown.md
+nav_arrows.pdf
+docs/upload-modal-report.md
