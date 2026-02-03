@@ -1143,6 +1143,11 @@ label {
   border-top: none;
 }
 
+/* Spread items to opposite ends */
+.adminRow--spread {
+  justify-content: space-between;
+}
+
 .adminRow label {
   font-size: 14px;
   color: rgba(255,255,255,0.85);
