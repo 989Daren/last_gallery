@@ -18,8 +18,10 @@
   // ========================================
   const $ = (id) => document.getElementById(id);
 
-  // These are defined in main.js and exposed globally
-  const getAdminPin = () => window.ADMIN_PIN || "8375";
+  // Admin PIN stored in closure scope only (never exposed to window)
+  // Set after successful server validation, cleared on modal close
+  let _adminPin = null;
+
   const getApi = () => window.API || {
     tileInfo: '/api/admin/tile_info',
     undo: '/api/admin/undo',
@@ -203,7 +205,7 @@
 
     try {
       const response = await fetch(getApi().historyStatus, {
-        headers: { 'X-Admin-Pin': getAdminPin() }
+        headers: { 'X-Admin-Pin': _adminPin }
       });
 
       if (response.ok) {
@@ -332,6 +334,9 @@
 
     function closeAdminModal() {
       adminModal?.classList.add("hidden");
+      // Clear PIN from memory on close (security: require re-entry)
+      _adminPin = null;
+      adminUnlocked = false;
     }
 
     function showPinError(msg = "Incorrect PIN") {
@@ -344,33 +349,54 @@
       adminPinError?.classList.add("hidden");
     }
 
-    function tryUnlockAdmin() {
-      const pin = (adminPinInput?.value || "").trim();
+    async function tryUnlockAdmin() {
+      const typedPin = (adminPinInput?.value || "").trim();
 
-      if (!/^\d{4}$/.test(pin)) {
+      if (!/^\d{4}$/.test(typedPin)) {
         showPinError("Enter 4 digits");
         return;
       }
 
-      if (pin !== getAdminPin()) {
-        showPinError("Incorrect PIN");
-        return;
-      }
+      // Disable button during validation
+      if (adminPinSubmit) adminPinSubmit.disabled = true;
 
-      adminUnlocked = true;
-      hidePinError();
+      try {
+        // Validate PIN server-side using history_status endpoint
+        const response = await fetch(getApi().historyStatus, {
+          headers: { 'X-Admin-Pin': typedPin }
+        });
 
-      adminPinGate?.classList.add("hidden");
-      adminControlsPanel?.classList.remove("hidden");
+        if (response.ok) {
+          // PIN is valid - store in closure and unlock
+          _adminPin = typedPin;
+          adminUnlocked = true;
+          hidePinError();
 
-      colorPicker?.focus();
+          adminPinGate?.classList.add("hidden");
+          adminControlsPanel?.classList.remove("hidden");
 
-      setTimeout(() => {
-        if (showTileLabels) {
-          refreshAdminOverlays();
+          colorPicker?.focus();
+
+          setTimeout(() => {
+            if (showTileLabels) {
+              refreshAdminOverlays();
+            }
+            fetchHistoryStatus();
+          }, 0);
+        } else if (response.status === 401 || response.status === 403) {
+          // Invalid PIN
+          showPinError("Incorrect PIN");
+        } else {
+          // Unexpected error
+          showPinError("Server error - try again");
         }
-        fetchHistoryStatus();
-      }, 0);
+      } catch (err) {
+        // Network error
+        showPinError("Network error - try again");
+        if (getDebugMode()) console.error('PIN validation failed:', err);
+      } finally {
+        if (adminPinSubmit) adminPinSubmit.disabled = false;
+      }
     }
 
     // ========================================
@@ -463,7 +489,7 @@
         }
 
         const infoResponse = await fetch(`${getApi().tileInfo}?tile_id=${encodeURIComponent(tileId)}`, {
-          headers: { 'X-Admin-Pin': getAdminPin() }
+          headers: { 'X-Admin-Pin': _adminPin }
         });
 
         if (!infoResponse.ok) {
@@ -488,7 +514,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Admin-Pin': getAdminPin()
+            'X-Admin-Pin': _adminPin
           },
           body: JSON.stringify({ tile_id: tileId })
         });
@@ -502,6 +528,7 @@
 
         if (typeof window.refreshWallFromServer === 'function') {
           await window.refreshWallFromServer();
+          refreshAdminOverlays(); // Re-apply tile labels after wall rebuild
         }
 
         showAdminStatus(`Cleared ${tileId}`, "success");
@@ -534,7 +561,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Admin-Pin': getAdminPin()
+            'X-Admin-Pin': _adminPin
           }
         });
 
@@ -547,6 +574,7 @@
 
         if (typeof window.refreshWallFromServer === 'function') {
           await window.refreshWallFromServer();
+          refreshAdminOverlays(); // Re-apply tile labels after wall rebuild
         }
 
         showAdminStatus("Cleared all tiles", "success");
@@ -644,7 +672,7 @@
     async function executeTileMove(fromId, toId, override) {
       try {
         const fromInfoResponse = await fetch(`${getApi().tileInfo}?tile_id=${encodeURIComponent(fromId)}`, {
-          headers: { 'X-Admin-Pin': getAdminPin() }
+          headers: { 'X-Admin-Pin': _adminPin }
         });
 
         if (!fromInfoResponse.ok) {
@@ -659,7 +687,7 @@
         }
 
         const toInfoResponse = await fetch(`${getApi().tileInfo}?tile_id=${encodeURIComponent(toId)}`, {
-          headers: { 'X-Admin-Pin': getAdminPin() }
+          headers: { 'X-Admin-Pin': _adminPin }
         });
 
         if (!toInfoResponse.ok) {
@@ -686,7 +714,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Admin-Pin': getAdminPin()
+            'X-Admin-Pin': _adminPin
           },
           body: JSON.stringify({
             from_tile_id: fromId,
@@ -705,6 +733,7 @@
 
         if (typeof window.refreshWallFromServer === 'function') {
           await window.refreshWallFromServer();
+          refreshAdminOverlays(); // Re-apply tile labels after wall rebuild
         }
 
         showAdminStatus(`Moved ${fromId} → ${toId}${override ? ' (override)' : ''}`, "success");
@@ -729,7 +758,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Admin-Pin': getAdminPin()
+            'X-Admin-Pin': _adminPin
           },
           body: JSON.stringify({ action_type: 'non_shuffle' })
         });
@@ -749,6 +778,7 @@
 
         if (typeof window.refreshWallFromServer === 'function') {
           await window.refreshWallFromServer();
+          refreshAdminOverlays(); // Re-apply tile labels after wall rebuild
         }
 
         showAdminStatus("Undo successful", "success");
@@ -803,7 +833,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Admin-Pin': getAdminPin()
+            'X-Admin-Pin': _adminPin
           },
           body: JSON.stringify({ action_type: 'shuffle' })
         });
@@ -823,6 +853,7 @@
 
         if (typeof window.refreshWallFromServer === 'function') {
           await window.refreshWallFromServer();
+          refreshAdminOverlays(); // Re-apply tile labels after wall rebuild
         }
 
         alert("Shuffle undone successfully");
@@ -847,11 +878,9 @@
       // Prevent double-clicks
       if (shuffleButton.disabled) return;
 
-      const pinEl = $("adminPinInput");
-      const pin = (pinEl?.value || "").trim();
-
-      if (!pin) {
-        alert("Enter admin PIN first.");
+      // Use stored PIN from successful authentication
+      if (!_adminPin) {
+        alert("Admin session expired. Please re-enter PIN.");
         return;
       }
 
@@ -865,7 +894,7 @@
         const response = await fetch("/shuffle", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin })
+          body: JSON.stringify({ pin: _adminPin })
         });
 
         if (response.status === 403 || response.status === 401) {
@@ -883,6 +912,7 @@
 
         if (typeof window.refreshWallFromServer === 'function') {
           await window.refreshWallFromServer();
+          refreshAdminOverlays(); // Re-apply tile labels after wall rebuild
         }
       } catch (err) {
         console.error("Shuffle error:", err);

@@ -209,10 +209,14 @@
           >
         </div>
 
-        <div class="adminRow">
+        <div class="adminRow adminRow--spread">
           <label>
             <input type="checkbox" id="outlineToggle" checked>
             Show tile outlines
+          </label>
+          <label>
+            <input type="checkbox" id="showTileLabelsToggle">
+            Show Tile Labels
           </label>
         </div>
 
@@ -265,18 +269,8 @@
         <div class="adminRow">
           <button id="shuffleButton" type="button">Shuffle Tiles</button>
           <button id="undoShuffleBtn" type="button" disabled>Undo Shuffle</button>
+          <button id="adminCloseBtn" type="button" aria-label="Close admin modal">Close</button>
         </div>
-
-        <div class="adminRow">
-          <label>
-            <input type="checkbox" id="showTileLabelsToggle">
-            Show Tile Labels
-          </label>
-        </div>
-      </div>
-
-      <div class="upload-actions">
-        <button id="adminCloseBtn" type="button" aria-label="Close admin modal">Close</button>
       </div>
     </div>
   </div>

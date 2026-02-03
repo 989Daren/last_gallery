@@ -171,12 +171,13 @@ Pulsing directional arrows that teach users to scroll in multiple directions.
 ## Admin PIN
 - Default: `8375`
 - Can be overridden via environment variable `TLG_ADMIN_PIN`
+- **Security**: PIN is validated server-side only; never exposed to client-side JavaScript
+- PIN stored in IIFE closure scope after successful server validation, cleared on modal close
 
 ## JavaScript Architecture
 
 ### Global Exposure (from main.js)
 ```javascript
-window.ADMIN_PIN      // Admin PIN constant
 window.DEBUG          // Debug mode flag
 window.ADMIN_DEBUG    // Admin debug footer flag
 window.SEL            // DOM selector constants
@@ -189,8 +190,27 @@ window.isAdminActive()            // Check admin session (from admin.js)
 
 ### admin.js Module
 - IIFE pattern with initialization guards
+- PIN validated server-side via `/api/admin/history_status` before unlocking modal
+- PIN stored in closure-scoped `_adminPin` variable (not exposed to window)
 - Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
 - Guards prevent duplicate event handler registration
+
+## Recent Changes (2026-02-03)
+
+### Admin Modal Improvements
+- **Transparent tinted window effect**: Admin modal now has semi-transparent backdrop and panel so tile ID labels are visible through it when "Show Tile Labels" is enabled
+- **CSS custom properties** for easy transparency tuning (`--admin-backdrop-alpha`, `--admin-modal-bg-alpha`, etc.)
+- **Layout reorganization**: "Show Tile Labels" checkbox moved to same row as "Show tile outlines"; Close button moved to same row as Shuffle/Undo Shuffle
+
+### Security Fix: Admin PIN
+- **Removed client-side PIN exposure**: `window.ADMIN_PIN` no longer exists; PIN cannot be discovered via browser dev tools
+- **Server-side validation**: PIN is validated via `/api/admin/history_status` endpoint before unlocking admin modal
+- **Memory safety**: PIN stored in IIFE closure scope only, cleared when modal closes
+
+### Bug Fix
+- **Tile labels persist after admin actions**: Added `refreshAdminOverlays()` call after every `refreshWallFromServer()` so tile labels remain visible after clear/move/undo/shuffle operations
+
+---
 
 ## Recent Changes (2026-02-01)
 

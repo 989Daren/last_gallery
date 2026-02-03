@@ -17,7 +17,6 @@ const SHOW_PUBLIC_TILE_LABELS = false;
 const SVG_GRID_PATH = "/static/grid_full.svg";
 const BASE_UNIT = 85;
 
-const ADMIN_PIN = "8375";
 const ENDPOINTS = {
   gridColor: "/api/grid-color",
   shuffle: "/shuffle",
@@ -26,7 +25,6 @@ const ENDPOINTS = {
 const $ = (id) => document.getElementById(id);
 
 // Expose globals for admin.js module
-window.ADMIN_PIN = ADMIN_PIN;
 window.DEBUG = DEBUG;
 window.ADMIN_DEBUG = ADMIN_DEBUG;
 
