@@ -334,9 +334,7 @@
 
     function closeAdminModal() {
       adminModal?.classList.add("hidden");
-      // Clear PIN from memory on close (security: require re-entry)
-      _adminPin = null;
-      adminUnlocked = false;
+      // PIN and adminUnlocked persist until page refresh
     }
 
     function showPinError(msg = "Incorrect PIN") {
