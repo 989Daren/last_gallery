@@ -211,6 +211,14 @@ window.isAdminActive()            // Check admin session (from admin.js)
 - **Tile labels persist after admin actions**: Added `refreshAdminOverlays()` call after every `refreshWallFromServer()` so tile labels remain visible after clear/move/undo/shuffle operations
 - **Admin session persists until page refresh**: Fixed regression where closing the admin modal required re-entering the PIN. Now the session stays active until page refresh, matching original behavior
 
+### Shuffle Refactor
+- **Database-driven tile list**: Shuffle now queries all tiles from database instead of parsing SVG
+- **Non-destructive updates**: Uses `UPDATE` instead of `DELETE`/`INSERT` for tile assignments
+- **True randomization**: Shuffles both asset IDs and tile IDs independently before reassigning
+
+### SVG Grid
+- **Expanded canvas**: Height increased from 1211.63pt to 1594.36pt to accommodate more tiles
+
 ---
 
 ## Recent Changes (2026-02-01)
