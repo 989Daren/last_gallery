@@ -207,8 +207,9 @@ window.isAdminActive()            // Check admin session (from admin.js)
 - **Server-side validation**: PIN is validated via `/api/admin/history_status` endpoint before unlocking admin modal
 - **Session persistence**: PIN stored in IIFE closure scope only, persists until page refresh (closing modal does not require re-entry)
 
-### Bug Fix
+### Bug Fixes
 - **Tile labels persist after admin actions**: Added `refreshAdminOverlays()` call after every `refreshWallFromServer()` so tile labels remain visible after clear/move/undo/shuffle operations
+- **Admin session persists until page refresh**: Fixed regression where closing the admin modal required re-entering the PIN. Now the session stays active until page refresh, matching original behavior
 
 ---
 
