@@ -515,8 +515,11 @@ label {
   position: relative;
   width: min(480px, 92%);
   max-width: 500px;
+  max-height: calc(100vh - 40px);
   background: #1a1a1a;
   color: #fff;
+  display: flex;
+  flex-direction: column;
   padding: 24px;
   border-radius: 8px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8);
@@ -529,6 +532,7 @@ label {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .modal-header-tier2 h2 {
@@ -560,6 +564,9 @@ label {
 /* Tier-2 body */
 .modal-body-tier2 {
   margin-bottom: 20px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* Required for flex child scrolling */
 }
 
 .modal-body-tier2 label {
@@ -719,6 +726,7 @@ label {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .modal-actions-tier2 button {
@@ -1463,13 +1471,13 @@ label {
   color: rgba(220, 240, 255, 1);
 }
 
-/* Popup close button (X) - above image, always visible when popup is open */
+/* Popup close button (X) - above image, appears after ribbon is dismissed */
 .popup-close-btn {
   position: absolute;
   top: -40px;
   right: 0;
-  width: 32px;
-  height: 32px;
+  width: 29px;
+  height: 29px;
   border: none;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.7);
@@ -1487,8 +1495,8 @@ label {
   pointer-events: none;
 }
 
-/* Show popup close button when popup is open */
-.popup-overlay.is-open .popup-close-btn {
+/* Show popup close button only after ribbon is dismissed */
+.popup-overlay.is-open.hide-info .popup-close-btn {
   opacity: 1;
   pointer-events: auto;
 }
