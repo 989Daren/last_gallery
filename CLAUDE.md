@@ -172,7 +172,7 @@ Pulsing directional arrows that teach users to scroll in multiple directions.
 - Default: `8375`
 - Can be overridden via environment variable `TLG_ADMIN_PIN`
 - **Security**: PIN is validated server-side only; never exposed to client-side JavaScript
-- PIN stored in IIFE closure scope after successful server validation, cleared on modal close
+- PIN stored in IIFE closure scope after successful server validation, persists until page refresh
 
 ## JavaScript Architecture
 
@@ -191,7 +191,7 @@ window.isAdminActive()            // Check admin session (from admin.js)
 ### admin.js Module
 - IIFE pattern with initialization guards
 - PIN validated server-side via `/api/admin/history_status` before unlocking modal
-- PIN stored in closure-scoped `_adminPin` variable (not exposed to window)
+- PIN stored in closure-scoped `_adminPin` variable (not exposed to window), persists until page refresh
 - Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
 - Guards prevent duplicate event handler registration
 
@@ -205,7 +205,7 @@ window.isAdminActive()            // Check admin session (from admin.js)
 ### Security Fix: Admin PIN
 - **Removed client-side PIN exposure**: `window.ADMIN_PIN` no longer exists; PIN cannot be discovered via browser dev tools
 - **Server-side validation**: PIN is validated via `/api/admin/history_status` endpoint before unlocking admin modal
-- **Memory safety**: PIN stored in IIFE closure scope only, cleared when modal closes
+- **Session persistence**: PIN stored in IIFE closure scope only, persists until page refresh (closing modal does not require re-entry)
 
 ### Bug Fix
 - **Tile labels persist after admin actions**: Added `refreshAdminOverlays()` call after every `refreshWallFromServer()` so tile labels remain visible after clear/move/undo/shuffle operations
