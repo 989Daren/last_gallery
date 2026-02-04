@@ -164,7 +164,10 @@ Tiles are classified by size and numbered sequentially:
 
 ## Welcome Popup
 - Displays on every page load
-- Text: "Welcome to The Last Gallery", "Scroll to explore", "Click images for full size"
+- **Layout**: Centered title, logo (left) + bullet instructions (right), Enter button below
+- **Logo**: `static/images/logo.svg` (168px desktop, 108px mobile)
+- **Content**: "Welcome to The Last Gallery" title, bulleted instructions
+- **Animation**: Diagonal reflection sweep across modal (simpleWelcomeSheen)
 - Dismissed via "Enter" button, backdrop click, or Escape key
 - Triggers navigation arrows on dismissal
 
@@ -232,6 +235,14 @@ window.isAdminActive()            // Check admin session (from admin.js)
 - **Flexbox layout**: Modal card now uses `display: flex; flex-direction: column` with `max-height: calc(100vh - 40px)`
 - **Fixed header/footer**: Header (`flex-shrink: 0`) and action buttons (`flex-shrink: 0`) stay visible
 - **Scrollable body**: Form content scrolls with `flex: 1; overflow-y: auto; min-height: 0`
+
+### Welcome Modal Redesign
+- **Added logo**: `static/images/logo.svg` displayed in welcome modal
+- **Horizontal layout**: Centered title at top, logo on left with bullet instructions on right
+- **Vertical centering**: Logo and bullet text vertically aligned using `align-items: center`
+- **Responsive sizing**: Desktop (168px logo, 31px title, 20px bullets) / Mobile (108px logo, 25px title, 18px bullets)
+- **Maintains horizontal layout on mobile**: Elements scale down but don't stack
+- **Cleanup**: Removed deprecated `.simpleWelcomeText` class, updated legacy comments
 
 ---
 
