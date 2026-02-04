@@ -875,11 +875,14 @@ def shuffle_tiles():
         conn = get_db()
         cursor = conn.cursor()
 
-        # Get current tile assignments
-        cursor.execute("SELECT tile_id, asset_id FROM tiles WHERE asset_id IS NOT NULL")
-        current_tiles = [dict(row) for row in cursor.fetchall()]
+        # Get ALL tiles from database and extract asset IDs
+        cursor.execute("SELECT tile_id, asset_id FROM tiles")
+        all_tiles = [dict(row) for row in cursor.fetchall()]
+        
+        # Get only the asset IDs (not None)
+        asset_ids = [t["asset_id"] for t in all_tiles if t["asset_id"] is not None]
 
-        if not current_tiles:
+        if not asset_ids:
             conn.close()
             return jsonify({
                 "ok": True,
@@ -888,28 +891,21 @@ def shuffle_tiles():
                 "non_shuffle_count": len(_undo_history)
             })
 
-        # Get ALL available tiles from SVG (any size)
-        tiles = get_tiles_from_svg()
-        all_tile_ids = [t["id"] for t in tiles]
-
-        num_assignments = len(current_tiles)
-
-        if num_assignments > len(all_tile_ids):
-            conn.close()
-            return jsonify({"ok": False, "error": "More assignments than available tiles"}), 400
-
-        # Randomly select new tile positions from ALL tiles (any size)
+        # Get ALL tile IDs from database
+        all_tile_ids = [t["tile_id"] for t in all_tiles]
+        
+        # Shuffle both lists independently for true randomization
+        random.shuffle(asset_ids)
         random.shuffle(all_tile_ids)
-        new_tile_ids = all_tile_ids[:num_assignments]
 
         # Clear all tile assignments
-        cursor.execute("DELETE FROM tiles")
+        cursor.execute("UPDATE tiles SET asset_id = NULL, updated_at = datetime('now')")
 
-        # Reassign with new tile IDs
-        for i, old_tile in enumerate(current_tiles):
+        # Assign shuffled assets to shuffled tile positions
+        for i, asset_id in enumerate(asset_ids):
             cursor.execute(
-                "INSERT INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
-                (new_tile_ids[i], old_tile["asset_id"])
+                "UPDATE tiles SET asset_id = ?, updated_at = datetime('now') WHERE tile_id = ?",
+                (asset_id, all_tile_ids[i])
             )
 
         conn.commit()
@@ -917,7 +913,7 @@ def shuffle_tiles():
 
         return jsonify({
             "ok": True,
-            "message": f"Shuffled {num_assignments} tiles",
+            "message": f"Shuffled {len(asset_ids)} tiles",
             "shuffle_count": len(_shuffle_history),
             "non_shuffle_count": len(_undo_history)
         })
