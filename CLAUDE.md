@@ -24,6 +24,7 @@ python app.py
 | `app.py` | Flask application, all API endpoints |
 | `db.py` | Database connection, schema initialization, versioned migrations |
 | `data/gallery.db` | SQLite database (assets + tiles + schema_version tables) |
+| `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
 
 ### Frontend
 | File | Purpose |
@@ -77,6 +78,31 @@ CREATE TABLE tiles (
 ```
 
 Current schema version: **3**
+
+## Tile Registration
+
+Tiles are defined visually in `grid_full.svg` but must exist in the `tiles` database table for the app to use them.
+
+### How Tiles Get Registered
+1. **On Upload**: `INSERT OR REPLACE INTO tiles` creates the tile entry if it doesn't exist
+2. **After SVG Extension**: Run `grid utilities/repair_tiles.py` to sync database with new SVG tiles
+
+### Extending the Grid
+When adding tiles to `grid_full.svg`:
+1. Add new `<rect>` elements to the SVG
+2. Run `python "grid utilities/repair_tiles.py"` from project root
+3. Script parses SVG, finds new tile IDs, inserts them into database
+4. Existing artwork assignments are preserved
+
+### Tile ID Assignment
+Tiles are classified by size and numbered sequentially:
+| Size Class | Width Range (design units) | Prefix | Example |
+|------------|---------------------------|--------|---------|
+| XS | 60-128 | X | X1, X2, X3... |
+| S | 128-213 | S | S1, S2... |
+| M | 213-298 | M | M1, M2... |
+| LG | 298-425 | L | L1, L2... |
+| XLG | 425-600 | XL | XL1, XL2... |
 
 ## API Endpoints
 
