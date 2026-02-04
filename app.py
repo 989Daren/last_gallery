@@ -3,8 +3,10 @@ import os
 import json
 import uuid
 import re
+import io
 import xml.etree.ElementTree as ET
 from werkzeug.utils import secure_filename
+from PIL import Image
 from db import init_db, get_db
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
@@ -29,6 +31,10 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # Minimal admin pin (only used if you later re-enable admin routes)
 ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "8375")
+
+# Popup image optimization settings
+POPUP_MAX_DIMENSION = 2560  # Max pixels on longest side
+POPUP_JPEG_QUALITY = 90
 
 
 def load_grid_color():
@@ -189,6 +195,70 @@ def _allowed_ext(filename: str):
     return ext in (".jpg", ".jpeg", ".png", ".webp")
 
 
+def _optimize_image(file_storage, max_dimension=POPUP_MAX_DIMENSION, quality=POPUP_JPEG_QUALITY):
+    """Resize image if needed and convert to optimized JPEG.
+
+    Args:
+        file_storage: Werkzeug FileStorage object
+        max_dimension: Max pixels on longest side (resizes proportionally if exceeded)
+        quality: JPEG quality (1-100)
+
+    Returns:
+        BytesIO buffer containing optimized JPEG
+    """
+    img = Image.open(file_storage)
+
+    # Handle EXIF orientation (auto-rotate based on metadata)
+    try:
+        from PIL import ExifTags
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation] == 'Orientation':
+                break
+        exif = img._getexif()
+        if exif is not None:
+            orientation_value = exif.get(orientation)
+            if orientation_value == 3:
+                img = img.rotate(180, expand=True)
+            elif orientation_value == 6:
+                img = img.rotate(270, expand=True)
+            elif orientation_value == 8:
+                img = img.rotate(90, expand=True)
+    except (AttributeError, KeyError, IndexError, TypeError):
+        # No EXIF data or orientation tag
+        pass
+
+    # Convert to RGB if necessary (RGBA, P mode, etc.)
+    if img.mode in ('RGBA', 'P', 'LA', 'L'):
+        # Create white background for transparency
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        else:
+            img = img.convert('RGB')
+    elif img.mode != 'RGB':
+        img = img.convert('RGB')
+
+    # Resize if exceeds max dimension
+    width, height = img.size
+    max_current = max(width, height)
+
+    if max_current > max_dimension:
+        ratio = max_dimension / max_current
+        new_width = int(width * ratio)
+        new_height = int(height * ratio)
+        img = img.resize((new_width, new_height), Image.LANCZOS)
+
+    # Save to buffer as optimized JPEG
+    buffer = io.BytesIO()
+    img.save(buffer, format='JPEG', quality=quality, optimize=True)
+    buffer.seek(0)
+
+    return buffer
+
+
 def _save_upload_file(fs, prefix: str, asset_id: str):
     """Save an uploaded file storage to UPLOAD_DIR with a stable name."""
     original = secure_filename(fs.filename or "")
@@ -199,6 +269,21 @@ def _save_upload_file(fs, prefix: str, asset_id: str):
     filename = f"{prefix}_{asset_id}{ext}"
     path = os.path.join(UPLOAD_DIR, filename)
     fs.save(path)
+    return filename
+
+
+def _save_optimized_popup(fs, asset_id: str):
+    """Optimize and save popup image as JPEG.
+
+    Resizes if larger than POPUP_MAX_DIMENSION, converts to JPEG at POPUP_JPEG_QUALITY.
+    """
+    optimized_buffer = _optimize_image(fs)
+    filename = f"popup_{asset_id}.jpg"
+    path = os.path.join(UPLOAD_DIR, filename)
+
+    with open(path, 'wb') as f:
+        f.write(optimized_buffer.read())
+
     return filename
 
 
@@ -326,7 +411,7 @@ def upload_assets():
     file_id = str(uuid.uuid4())
 
     tile_filename = _save_upload_file(tile_fs, "tile", file_id)
-    popup_filename = _save_upload_file(popup_fs, "popup", file_id)
+    popup_filename = _save_optimized_popup(popup_fs, file_id)
 
     tile_url = f"/uploads/{tile_filename}"
     popup_url = f"/uploads/{popup_filename}"

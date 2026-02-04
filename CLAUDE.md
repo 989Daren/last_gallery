@@ -7,10 +7,11 @@ A Flask-based web gallery application where users can upload artwork images that
 - **Backend**: Python/Flask
 - **Database**: SQLite (single source of truth) with versioned migrations
 - **Frontend**: Vanilla JavaScript (modular), CSS
-- **Image Processing**: Cropper.js for client-side cropping
+- **Image Processing**: Cropper.js (client-side cropping), Pillow (server-side optimization)
 
 ## How to Run
 ```bash
+pip install -r requirements.txt
 python app.py
 ```
 - Local: http://127.0.0.1:5000
@@ -158,9 +159,17 @@ Tiles are classified by size and numbered sequentially:
 ## Upload Flow
 1. User selects image → Cropper.js allows square crop
 2. Upload sends: `tile_image` (512x512 thumbnail) + `popup_image` (original)
-3. Server saves to `/uploads/` directory, creates DB records
+3. Server optimizes popup image (see below) and saves to `/uploads/`, creates DB records
 4. Metadata modal appears → user enters required + optional fields → saved to DB
 5. Wall refreshes to show new image
+
+### Image Optimization (server-side)
+- **Tile image**: Saved as-is (already 512x512 JPEG from client)
+- **Popup image**: Optimized via Pillow before saving:
+  - Resized proportionally if longest side exceeds 2560px
+  - Converted to JPEG at 90% quality
+  - EXIF orientation auto-corrected
+  - Transparent PNGs get white background
 
 ## Welcome Popup
 - Displays on every page load
@@ -243,6 +252,14 @@ window.isAdminActive()            // Check admin session (from admin.js)
 - **Responsive sizing**: Desktop (168px logo, 31px title, 20px bullets) / Mobile (108px logo, 25px title, 18px bullets)
 - **Maintains horizontal layout on mobile**: Elements scale down but don't stack
 - **Cleanup**: Removed deprecated `.simpleWelcomeText` class, updated legacy comments
+
+### Server-side Image Optimization
+- **Popup image optimization**: Large uploads now resized server-side using Pillow
+- **Max dimension**: 2560px on longest side (proportional scaling)
+- **Format conversion**: All popup images converted to JPEG at 90% quality
+- **EXIF handling**: Auto-rotates based on EXIF orientation metadata
+- **Transparency handling**: RGBA/PNG images get white background
+- **New dependency**: Added `requirements.txt` with Flask and Pillow
 
 ---
 
