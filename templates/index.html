@@ -56,8 +56,13 @@
   <div id="simpleWelcome" class="simpleWelcome hidden" role="dialog" aria-modal="true" aria-label="Welcome">
     <div class="simpleWelcomeCard" role="document">
       <div class="simpleWelcomeTitle">Welcome to The Last Gallery</div>
-      <div class="simpleWelcomeText">Scroll to explore</div>
-      <div class="simpleWelcomeText">Click images for full size</div>
+      <div class="welcome-content-row">
+        <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="The Last Gallery" class="welcome-logo">
+        <ul class="welcome-instructions">
+          <li>Scroll to explore</li>
+          <li>Click images for full size</li>
+        </ul>
+      </div>
       <button id="simpleWelcomeEnterBtn" class="simpleWelcomeBtn" type="button">Enter</button>
     </div>
   </div>

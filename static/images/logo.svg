@@ -1,0 +1,35 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!--Generator: Xara Designer (www.xara.com), SVG filter version: 6.7.0.0-->
+<svg fill="none" fill-rule="evenodd" stroke="black" stroke-width="0.501" stroke-linejoin="bevel" stroke-miterlimit="10" font-family="Times New Roman" font-size="16" style="font-variant-ligatures:none" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" version="1.1" overflow="visible" width="383.945pt" height="378.723pt" viewBox="0 -496.182 383.945 378.723">
+ <defs>
+  <linearGradient id="LinearGradient" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="132.167" y2="0" gradientTransform="translate(193.103 202.784) rotate(39.7087) skewX(7.5537)">
+   <stop offset="0" stop-color="#c4209b"/>
+   <stop offset="1" stop-color="#5c47ea"/>
+  </linearGradient>
+  <linearGradient id="LinearGradient_1" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="70.09" y2="0" gradientTransform="translate(179.623 233.756) rotate(123.954) skewX(-7.70151)">
+   <stop offset="0" stop-color="#c4209b"/>
+   <stop offset="1" stop-color="#5c47ea"/>
+  </linearGradient>
+  <linearGradient id="LinearGradient_2" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="79.581" y2="0" gradientTransform="translate(89.893 335.428) rotate(-46.6252) skewX(-7.92518)">
+   <stop offset="0" stop-color="#fdaa1b"/>
+   <stop offset="1" stop-color="#e52a27"/>
+  </linearGradient>
+  <linearGradient id="LinearGradient_3" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="62.977" y2="0" gradientTransform="translate(197.674 214.765) rotate(-35.773) skewX(-7.16356)">
+   <stop offset="0" stop-color="#fdaa1b"/>
+   <stop offset="1" stop-color="#e52a27"/>
+  </linearGradient>
+ </defs>
+ <g id="Layer 1" transform="scale(1 -1)">
+  <g id="Group">
+   <path d="M 253.211,174.164 C 266.004,182.599 277.957,192.419 277.613,222.665 L 277.613,280.932 L 233.326,280.632 C 219.254,282.654 213.937,292.897 212.739,305.466 L 212.739,328.548 L 325.793,328.548 L 325.793,210.971 C 323.737,191.522 312.877,177.606 291.223,174.443 L 253.211,174.164 Z" stroke-linejoin="miter" stroke="none" stroke-width="0.287" marker-start="none" marker-end="none" fill="url(#LinearGradient)"/>
+   <path d="M 159.292,387.435 L 159.292,235.508 C 135.904,234.337 116.078,250.117 115.565,278.458 L 115.822,407.006 C 117.596,423.663 125.717,437.761 146.831,438.859 L 290.457,438.859 C 304.697,438.568 324.776,431.257 326.045,402.039 L 326.045,375.163 C 320.884,382.722 313.865,387.079 304.697,387.728 L 159.292,387.435 Z" stroke-linejoin="miter" stroke="none" stroke-width="0.287" marker-start="none" marker-end="none" fill="url(#LinearGradient_1)"/>
+   <path d="M 122.177,438.267 L 87.858,438.568 C 69.02,436.393 60.756,424.112 58.115,406.422 L 58.115,258.295 C 59.174,246.231 64.188,237.456 77.436,235.508 L 124.717,235.508 C 114.01,242.244 106.426,252.804 105.909,272.027 L 105.909,409.055 C 106.927,422.687 112.47,432.311 122.177,438.267 Z" stroke-linejoin="miter" stroke="none" stroke-width="0.144" marker-start="none" marker-end="none" fill="url(#LinearGradient_2)"/>
+   <path d="M 58.115,236.676 C 62.994,230.999 68.225,225.623 78.962,224.991 L 266.564,224.991 C 268.6,203.952 260.713,178.825 230.98,174.443 L 92.938,174.155 C 72.095,176.198 59.562,193.469 58.115,213.301 L 58.115,236.676 Z" stroke-linejoin="miter" stroke="none" stroke-width="0.144" marker-start="none" marker-end="none" fill="url(#LinearGradient_3)"/>
+   <path d="M 333.874,118.648 L 333.874,494.992" fill="none" stroke-width="2.379" stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round"/>
+   <path d="M 50.061,118.648 L 50.061,494.992" fill="none" stroke-width="2.379" stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round"/>
+   <path d="M 382.753,447.207 L 1.189,447.207" fill="none" stroke-width="2.379" stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round"/>
+   <path d="M 382.755,165.864 L 1.937,165.864" fill="none" stroke-width="2.379" stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+ </g>
+</svg>

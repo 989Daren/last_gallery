@@ -1612,7 +1612,7 @@ label {
 }
 
 /* =========================
-   Simple Welcome Banner (DEV)
+   Welcome Modal
    ========================= */
 
 .simpleWelcome {
@@ -1629,20 +1629,21 @@ label {
 }
 
 .simpleWelcomeCard {
-  width: min(92vw, 420px);
+  /* Adjustable: modal container width */
+  width: min(92vw, 550px);
   background: #111;
   color: #fff;
   border: 1px solid rgba(255,255,255,0.15);
   border-radius: 14px;
-  padding: 18px 16px;
-  text-align: center;
+  padding: 24px 28px;
+  text-align: left;
   box-shadow: 0 12px 40px rgba(0,0,0,0.45);
   position: relative;
   overflow: hidden;
 }
 
 
-/* Temporary looping spotlight sweep (replace later) */
+/* Diagonal reflection animation - sweeps across modal */
 .simpleWelcomeCard::before {
   content: "";
   position: absolute;
@@ -1664,16 +1665,86 @@ label {
   0%   { transform: translateX(-80%); }
   100% { transform: translateX(80%); }
 }
+/* Welcome modal title - spans full width at top */
 .simpleWelcomeTitle {
-  font-size: 20px;
+  font-size: 31px;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin: 0 0 16px 0;
+  text-align: center;
 }
 
-.simpleWelcomeText {
-  font-size: 14px;
+/* Welcome modal horizontal layout: logo left, bullets right */
+.welcome-content-row {
+  display: flex;
+  align-items: center; /* Vertically center bullets on logo */
+  /* Adjustable: gap between logo and text */
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.welcome-logo {
+  /* Adjustable: logo size (desktop) */
+  width: 168px;
+  height: 168px;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+.welcome-instructions {
+  list-style: disc;
+  padding-left: 20px;
+  margin: 0;
+  text-align: left;
+}
+
+.welcome-instructions li {
+  margin-bottom: 8px;
+  font-size: 20px;
   opacity: 0.9;
-  margin-bottom: 14px;
+  line-height: 1.4;
+}
+
+.welcome-instructions li:last-child {
+  margin-bottom: 0;
+}
+
+/* Mobile responsive: maintain horizontal layout, scale down */
+@media (max-width: 768px) {
+  .simpleWelcomeCard {
+    /* Adjustable: mobile modal width */
+    width: min(92vw, 360px);
+    padding: 18px 16px;
+  }
+
+  .simpleWelcomeTitle {
+    font-size: 25px;
+    margin-bottom: 12px;
+  }
+
+  .welcome-content-row {
+    /* Adjustable: mobile gap */
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .welcome-logo {
+    /* Adjustable: logo size (mobile) */
+    width: 108px;
+    height: 108px;
+  }
+
+  .welcome-instructions {
+    padding-left: 18px;
+  }
+
+  .welcome-instructions li {
+    font-size: 18px;
+    margin-bottom: 6px;
+  }
+
+  .simpleWelcomeBtn {
+    padding: 10px 12px;
+  }
 }
 
 .simpleWelcomeBtn {
