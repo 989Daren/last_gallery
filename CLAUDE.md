@@ -221,6 +221,20 @@ window.isAdminActive()            // Check admin session (from admin.js)
 - Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
 - Guards prevent duplicate event handler registration
 
+## Recent Changes (2026-02-04)
+
+### Popup Close Button UX
+- **Delayed visibility**: Popup close button (X above image) now appears only after ribbon is dismissed, not immediately when popup opens
+- **Smaller background**: Reduced circle size from 32px to 29px while keeping X icon at 22px
+
+### Mobile Responsiveness
+- **Metadata modal scroll fix**: Modal was taller than viewport on mobile, hiding header and Save button
+- **Flexbox layout**: Modal card now uses `display: flex; flex-direction: column` with `max-height: calc(100vh - 40px)`
+- **Fixed header/footer**: Header (`flex-shrink: 0`) and action buttons (`flex-shrink: 0`) stay visible
+- **Scrollable body**: Form content scrolls with `flex: 1; overflow-y: auto; min-height: 0`
+
+---
+
 ## Recent Changes (2026-02-03)
 
 ### Admin Modal Improvements
