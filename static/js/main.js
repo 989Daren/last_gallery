@@ -232,6 +232,285 @@ function throttle(func, delay) {
   };
 }
 
+// ============================
+// Pinch-to-Zoom (Touch devices only)
+// ============================
+// Architecture:
+//   transform-origin: 0 0
+//   transform: translate(tx, ty) scale(s)
+//
+// Behavior:
+//   - At scale=1: No transform, native scroll works
+//   - At scale<1: Grid scales + centers, with bounded panning
+//   - At minScale: Grid fits viewport width exactly (edge-to-edge)
+//   - Double-tap: Resets to scale=1
+// ============================
+const zoomState = {
+  // Scale
+  scale: 1.0,
+  minScale: 0.3,
+  maxScale: 1.0,
+
+  // Gesture tracking
+  isPinching: false,
+  isPanning: false,
+  initialDistance: 0,
+  initialScale: 1.0,
+
+  // Wall dimensions (cached on init)
+  wallWidth: 0,
+  wallHeight: 0,
+
+  // Pan offset
+  panX: 0,
+  panY: 0,
+  initialPanX: 0,
+  initialPanY: 0,
+  panStartX: 0,
+  panStartY: 0,
+  edgePadding: 20,
+
+  // Double-tap detection
+  lastTapTime: 0,
+  lastTapX: 0,
+  lastTapY: 0,
+  tapStartX: undefined,
+  tapStartY: undefined,
+  tapMoved: false,
+  doubleTapThreshold: 300,
+  doubleTapDistance: 50,
+
+  initialized: false
+};
+
+function initZoom() {
+  if (zoomState.initialized) return;
+
+  const wall = document.getElementById('galleryWall');
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  const zoomWrapper = document.querySelector('.zoom-wrapper');
+  if (!wall || !wrapper || !zoomWrapper) return;
+
+  zoomState.wallWidth = wall.scrollWidth;
+  zoomState.wallHeight = wall.scrollHeight;
+  recalculateZoomLimits();
+
+  wrapper.addEventListener('touchstart', handleZoomTouchStart, { passive: false });
+  wrapper.addEventListener('touchmove', handleZoomTouchMove, { passive: false });
+  wrapper.addEventListener('touchend', handleZoomTouchEnd);
+  wrapper.addEventListener('touchcancel', handleZoomTouchEnd);
+
+  window.addEventListener('resize', recalculateZoomLimits);
+  window.addEventListener('orientationchange', () => setTimeout(recalculateZoomLimits, 100));
+
+  zoomState.initialized = true;
+  if (DEBUG) console.log('[ZOOM] Initialized', zoomState);
+}
+
+function recalculateZoomLimits() {
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  if (!wrapper || !zoomState.wallWidth) return;
+
+  const viewportWidth = wrapper.clientWidth;
+  zoomState.minScale = Math.min(viewportWidth / zoomState.wallWidth, 1.0);
+
+  if (zoomState.scale < 1.0) {
+    zoomState.scale = Math.max(zoomState.minScale, Math.min(zoomState.maxScale, zoomState.scale));
+    applyZoomTransform();
+  }
+}
+
+function isZoomDisabled() {
+  const welcomeModal = document.getElementById('simpleWelcome');
+  if (welcomeModal && !welcomeModal.classList.contains('hidden')) return true;
+  if (typeof isArtworkPopupOpen === 'function' && isArtworkPopupOpen()) return true;
+  const uploadModal = document.getElementById('uploadModal');
+  if (uploadModal && uploadModal.classList.contains('is-open')) return true;
+  const adminModal = document.getElementById('adminModal');
+  if (adminModal && !adminModal.classList.contains('hidden')) return true;
+  return false;
+}
+
+function getTouchDistance(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function handleZoomTouchStart(e) {
+  if (isZoomDisabled()) return;
+
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    zoomState.isPinching = true;
+    zoomState.isPanning = false;
+    zoomState.initialDistance = getTouchDistance(e.touches);
+    zoomState.initialScale = zoomState.scale;
+    e.currentTarget.classList.add('is-pinching');
+  } else if (e.touches.length === 1) {
+    zoomState.tapStartX = e.touches[0].clientX;
+    zoomState.tapStartY = e.touches[0].clientY;
+    zoomState.tapMoved = false;
+
+    if (zoomState.scale < 0.999) {
+      zoomState.isPanning = true;
+      zoomState.panStartX = e.touches[0].clientX;
+      zoomState.panStartY = e.touches[0].clientY;
+      zoomState.initialPanX = zoomState.panX;
+      zoomState.initialPanY = zoomState.panY;
+    }
+  }
+}
+
+function handleZoomTouchMove(e) {
+  if (isZoomDisabled()) return;
+
+  if (zoomState.isPinching && e.touches.length === 2) {
+    e.preventDefault();
+    const scaleChange = getTouchDistance(e.touches) / zoomState.initialDistance;
+    zoomState.scale = Math.max(zoomState.minScale, Math.min(zoomState.maxScale, zoomState.initialScale * scaleChange));
+    zoomState.panX = 0;
+    zoomState.panY = 0;
+    applyZoomTransform();
+  } else if (e.touches.length === 1) {
+    if (zoomState.tapStartX !== undefined) {
+      const dx = e.touches[0].clientX - zoomState.tapStartX;
+      const dy = e.touches[0].clientY - zoomState.tapStartY;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) zoomState.tapMoved = true;
+    }
+
+    if (zoomState.isPanning && zoomState.scale < 0.999) {
+      e.preventDefault();
+      zoomState.panX = zoomState.initialPanX + (e.touches[0].clientX - zoomState.panStartX);
+      zoomState.panY = zoomState.initialPanY + (e.touches[0].clientY - zoomState.panStartY);
+      applyZoomTransform();
+    }
+  }
+}
+
+function handleZoomTouchEnd(e) {
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+
+  // Double-tap detection
+  if (e.touches.length === 0 && !zoomState.isPinching && !zoomState.tapMoved) {
+    const now = Date.now();
+    const dx = Math.abs((zoomState.tapStartX || 0) - zoomState.lastTapX);
+    const dy = Math.abs((zoomState.tapStartY || 0) - zoomState.lastTapY);
+
+    if (now - zoomState.lastTapTime < zoomState.doubleTapThreshold && Math.sqrt(dx*dx + dy*dy) < zoomState.doubleTapDistance) {
+      resetZoom();
+      zoomState.lastTapTime = 0;
+    } else {
+      zoomState.lastTapTime = now;
+      zoomState.lastTapX = zoomState.tapStartX || 0;
+      zoomState.lastTapY = zoomState.tapStartY || 0;
+    }
+  }
+
+  if (zoomState.isPinching) {
+    wrapper?.classList.remove('is-pinching');
+    if (zoomState.scale > 0.95) resetZoom();
+  }
+
+  zoomState.isPinching = false;
+  zoomState.isPanning = false;
+  zoomState.tapStartX = undefined;
+  zoomState.tapStartY = undefined;
+}
+
+function applyZoomTransform() {
+  const zoomWrapper = document.querySelector('.zoom-wrapper');
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  if (!zoomWrapper || !wrapper) return;
+
+  const headerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
+  const viewportWidth = wrapper.clientWidth;
+  const viewportHeight = window.innerHeight - headerHeight;
+  const scaledWidth = zoomState.wallWidth * zoomState.scale;
+  const scaledHeight = zoomState.wallHeight * zoomState.scale;
+  const padding = zoomState.edgePadding;
+
+  // At scale=1: no transform, native scroll
+  if (zoomState.scale >= 0.999) {
+    zoomWrapper.style.transform = '';
+    zoomState.panX = 0;
+    zoomState.panY = 0;
+    unlockScroll();
+    return;
+  }
+
+  lockScroll();
+
+  // Base translation to center grid in viewport
+  let baseTx = (viewportWidth - scaledWidth) / 2;
+  let baseTy = (viewportHeight - scaledHeight) / 2;
+
+  // X-axis: At minScale, grid fits width exactly (edge-to-edge, no pan)
+  let clampedPanX = zoomState.panX;
+  if (scaledWidth <= viewportWidth + 5) {
+    clampedPanX = 0;
+    if (Math.abs(scaledWidth - viewportWidth) < 5) baseTx = 0;
+  } else {
+    const minPanX = viewportWidth - scaledWidth - baseTx - padding;
+    const maxPanX = -baseTx + padding;
+    clampedPanX = Math.max(minPanX, Math.min(maxPanX, clampedPanX));
+  }
+
+  // Y-axis: Center if fits, otherwise allow bounded pan
+  let clampedPanY = zoomState.panY;
+  if (scaledHeight + 2 * padding <= viewportHeight) {
+    clampedPanY = 0;
+  } else {
+    const minPanY = viewportHeight - scaledHeight - baseTy - padding;
+    const maxPanY = -baseTy + padding;
+    clampedPanY = Math.max(minPanY, Math.min(maxPanY, clampedPanY));
+  }
+
+  zoomState.panX = clampedPanX;
+  zoomState.panY = clampedPanY;
+
+  zoomWrapper.style.transform = `translate(${baseTx + clampedPanX}px, ${baseTy + clampedPanY}px) scale(${zoomState.scale})`;
+}
+
+let scrollLocked = false;
+
+function lockScroll() {
+  if (scrollLocked) return;
+  window.scrollTo(0, 0);
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  if (wrapper) {
+    wrapper.scrollLeft = 0;
+    wrapper.style.overflow = 'hidden';
+  }
+  document.body.style.overflow = 'hidden';
+  document.documentElement.style.overflow = 'hidden';
+  scrollLocked = true;
+}
+
+function unlockScroll() {
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  if (wrapper) {
+    wrapper.style.overflowX = 'auto';
+    wrapper.style.overflowY = 'visible';
+  }
+  scrollLocked = false;
+}
+
+function resetZoom() {
+  zoomState.scale = 1.0;
+  zoomState.panX = 0;
+  zoomState.panY = 0;
+  const zoomWrapper = document.querySelector('.zoom-wrapper');
+  if (zoomWrapper) zoomWrapper.style.transform = '';
+  unlockScroll();
+}
+
+// Expose for external use (e.g., after wall refresh)
+window.initZoom = initZoom;
+window.resetZoom = resetZoom;
+
 // ==============================
 // ConicalNav: Back button closes UI layers (no history weirdness).
 // Hash encodes layer stack: "", "#art", "#art/ribbon", "#upload".
@@ -1292,6 +1571,9 @@ document.addEventListener("DOMContentLoaded", () => {
       window.addEventListener('orientationchange', () => {
         setTimeout(() => finalizeAfterRender(wall), 50);
       });
+
+      // Initialize pinch-to-zoom after wall is fully rendered
+      requestAnimationFrame(() => initZoom());
     } catch (err) {
       error("Failed to load SVG grid:", err);
       wall.innerHTML = `

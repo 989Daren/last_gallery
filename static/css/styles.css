@@ -292,6 +292,20 @@ label {
   background: var(--wall-bg);
 }
 
+/* During pinch gesture - prevent text selection and browser gestures */
+.gallery-wall-wrapper.is-pinching {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+/* Zoom wrapper: receives scale + translate transform */
+/* Origin 0,0 with translate positions the scaled grid centered in viewport */
+.zoom-wrapper {
+  transform-origin: 0 0;
+  will-change: transform;     /* GPU layer hint for smooth zoom */
+}
+
 .gallery-wall {
   position: relative;
   margin: 0 auto;   /* centers the entire grid */
