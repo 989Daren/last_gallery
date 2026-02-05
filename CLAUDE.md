@@ -222,6 +222,7 @@ Custom zoom for touch devices allowing users to see the entire gallery at once.
 - **Behavior at max zoom-out**: Grid fits viewport width exactly (no horizontal padding), centered vertically
 - **Boundary clamping**: Can't pan past grid edges (20px padding)
 - **Disabled during**: Welcome modal, upload modal, admin modal, artwork popup
+- **Auto-reset**: Zoom resets to 1.0x after wall refresh (shuffle, clear, move, undo)
 
 ## Admin PIN
 - Default: `8375`
@@ -262,6 +263,7 @@ window.resetZoom()                // Reset zoom to 1.0x
 - **Double-tap**: Resets zoom to 1.0x
 - **Scroll locking**: Native scroll disabled when zoomed out, re-enabled at scale=1
 - **Modal awareness**: Zoom disabled when welcome/upload/admin/popup modals are open
+- **Wall refresh**: Zoom resets to 1.0x after `refreshWallFromServer()` (shuffle, clear, move, undo)
 
 ---
 
