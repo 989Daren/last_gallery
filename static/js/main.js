@@ -416,6 +416,11 @@ function handleZoomTouchEnd(e) {
   zoomState.isPanning = false;
   zoomState.tapStartX = undefined;
   zoomState.tapStartY = undefined;
+
+  // Push hash if zoomed out (enables back button to reset zoom)
+  if (zoomState.scale < 0.999) {
+    window.ConicalNav && window.ConicalNav.pushToMatchUi();
+  }
 }
 
 function applyZoomTransform() {
@@ -498,13 +503,19 @@ function unlockScroll() {
   scrollLocked = false;
 }
 
-function resetZoom() {
+function resetZoom(silent) {
+  const wasZoomed = zoomState.scale < 0.999;
   zoomState.scale = 1.0;
   zoomState.panX = 0;
   zoomState.panY = 0;
   const zoomWrapper = document.querySelector('.zoom-wrapper');
   if (zoomWrapper) zoomWrapper.style.transform = '';
   unlockScroll();
+
+  // Pop history when reset programmatically (not from back button)
+  if (!silent && wasZoomed) {
+    window.ConicalNav && window.ConicalNav.popFromUiClose();
+  }
 }
 
 // Expose for external use (e.g., after wall refresh)
@@ -528,14 +539,18 @@ const ConicalNav = {
   isUploadOpen() {
     return (typeof isUploadModalOpen === "function") ? isUploadModalOpen() : false;
   },
+  isZoomedOut() {
+    return typeof zoomState !== "undefined" && zoomState.scale < 0.999;
+  },
 
   // Choose the desired conical hash based on current UI state
-  // Priority order matches requested close order: ribbon -> art -> upload
+  // Priority order matches requested close order: ribbon -> art -> upload -> zoom
   desiredHash() {
     // If ribbon is open, art is assumed open underneath
     if (this.isRibbonOpen()) return "#art/ribbon";
     if (this.isArtOpen()) return "#art";
     if (this.isUploadOpen()) return "#upload";
+    if (this.isZoomedOut()) return "#zoom";
     return "";
   },
 
@@ -584,6 +599,12 @@ const ConicalNav = {
     // Close upload if hash no longer includes upload/standalone upload
     if (!wantsUpload && !standaloneUpload && this.isUploadOpen()) {
       try { closeUploadModal(true); } catch (e) {}
+    }
+
+    // Reset zoom if hash no longer includes zoom
+    const wantsZoom = stack.includes("zoom");
+    if (!wantsZoom && this.isZoomedOut()) {
+      try { resetZoom(true); } catch (e) {}
     }
 
     // NOTE: We do NOT auto-open layers on forward navigation.
