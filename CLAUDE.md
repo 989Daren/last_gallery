@@ -206,6 +206,23 @@ Pulsing directional arrows that teach users to scroll in multiple directions.
 - **Ribbon close button**: X button in top-right corner of ribbon (visible only when ribbon is shown)
 - **Contact links**: Clickable (email opens mail client, web links open in new tab)
 
+## Pinch-to-Zoom (Mobile)
+Custom zoom for touch devices allowing users to see the entire gallery at once.
+
+- **HTML Structure**:
+  ```
+  .gallery-wall-wrapper (scroll container)
+    └── .zoom-wrapper (receives transform)
+         └── #galleryWall (content)
+  ```
+- **Gestures**:
+  - Two-finger pinch: Zoom in/out
+  - Single-finger drag (when zoomed): Pan within bounds
+  - Double-tap: Reset to 1.0x
+- **Behavior at max zoom-out**: Grid fits viewport width exactly (no horizontal padding), centered vertically
+- **Boundary clamping**: Can't pan past grid edges (20px padding)
+- **Disabled during**: Welcome modal, upload modal, admin modal, artwork popup
+
 ## Admin PIN
 - Default: `8375`
 - Can be overridden via environment variable `TLG_ADMIN_PIN`
@@ -224,6 +241,8 @@ window.refreshWallFromServer()    // Refresh wall from database
 window.captureStateSnapshot()     // Stub for state snapshots
 window.refreshAdminOverlays()     // Refresh admin UI (from admin.js)
 window.isAdminActive()            // Check admin session (from admin.js)
+window.initZoom()                 // Initialize pinch-to-zoom
+window.resetZoom()                // Reset zoom to 1.0x
 ```
 
 ### admin.js Module
@@ -232,6 +251,19 @@ window.isAdminActive()            // Check admin session (from admin.js)
 - PIN stored in closure-scoped `_adminPin` variable (not exposed to window), persists until page refresh
 - Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
 - Guards prevent duplicate event handler registration
+
+## Recent Changes (2026-02-05)
+
+### Pinch-to-Zoom (Mobile)
+- **Architecture**: Separate scroll container (`.gallery-wall-wrapper`) and zoom wrapper (`.zoom-wrapper`)
+- **Transform**: `transform-origin: 0 0` with `translate(tx, ty) scale(s)`
+- **Max zoom-out**: Grid fits viewport width exactly (edge-to-edge), vertically centered with equal padding
+- **Panning**: Single-finger drag when zoomed out, clamped to grid edges (20px padding)
+- **Double-tap**: Resets zoom to 1.0x
+- **Scroll locking**: Native scroll disabled when zoomed out, re-enabled at scale=1
+- **Modal awareness**: Zoom disabled when welcome/upload/admin/popup modals are open
+
+---
 
 ## Recent Changes (2026-02-04)
 
