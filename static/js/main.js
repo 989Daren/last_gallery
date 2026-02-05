@@ -544,14 +544,18 @@ const ConicalNav = {
   },
 
   // Choose the desired conical hash based on current UI state
-  // Priority order matches requested close order: ribbon -> art -> upload -> zoom
+  // Builds compound hash for layered states: #zoom/art/ribbon
   desiredHash() {
-    // If ribbon is open, art is assumed open underneath
-    if (this.isRibbonOpen()) return "#art/ribbon";
-    if (this.isArtOpen()) return "#art";
+    // Upload is full-screen, doesn't layer with zoom
     if (this.isUploadOpen()) return "#upload";
-    if (this.isZoomedOut()) return "#zoom";
-    return "";
+
+    // Build compound hash for zoom + popup layers
+    const parts = [];
+    if (this.isZoomedOut()) parts.push("zoom");
+    if (this.isArtOpen()) parts.push("art");
+    if (this.isRibbonOpen()) parts.push("ribbon");
+
+    return parts.length ? "#" + parts.join("/") : "";
   },
 
   // PUSH a new hash state (creates a history step)
