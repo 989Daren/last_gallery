@@ -1432,6 +1432,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // PHASE 3: Single render after state update (refreshAdminOverlays called inside)
       commitWallStateChange('refreshWallFromServer');
+
+      // Reset zoom to 1.0x so user sees refreshed content at normal scale
+      resetZoom();
     } catch (err) {
       console.error('Failed to refresh wall from server:', err);
     }
