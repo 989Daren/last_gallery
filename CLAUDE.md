@@ -219,6 +219,7 @@ Custom zoom for touch devices allowing users to see the entire gallery at once.
   - Two-finger pinch: Zoom in/out
   - Single-finger drag (when zoomed): Pan within bounds
   - Double-tap: Reset to 1.0x
+  - Back button: Unwinds layers (ribbon → popup → zoom → leave page)
 - **Behavior at max zoom-out**: Grid fits viewport width exactly (no horizontal padding), centered vertically
 - **Boundary clamping**: Can't pan past grid edges (20px padding)
 - **Disabled during**: Welcome modal, upload modal, admin modal, artwork popup
@@ -261,6 +262,7 @@ window.resetZoom()                // Reset zoom to 1.0x
 - **Max zoom-out**: Grid fits viewport width exactly (edge-to-edge), vertically centered with equal padding
 - **Panning**: Single-finger drag when zoomed out, clamped to grid edges (20px padding)
 - **Double-tap**: Resets zoom to 1.0x
+- **Back button**: Integrated with ConicalNav using compound hashes (`#zoom/art/ribbon`); layers unwind in order: ribbon → popup → zoom → leave page
 - **Scroll locking**: Native scroll disabled when zoomed out, re-enabled at scale=1
 - **Modal awareness**: Zoom disabled when welcome/upload/admin/popup modals are open
 - **Wall refresh**: Zoom resets to 1.0x after `refreshWallFromServer()` (shuffle, clear, move, undo)
