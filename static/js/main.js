@@ -40,19 +40,20 @@ function escapeHtml(str) {
 // Center Gallery View
 // Positions viewport at center of gallery (matches zoom-out center point)
 // ============================
+function getCenterScrollPosition() {
+  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  const scrollX = wrapper ? (wrapper.scrollWidth - wrapper.clientWidth) / 2 : 0;
+  const scrollY = Math.max(0, (document.body.scrollHeight - window.innerHeight) / 2);
+  return { scrollX, scrollY };
+}
+
 function centerGalleryView() {
   const wrapper = document.querySelector('.gallery-wall-wrapper');
   if (!wrapper) return;
-
-  // Center horizontally (wrapper handles horizontal scroll)
-  const centerX = (wrapper.scrollWidth - wrapper.clientWidth) / 2;
-  wrapper.scrollLeft = centerX;
-
-  // Center vertically (window handles vertical scroll)
-  const centerY = (document.body.scrollHeight - window.innerHeight) / 2;
-  window.scrollTo(0, Math.max(0, centerY));
-
-  if (DEBUG) console.log('[CENTER] Gallery centered at', centerX, centerY);
+  const { scrollX, scrollY } = getCenterScrollPosition();
+  wrapper.scrollLeft = scrollX;
+  window.scrollTo(0, scrollY);
+  if (DEBUG) console.log('[CENTER] Gallery centered at', scrollX, scrollY);
 }
 
 // ============================
@@ -164,16 +165,6 @@ const zoomState = {
   panStartY: 0,
   edgePadding: 20,
 
-  // Double-tap detection
-  lastTapTime: 0,
-  lastTapX: 0,
-  lastTapY: 0,
-  tapStartX: undefined,
-  tapStartY: undefined,
-  tapMoved: false,
-  doubleTapThreshold: 300,
-  doubleTapDistance: 50,
-
   initialized: false
 };
 
@@ -241,18 +232,13 @@ function handleZoomTouchStart(e) {
     zoomState.initialDistance = getTouchDistance(e.touches);
     zoomState.initialScale = zoomState.scale;
     e.currentTarget.classList.add('is-pinching');
-  } else if (e.touches.length === 1) {
-    zoomState.tapStartX = e.touches[0].clientX;
-    zoomState.tapStartY = e.touches[0].clientY;
-    zoomState.tapMoved = false;
-
-    if (zoomState.scale < 0.999) {
-      zoomState.isPanning = true;
-      zoomState.panStartX = e.touches[0].clientX;
-      zoomState.panStartY = e.touches[0].clientY;
-      zoomState.initialPanX = zoomState.panX;
-      zoomState.initialPanY = zoomState.panY;
-    }
+  } else if (e.touches.length === 1 && zoomState.scale < 0.999) {
+    // Single finger pan when zoomed out
+    zoomState.isPanning = true;
+    zoomState.panStartX = e.touches[0].clientX;
+    zoomState.panStartY = e.touches[0].clientY;
+    zoomState.initialPanX = zoomState.panX;
+    zoomState.initialPanY = zoomState.panY;
   }
 }
 
@@ -266,40 +252,17 @@ function handleZoomTouchMove(e) {
     zoomState.panX = 0;
     zoomState.panY = 0;
     applyZoomTransform();
-  } else if (e.touches.length === 1) {
-    if (zoomState.tapStartX !== undefined) {
-      const dx = e.touches[0].clientX - zoomState.tapStartX;
-      const dy = e.touches[0].clientY - zoomState.tapStartY;
-      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) zoomState.tapMoved = true;
-    }
-
-    if (zoomState.isPanning && zoomState.scale < 0.999) {
-      e.preventDefault();
-      zoomState.panX = zoomState.initialPanX + (e.touches[0].clientX - zoomState.panStartX);
-      zoomState.panY = zoomState.initialPanY + (e.touches[0].clientY - zoomState.panStartY);
-      applyZoomTransform();
-    }
+  } else if (zoomState.isPanning && e.touches.length === 1 && zoomState.scale < 0.999) {
+    // Single finger pan when zoomed out
+    e.preventDefault();
+    zoomState.panX = zoomState.initialPanX + (e.touches[0].clientX - zoomState.panStartX);
+    zoomState.panY = zoomState.initialPanY + (e.touches[0].clientY - zoomState.panStartY);
+    applyZoomTransform();
   }
 }
 
 function handleZoomTouchEnd(e) {
   const wrapper = document.querySelector('.gallery-wall-wrapper');
-
-  // Double-tap detection
-  if (e.touches.length === 0 && !zoomState.isPinching && !zoomState.tapMoved) {
-    const now = Date.now();
-    const dx = Math.abs((zoomState.tapStartX || 0) - zoomState.lastTapX);
-    const dy = Math.abs((zoomState.tapStartY || 0) - zoomState.lastTapY);
-
-    if (now - zoomState.lastTapTime < zoomState.doubleTapThreshold && Math.sqrt(dx*dx + dy*dy) < zoomState.doubleTapDistance) {
-      resetZoom();
-      zoomState.lastTapTime = 0;
-    } else {
-      zoomState.lastTapTime = now;
-      zoomState.lastTapX = zoomState.tapStartX || 0;
-      zoomState.lastTapY = zoomState.tapStartY || 0;
-    }
-  }
 
   if (zoomState.isPinching) {
     wrapper?.classList.remove('is-pinching');
@@ -308,8 +271,6 @@ function handleZoomTouchEnd(e) {
 
   zoomState.isPinching = false;
   zoomState.isPanning = false;
-  zoomState.tapStartX = undefined;
-  zoomState.tapStartY = undefined;
 
   // Push hash if zoomed out (enables back button to reset zoom)
   if (zoomState.scale < 0.999) {
@@ -329,12 +290,13 @@ function applyZoomTransform() {
   const scaledHeight = zoomState.wallHeight * zoomState.scale;
   const padding = zoomState.edgePadding;
 
-  // At scale=1: no transform, native scroll
+  // At scale=1: no transform, native scroll, return to center
   if (zoomState.scale >= 0.999) {
     zoomWrapper.style.transform = '';
     zoomState.panX = 0;
     zoomState.panY = 0;
-    unlockScroll();
+    const { scrollX, scrollY } = getCenterScrollPosition();
+    unlockScrollTo(scrollX, scrollY);
     return;
   }
 
@@ -386,14 +348,18 @@ function lockScroll() {
   scrollLocked = true;
 }
 
-function unlockScroll() {
-  document.body.style.overflow = '';
-  document.documentElement.style.overflow = '';
+// Atomic unlock + position: restores overflow and sets scroll in one operation.
+// Scroll is never visible at 0,0 — position is set before each axis becomes scrollable.
+function unlockScrollTo(scrollX, scrollY) {
   const wrapper = document.querySelector('.gallery-wall-wrapper');
   if (wrapper) {
     wrapper.style.overflowX = 'auto';
     wrapper.style.overflowY = 'visible';
+    wrapper.scrollLeft = scrollX;
   }
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
+  window.scrollTo(0, scrollY);
   scrollLocked = false;
 }
 
@@ -404,10 +370,10 @@ function resetZoom(silent) {
   zoomState.panY = 0;
   const zoomWrapper = document.querySelector('.zoom-wrapper');
   if (zoomWrapper) zoomWrapper.style.transform = '';
-  unlockScroll();
 
-  // Return to centered view (50%, 50%) at 1.0x
-  centerGalleryView();
+  // Atomic unlock + center: no intermediate 0,0 state is ever paintable
+  const { scrollX, scrollY } = getCenterScrollPosition();
+  unlockScrollTo(scrollX, scrollY);
 
   // Pop history when reset programmatically (not from back button)
   if (!silent && wasZoomed) {
