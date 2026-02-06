@@ -1722,6 +1722,12 @@ label {
   margin-bottom: 0;
 }
 
+/* Touch-only elements (e.g. pinch hint in welcome modal) */
+.touch-only { display: none; }
+@media (pointer: coarse) {
+  .touch-only { display: list-item; }
+}
+
 /* Mobile responsive: maintain horizontal layout, scale down */
 @media (max-width: 768px) {
   .simpleWelcomeCard {
@@ -1774,4 +1780,57 @@ label {
 
 .simpleWelcomeBtn:active {
   transform: translateY(1px);
+}
+
+/* =========================
+   Pinch Hint Animation
+   Two dots animate a pinch gesture on touch devices
+   ========================= */
+
+.pinch-hint {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pinchHintFade 2s ease forwards;
+}
+
+.pinch-hint-dot {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  position: absolute;
+}
+
+.pinch-hint-dot--left {
+  animation: pinchFromLeft 1s ease-in-out 2;
+}
+
+.pinch-hint-dot--right {
+  animation: pinchFromRight 1s ease-in-out 2;
+}
+
+@keyframes pinchFromLeft {
+  0%   { transform: translate(-60px, 0); }
+  100% { transform: translate(-15px, 0); }
+}
+
+@keyframes pinchFromRight {
+  0%   { transform: translate(60px, 0); }
+  100% { transform: translate(15px, 0); }
+}
+
+@keyframes pinchHintFade {
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
 }

@@ -57,6 +57,32 @@ function centerGalleryView() {
 }
 
 // ============================
+// Pinch Hint (Touch devices only)
+// Shows two animated dots mimicking a pinch gesture after welcome dismisses
+// ============================
+function showPinchHint() {
+  if (!window.matchMedia('(pointer: coarse)').matches) return;
+
+  const hint = document.createElement('div');
+  hint.className = 'pinch-hint';
+
+  const dotL = document.createElement('div');
+  dotL.className = 'pinch-hint-dot pinch-hint-dot--left';
+
+  const dotR = document.createElement('div');
+  dotR.className = 'pinch-hint-dot pinch-hint-dot--right';
+
+  hint.appendChild(dotL);
+  hint.appendChild(dotR);
+  document.body.appendChild(hint);
+
+  // Remove after the fade-out animation ends (2s)
+  hint.addEventListener('animationend', () => {
+    hint.remove();
+  });
+}
+
+// ============================
 // Simple Welcome Banner
 // Shown after boot hydration (policy can be changed later)
 // ============================
@@ -81,6 +107,7 @@ function initSimpleWelcomeAlways() {
   const close = () => {
     overlay.classList.add("hidden");
     document.body.style.overflow = "";
+    setTimeout(showPinchHint, 300);
   };
 
   // Always show on load
