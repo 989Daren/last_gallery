@@ -203,7 +203,6 @@ Custom zoom for touch devices allowing users to see the entire gallery at once.
 - **Gestures**:
   - Two-finger pinch: Zoom in/out
   - Single-finger drag (when zoomed): Pan within bounds
-  - Double-tap: Reset to 1.0x
   - Back button: Unwinds layers (ribbon → popup → zoom → leave page)
 - **Behavior at max zoom-out**: Grid fits viewport width exactly (no horizontal padding), centered vertically
 - **Boundary clamping**: Can't pan past grid edges (20px padding)
@@ -239,6 +238,17 @@ window.resetZoom()                // Reset zoom to 1.0x
 - Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
 - Guards prevent duplicate event handler registration
 
+## Recent Changes (2026-02-06)
+
+### Atomic Zoom Reset (Back Button Flash Fix)
+- **Problem**: Back button from zoomed-out state flashed 0,0 before centering. `lockScroll()` zeroed scroll position; old `unlockScroll()` restored overflow without positioning, leaving a 1-2 frame gap before `centerGalleryView()` ran via `requestAnimationFrame`
+- **Fix**: Replaced `unlockScroll()` with `unlockScrollTo(scrollX, scrollY)` — atomic function that restores overflow and sets scroll position in one operation. Scroll is never visible at 0,0
+- **`getCenterScrollPosition()`**: Extracted center calculation into reusable helper; `centerGalleryView()` refactored to use it
+- **API design**: `unlockScrollTo` requires a target position — impossible to call without specifying where scroll goes, eliminating the temporal coupling bug
+- **Double-tap removed**: Removed unused double-tap-to-reset gesture and related state tracking from zoom
+
+---
+
 ## Recent Changes (2026-02-05)
 
 ### Pinch-to-Zoom (Mobile)
@@ -246,7 +256,6 @@ window.resetZoom()                // Reset zoom to 1.0x
 - **Transform**: `transform-origin: 0 0` with `translate(tx, ty) scale(s)`
 - **Max zoom-out**: Grid fits viewport width exactly (edge-to-edge), vertically centered with equal padding
 - **Panning**: Single-finger drag when zoomed out, clamped to grid edges (20px padding)
-- **Double-tap**: Resets zoom to 1.0x
 - **Back button**: Integrated with ConicalNav using compound hashes (`#zoom/art/ribbon`); layers unwind in order: ribbon → popup → zoom → leave page
 - **Scroll locking**: Native scroll disabled when zoomed out, re-enabled at scale=1
 - **Modal awareness**: Zoom disabled when welcome/upload/admin/popup modals are open
