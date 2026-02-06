@@ -240,6 +240,13 @@ window.resetZoom()                // Reset zoom to 1.0x
 
 ## Recent Changes (2026-02-06)
 
+### Pinch-to-Zoom Hint Animation
+- **Welcome modal bullet**: "Pinch to zoom out" shown on touch devices only (`<li class="touch-only">`, hidden via `display:none`, shown via `@media (pointer: coarse)`)
+- **Ghost finger animation**: `showPinchHint()` fires 300ms after welcome modal dismisses; two 48px semi-transparent circles animate toward each other (2 cycles, 1s each) with a 2s fade envelope
+- **Touch-only gate**: `window.matchMedia('(pointer: coarse)')` — no hint on desktop
+- **Non-blocking**: `pointer-events: none` on hint overlay; user can pinch immediately while animation plays
+- **Self-cleaning**: Hint DOM removed on `animationend`
+
 ### Atomic Zoom Reset (Back Button Flash Fix)
 - **Problem**: Back button from zoomed-out state flashed 0,0 before centering. `lockScroll()` zeroed scroll position; old `unlockScroll()` restored overflow without positioning, leaving a 1-2 frame gap before `centerGalleryView()` ran via `requestAnimationFrame`
 - **Fix**: Replaced `unlockScroll()` with `unlockScrollTo(scrollX, scrollY)` — atomic function that restores overflow and sets scroll position in one operation. Scroll is never visible at 0,0
@@ -265,7 +272,7 @@ window.resetZoom()                // Reset zoom to 1.0x
 - **Initial position**: Gallery loads centered at 50%, 50% (not 0,0)
 - **Pre-positioned**: Centering happens on page load, before welcome modal dismissal
 - **Matches zoom**: Same center point as pinch-to-zoom for seamless UX
-- **Nav arrows removed**: Replaced by ghost finger pinch-out animation (planned)
+- **Nav arrows removed**: Replaced by ghost finger pinch-out animation (see 2026-02-06 hint animation)
 
 ---
 
