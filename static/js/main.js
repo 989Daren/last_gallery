@@ -406,6 +406,9 @@ function resetZoom(silent) {
   if (zoomWrapper) zoomWrapper.style.transform = '';
   unlockScroll();
 
+  // Return to centered view (50%, 50%) at 1.0x
+  centerGalleryView();
+
   // Pop history when reset programmatically (not from back button)
   if (!silent && wasZoomed) {
     window.ConicalNav && window.ConicalNav.popFromUiClose();
