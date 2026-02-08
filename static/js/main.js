@@ -3,7 +3,6 @@
 // === Debug toggle ===
 const DEBUG = false;
 const ADMIN_DEBUG = false; // Admin debug footer
-const DEV_MODE = true; // Dev-only behavior/logs
 const log = (...args) => { if (DEBUG) console.log(...args); };
 const warn = (...args) => { if (DEBUG) console.warn(...args); };
 const error = (...args) => console.error(...args);
@@ -37,23 +36,13 @@ function escapeHtml(str) {
 }
 
 // ============================
-// Center Gallery View
-// Positions viewport at center of gallery (matches zoom-out center point)
+// Gallery View Origin
+// Resets viewport to top-left (0,0) of gallery
 // ============================
-function getCenterScrollPosition() {
-  const wrapper = document.querySelector('.gallery-wall-wrapper');
-  const scrollX = wrapper ? (wrapper.scrollWidth - wrapper.clientWidth) / 2 : 0;
-  const scrollY = Math.max(0, (document.body.scrollHeight - window.innerHeight) / 2);
-  return { scrollX, scrollY };
-}
-
 function centerGalleryView() {
   const wrapper = document.querySelector('.gallery-wall-wrapper');
-  if (!wrapper) return;
-  const { scrollX, scrollY } = getCenterScrollPosition();
-  wrapper.scrollLeft = scrollX;
-  window.scrollTo(0, scrollY);
-  if (DEBUG) console.log('[CENTER] Gallery centered at', scrollX, scrollY);
+  if (wrapper) wrapper.scrollLeft = 0;
+  window.scrollTo(0, 0);
 }
 
 // ============================
@@ -131,29 +120,6 @@ function initSimpleWelcomeAlways() {
   });
 }
 
-// Throttle utility for scroll events
-function throttle(func, delay) {
-  let lastExecTime = 0;
-  let timeoutId = null;
-
-  return function(...args) {
-    const now = Date.now();
-    const timeSinceLastExec = now - lastExecTime;
-
-    clearTimeout(timeoutId);
-
-    if (timeSinceLastExec >= delay) {
-      func.apply(this, args);
-      lastExecTime = now;
-    } else {
-      timeoutId = setTimeout(() => {
-        func.apply(this, args);
-        lastExecTime = Date.now();
-      }, delay - timeSinceLastExec);
-    }
-  };
-}
-
 // ============================
 // Pinch-to-Zoom (Touch devices only)
 // ============================
@@ -183,17 +149,35 @@ const zoomState = {
   wallWidth: 0,
   wallHeight: 0,
 
-  // Pan offset
-  panX: 0,
-  panY: 0,
-  initialPanX: 0,
-  initialPanY: 0,
+  // Unified transform position (translate(tx, ty) scale(s))
+  tx: 0,
+  ty: 0,
+
+  // Per-frame midpoint tracking for focal-point anchoring
+  prevMidX: 0,
+  prevMidY: 0,
+
+  // Pan start state (single-finger drag)
   panStartX: 0,
   panStartY: 0,
+  txAtPanStart: 0,
+  tyAtPanStart: 0,
+
   edgePadding: 20,
+
+  // Cached DOM elements (set in initZoom, never change)
+  _wrapper: null,
+  _zoomWrapper: null,
+
+  // Cached viewport metrics (refreshed on resize/orientation)
+  _vw: 0,
+  _vh: 0,
 
   initialized: false
 };
+
+// Reusable object for clampTransform output — avoids per-frame allocation
+const _clampResult = { tx: 0, ty: 0 };
 
 function initZoom() {
   if (zoomState.initialized) return;
@@ -203,8 +187,13 @@ function initZoom() {
   const zoomWrapper = document.querySelector('.zoom-wrapper');
   if (!wall || !wrapper || !zoomWrapper) return;
 
+  // Cache DOM references — these elements never change
+  zoomState._wrapper = wrapper;
+  zoomState._zoomWrapper = zoomWrapper;
+
   zoomState.wallWidth = wall.scrollWidth;
   zoomState.wallHeight = wall.scrollHeight;
+  refreshViewportMetrics();
   recalculateZoomLimits();
 
   wrapper.addEventListener('touchstart', handleZoomTouchStart, { passive: false });
@@ -212,22 +201,41 @@ function initZoom() {
   wrapper.addEventListener('touchend', handleZoomTouchEnd);
   wrapper.addEventListener('touchcancel', handleZoomTouchEnd);
 
+  window.addEventListener('resize', refreshViewportMetrics);
   window.addEventListener('resize', recalculateZoomLimits);
-  window.addEventListener('orientationchange', () => setTimeout(recalculateZoomLimits, 100));
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => { refreshViewportMetrics(); recalculateZoomLimits(); }, 100);
+  });
 
   zoomState.initialized = true;
   if (DEBUG) console.log('[ZOOM] Initialized', zoomState);
 }
 
-function recalculateZoomLimits() {
-  const wrapper = document.querySelector('.gallery-wall-wrapper');
-  if (!wrapper || !zoomState.wallWidth) return;
+function refreshViewportMetrics() {
+  const wrapper = zoomState._wrapper;
+  if (!wrapper) return;
+  const headerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
+  zoomState._vw = wrapper.clientWidth;
+  zoomState._vh = window.innerHeight - headerHeight;
+}
 
-  const viewportWidth = wrapper.clientWidth;
-  zoomState.minScale = Math.min(viewportWidth / zoomState.wallWidth, 1.0);
+function recalculateZoomLimits() {
+  if (!zoomState._vw || !zoomState.wallWidth) return;
+
+  const halfPad = zoomState.edgePadding / 2;
+
+  // Use half-padding for minScale so grid fills more of the viewport at max zoom-out
+  zoomState.minScale = Math.min(
+    (zoomState._vw - 2 * halfPad) / zoomState.wallWidth,
+    (zoomState._vh - 2 * halfPad) / zoomState.wallHeight,
+    1.0
+  );
 
   if (zoomState.scale < 1.0) {
     zoomState.scale = Math.max(zoomState.minScale, Math.min(zoomState.maxScale, zoomState.scale));
+    clampTransform(zoomState.tx, zoomState.ty, zoomState.scale);
+    zoomState.tx = _clampResult.tx;
+    zoomState.ty = _clampResult.ty;
     applyZoomTransform();
   }
 }
@@ -243,57 +251,148 @@ function isZoomDisabled() {
   return false;
 }
 
-function getTouchDistance(touches) {
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
-  return Math.sqrt(dx * dx + dy * dy);
+// Writes clamped values into _clampResult (no allocation)
+function clampTransform(tx, ty, scale) {
+  const vw = zoomState._vw;
+  const vh = zoomState._vh;
+
+  // Interpolate padding: full at scale=1, half at minScale
+  const range = 1.0 - zoomState.minScale;
+  const t = range > 0 ? (scale - zoomState.minScale) / range : 1;
+  const pad = zoomState.edgePadding * (0.5 + 0.5 * t);
+
+  const sw = scale * zoomState.wallWidth;
+  const sh = scale * zoomState.wallHeight;
+
+  // X-axis
+  if (sw <= vw - 2 * pad) {
+    tx = (vw - sw) / 2;
+  } else {
+    if (tx > pad) tx = pad;
+    if (tx < vw - pad - sw) tx = vw - pad - sw;
+  }
+
+  // Y-axis
+  if (sh <= vh - 2 * pad) {
+    ty = (vh - sh) / 2;
+  } else {
+    if (ty > pad) ty = pad;
+    if (ty < vh - pad - sh) ty = vh - pad - sh;
+  }
+
+  _clampResult.tx = tx;
+  _clampResult.ty = ty;
 }
 
 function handleZoomTouchStart(e) {
   if (isZoomDisabled()) return;
 
+  const wrapper = zoomState._wrapper;
+  const zoomWrapper = zoomState._zoomWrapper;
+
   if (e.touches.length === 2) {
     e.preventDefault();
+
+    // Scroll→transform handoff: capture scroll position BEFORE locking
+    if (zoomState.scale >= 0.999) {
+      const scrollX = wrapper.scrollLeft;
+      const scrollY = window.scrollY;
+      lockScroll();
+      zoomState.tx = -scrollX;
+      zoomState.ty = -scrollY;
+      zoomState.scale = 1.0;
+      zoomWrapper.style.transform = 'translate(' + zoomState.tx + 'px,' + zoomState.ty + 'px) scale(1)';
+    }
+
     zoomState.isPinching = true;
     zoomState.isPanning = false;
-    zoomState.initialDistance = getTouchDistance(e.touches);
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
+    zoomState.initialDistance = Math.sqrt(dx * dx + dy * dy);
     zoomState.initialScale = zoomState.scale;
-    e.currentTarget.classList.add('is-pinching');
+
+    // Record finger midpoint in wrapper-relative coords
+    const rect = wrapper.getBoundingClientRect();
+    zoomState.prevMidX = (t0.clientX + t1.clientX) / 2 - rect.left;
+    zoomState.prevMidY = (t0.clientY + t1.clientY) / 2 - rect.top;
+
+    wrapper.classList.add('is-pinching');
   } else if (e.touches.length === 1 && zoomState.scale < 0.999) {
     // Single finger pan when zoomed out
     zoomState.isPanning = true;
     zoomState.panStartX = e.touches[0].clientX;
     zoomState.panStartY = e.touches[0].clientY;
-    zoomState.initialPanX = zoomState.panX;
-    zoomState.initialPanY = zoomState.panY;
+    zoomState.txAtPanStart = zoomState.tx;
+    zoomState.tyAtPanStart = zoomState.ty;
   }
 }
 
 function handleZoomTouchMove(e) {
-  if (isZoomDisabled()) return;
-
   if (zoomState.isPinching && e.touches.length === 2) {
+    if (isZoomDisabled()) return;
     e.preventDefault();
-    const scaleChange = getTouchDistance(e.touches) / zoomState.initialDistance;
-    zoomState.scale = Math.max(zoomState.minScale, Math.min(zoomState.maxScale, zoomState.initialScale * scaleChange));
-    zoomState.panX = 0;
-    zoomState.panY = 0;
+
+    const rect = zoomState._wrapper.getBoundingClientRect();
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const mx = (t0.clientX + t1.clientX) / 2 - rect.left;
+    const my = (t0.clientY + t1.clientY) / 2 - rect.top;
+
+    // Compute new scale
+    const dx = t0.clientX - t1.clientX;
+    const dy = t0.clientY - t1.clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const newScale = Math.max(zoomState.minScale, Math.min(zoomState.maxScale, zoomState.initialScale * dist / zoomState.initialDistance));
+
+    // Focal-point anchoring: keep content point under previous midpoint at current midpoint
+    const s = zoomState.scale;
+    const cx = (zoomState.prevMidX - zoomState.tx) / s;
+    const cy = (zoomState.prevMidY - zoomState.ty) / s;
+
+    // Edge clamping
+    clampTransform(mx - newScale * cx, my - newScale * cy, newScale);
+    zoomState.tx = _clampResult.tx;
+    zoomState.ty = _clampResult.ty;
+    zoomState.scale = newScale;
+
+    // Store current midpoint for next frame
+    zoomState.prevMidX = mx;
+    zoomState.prevMidY = my;
+
     applyZoomTransform();
   } else if (zoomState.isPanning && e.touches.length === 1 && zoomState.scale < 0.999) {
+    if (isZoomDisabled()) return;
     // Single finger pan when zoomed out
     e.preventDefault();
-    zoomState.panX = zoomState.initialPanX + (e.touches[0].clientX - zoomState.panStartX);
-    zoomState.panY = zoomState.initialPanY + (e.touches[0].clientY - zoomState.panStartY);
+    clampTransform(
+      zoomState.txAtPanStart + (e.touches[0].clientX - zoomState.panStartX),
+      zoomState.tyAtPanStart + (e.touches[0].clientY - zoomState.panStartY),
+      zoomState.scale
+    );
+    zoomState.tx = _clampResult.tx;
+    zoomState.ty = _clampResult.ty;
     applyZoomTransform();
   }
 }
 
 function handleZoomTouchEnd(e) {
-  const wrapper = document.querySelector('.gallery-wall-wrapper');
-
   if (zoomState.isPinching) {
-    wrapper?.classList.remove('is-pinching');
-    if (zoomState.scale > 0.95) resetZoom();
+    zoomState._wrapper.classList.remove('is-pinching');
+
+    // Snap-back to native scroll if close to 1.0x
+    if (zoomState.scale > 0.95) {
+      // Transform→scroll handoff: compute scroll from current transform
+      const scrollX = Math.max(0, -zoomState.tx);
+      const scrollY = Math.max(0, -zoomState.ty);
+      zoomState.scale = 1.0;
+      zoomState.tx = 0;
+      zoomState.ty = 0;
+      zoomState._zoomWrapper.style.transform = '';
+      unlockScrollTo(scrollX, scrollY);
+
+      zoomState.isPinching = false;
+      zoomState.isPanning = false;
+      return;
+    }
   }
 
   zoomState.isPinching = false;
@@ -306,58 +405,20 @@ function handleZoomTouchEnd(e) {
 }
 
 function applyZoomTransform() {
-  const zoomWrapper = document.querySelector('.zoom-wrapper');
-  const wrapper = document.querySelector('.gallery-wall-wrapper');
-  if (!zoomWrapper || !wrapper) return;
-
-  const headerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
-  const viewportWidth = wrapper.clientWidth;
-  const viewportHeight = window.innerHeight - headerHeight;
-  const scaledWidth = zoomState.wallWidth * zoomState.scale;
-  const scaledHeight = zoomState.wallHeight * zoomState.scale;
-  const padding = zoomState.edgePadding;
-
-  // At scale=1: no transform, native scroll, return to center
-  if (zoomState.scale >= 0.999) {
-    zoomWrapper.style.transform = '';
-    zoomState.panX = 0;
-    zoomState.panY = 0;
-    const { scrollX, scrollY } = getCenterScrollPosition();
+  // At scale=1 and NOT mid-gesture: handoff to native scroll.
+  // During a pinch, stay in transform mode — touchEnd handles the handoff.
+  if (zoomState.scale >= 0.999 && !zoomState.isPinching) {
+    const scrollX = Math.max(0, -zoomState.tx);
+    const scrollY = Math.max(0, -zoomState.ty);
+    zoomState._zoomWrapper.style.transform = '';
+    zoomState.tx = 0;
+    zoomState.ty = 0;
     unlockScrollTo(scrollX, scrollY);
     return;
   }
 
   lockScroll();
-
-  // Base translation to center grid in viewport
-  let baseTx = (viewportWidth - scaledWidth) / 2;
-  let baseTy = (viewportHeight - scaledHeight) / 2;
-
-  // X-axis: At minScale, grid fits width exactly (edge-to-edge, no pan)
-  let clampedPanX = zoomState.panX;
-  if (scaledWidth <= viewportWidth + 5) {
-    clampedPanX = 0;
-    if (Math.abs(scaledWidth - viewportWidth) < 5) baseTx = 0;
-  } else {
-    const minPanX = viewportWidth - scaledWidth - baseTx - padding;
-    const maxPanX = -baseTx + padding;
-    clampedPanX = Math.max(minPanX, Math.min(maxPanX, clampedPanX));
-  }
-
-  // Y-axis: Center if fits, otherwise allow bounded pan
-  let clampedPanY = zoomState.panY;
-  if (scaledHeight + 2 * padding <= viewportHeight) {
-    clampedPanY = 0;
-  } else {
-    const minPanY = viewportHeight - scaledHeight - baseTy - padding;
-    const maxPanY = -baseTy + padding;
-    clampedPanY = Math.max(minPanY, Math.min(maxPanY, clampedPanY));
-  }
-
-  zoomState.panX = clampedPanX;
-  zoomState.panY = clampedPanY;
-
-  zoomWrapper.style.transform = `translate(${baseTx + clampedPanX}px, ${baseTy + clampedPanY}px) scale(${zoomState.scale})`;
+  zoomState._zoomWrapper.style.transform = 'translate(' + zoomState.tx + 'px,' + zoomState.ty + 'px) scale(' + zoomState.scale + ')';
 }
 
 let scrollLocked = false;
@@ -365,10 +426,11 @@ let scrollLocked = false;
 function lockScroll() {
   if (scrollLocked) return;
   window.scrollTo(0, 0);
-  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  const wrapper = zoomState._wrapper;
   if (wrapper) {
     wrapper.scrollLeft = 0;
     wrapper.style.overflow = 'hidden';
+    wrapper.style.touchAction = 'none';
   }
   document.body.style.overflow = 'hidden';
   document.documentElement.style.overflow = 'hidden';
@@ -378,10 +440,11 @@ function lockScroll() {
 // Atomic unlock + position: restores overflow and sets scroll in one operation.
 // Scroll is never visible at 0,0 — position is set before each axis becomes scrollable.
 function unlockScrollTo(scrollX, scrollY) {
-  const wrapper = document.querySelector('.gallery-wall-wrapper');
+  const wrapper = zoomState._wrapper;
   if (wrapper) {
     wrapper.style.overflowX = 'auto';
     wrapper.style.overflowY = 'visible';
+    wrapper.style.touchAction = '';
     wrapper.scrollLeft = scrollX;
   }
   document.body.style.overflow = '';
@@ -393,14 +456,12 @@ function unlockScrollTo(scrollX, scrollY) {
 function resetZoom(silent) {
   const wasZoomed = zoomState.scale < 0.999;
   zoomState.scale = 1.0;
-  zoomState.panX = 0;
-  zoomState.panY = 0;
-  const zoomWrapper = document.querySelector('.zoom-wrapper');
-  if (zoomWrapper) zoomWrapper.style.transform = '';
+  zoomState.tx = 0;
+  zoomState.ty = 0;
+  if (zoomState._zoomWrapper) zoomState._zoomWrapper.style.transform = '';
 
-  // Atomic unlock + center: no intermediate 0,0 state is ever paintable
-  const { scrollX, scrollY } = getCenterScrollPosition();
-  unlockScrollTo(scrollX, scrollY);
+  // Atomic unlock + origin: no intermediate state is ever paintable
+  unlockScrollTo(0, 0);
 
   // Pop history when reset programmatically (not from back button)
   if (!silent && wasZoomed) {
@@ -1109,12 +1170,6 @@ function finalizeAfterRender(wall) {
 }
 
 // ========================================
-// Dev canary (optional)
-// ========================================
-const DEV_CANARY = false; // set true to log drift regressions
-function checkForImageShift() { /* optional dev-only canary (disabled) */ }
-
-// ========================================
 // PHASE 2: New state-driven render pipeline
 // ========================================
 function renderWallFromState() {
@@ -1256,9 +1311,7 @@ function renderWallFromState() {
   // PHASE 6: Finalize layout
   finalizeAfterRender(wall);
 
-  // PHASE 7: Diagnostic canary (dev-only)
   console.log(LOG.render, 'renderWallFromState');
-  if (DEV_MODE && DEV_CANARY) checkForImageShift();
 }
 
 // PHASE 3: Single render choke point for explicit state changes
@@ -1266,7 +1319,6 @@ function commitWallStateChange(reason) {
   if (DEBUG) console.log('[PHASE 3] commitWallStateChange:', reason);
   renderWallFromState();
   console.log(LOG.render, 'commitWallStateChange:', reason);
-  if (DEV_MODE && DEV_CANARY) checkForImageShift();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
