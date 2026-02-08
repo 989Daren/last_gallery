@@ -180,9 +180,8 @@ Tiles are classified by size and numbered sequentially:
 - Dismissed via "Enter" button, backdrop click, or Escape key
 
 ## Initial Gallery View
-- **Centered on load**: Gallery starts at 50%, 50% (center of grid)
-- **Matches zoom center**: Same center point used during pinch-to-zoom for smooth UX
-- **Pre-positioned**: Centering happens before welcome modal, so view is ready when dismissed
+- **Origin on load**: Gallery starts at 0, 0 (top-left corner)
+- **Pre-positioned**: Scroll set before welcome modal, so view is ready when dismissed
 
 ## Popup Overlay
 - **Animation sequence**: image appears → title fades in → black ribbon slides from left → text reveals
@@ -192,7 +191,7 @@ Tiles are classified by size and numbered sequentially:
 - **Contact links**: Clickable (email opens mail client, web links open in new tab)
 
 ## Pinch-to-Zoom (Mobile)
-Custom zoom for touch devices allowing users to see the entire gallery at once.
+Focal-point zoom for touch devices — content under fingers stays anchored during pinch.
 
 - **HTML Structure**:
   ```
@@ -200,14 +199,19 @@ Custom zoom for touch devices allowing users to see the entire gallery at once.
     └── .zoom-wrapper (receives transform)
          └── #galleryWall (content)
   ```
+- **Transform model**: `transform-origin: 0 0` with `translate(tx, ty) scale(s)`. All positioning via unified `tx/ty` state — no separate pan offset.
+- **Focal-point anchoring**: Each pinch frame computes the content point under the previous finger midpoint and repositions it at the current midpoint. Handles simultaneous zoom + pan + direction reversal in one formula.
+- **Progressive edge clamping**: Per-axis, per-frame constraint. Centers content when it fits the viewport; enforces edge boundaries when it overflows. Padding interpolates from 20px at scale=1 to 10px at minScale.
+- **Min scale**: `min((vw - pad) / galleryW, (vh - pad) / galleryH, 1.0)` — fits entire grid with half-padding at max zoom-out.
+- **Scroll ↔ transform handoff**: At 1.0x, native scroll is active. On two-finger touch, scroll position is captured before `lockScroll()`, then mapped to `tx = -scrollX, ty = -scrollY`. On snap-back (>0.95x), reverse mapping restores scroll position — user stays at the same view, not jolted to origin.
+- **Touch-action guard**: `touch-action: none` set on wrapper for entire zoom-out duration (via `lockScroll`/`unlockScrollTo`), not just during active pinch. Prevents browser's built-in pinch-to-zoom from firing between gestures.
 - **Gestures**:
-  - Two-finger pinch: Zoom in/out
-  - Single-finger drag (when zoomed): Pan within bounds
+  - Two-finger pinch: Zoom in/out (focal-point anchored)
+  - Single-finger drag (when zoomed): Pan within clamped bounds
   - Back button: Unwinds layers (ribbon → popup → zoom → leave page)
-- **Behavior at max zoom-out**: Grid fits viewport width exactly (no horizontal padding), centered vertically
-- **Boundary clamping**: Can't pan past grid edges (20px padding)
 - **Disabled during**: Welcome modal, upload modal, admin modal, artwork popup
 - **Auto-reset**: Zoom resets to 1.0x after wall refresh (shuffle, clear, move, undo)
+- **Performance**: DOM elements (`_wrapper`, `_zoomWrapper`) and viewport metrics (`_vw`, `_vh`) cached in `zoomState`; refreshed only on resize/orientation change. `clampTransform` writes to a reusable `_clampResult` object (zero per-frame allocation). Touch distance and midpoint inlined in hot path.
 
 ## Admin PIN
 - Default: `8375`
@@ -238,41 +242,25 @@ window.resetZoom()                // Reset zoom to 1.0x
 - Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
 - Guards prevent duplicate event handler registration
 
-## Recent Changes (2026-02-06)
+## Recent Changes (2026-02-08)
 
-### Pinch-to-Zoom Hint Animation
+### Focal-Point Zoom Rewrite
+- **Replaced center-origin zoom** with unified focal-point model: content under fingers stays anchored during pinch. Seamless direction reversal within a single gesture.
+- **Progressive edge clamping**: Per-axis, per-frame. Padding interpolates from 20px (scale=1) to 10px (minScale). Content centers when it fits viewport, edge-clamps when it overflows.
+- **2-axis minScale**: `min((vw-pad)/w, (vh-pad)/h, 1.0)` replaces old X-only formula
+- **Scroll ↔ transform handoff**: Scroll captured before `lockScroll()`, mapped to `tx=-scrollX`. On snap-back, reverse mapping restores exact scroll position (no jump to origin).
+- **Mid-gesture guard**: `applyZoomTransform` skips scroll handoff while `isPinching` is true — prevents the lockScroll/unlockScrollTo round-trip that was zeroing scroll position mid-pinch.
+- **Touch-action fix**: `touch-action: none` set on wrapper via `lockScroll()`/`unlockScrollTo()` for entire zoom-out duration, preventing browser pinch-to-zoom flash between gestures.
+- **Performance**: DOM refs (`_wrapper`, `_zoomWrapper`) and viewport metrics (`_vw`, `_vh`) cached in `zoomState`; `clampTransform` writes to reusable `_clampResult` object; touch math inlined in hot path. Zero per-frame DOM queries or allocations.
+- **Gallery origin**: Initial view set to top-left (0, 0) instead of center
+- **Cleanup**: Removed `throttle()`, `DEV_MODE`, `DEV_CANARY`, `checkForImageShift()`, `getCenterScrollPosition()`, `getPinchMidpoint()`, `getTouchDistance()` (last two inlined)
+
+### Pinch-to-Zoom Hint Animation (2026-02-06)
 - **Welcome modal bullet**: "Pinch to zoom out" shown on touch devices only (`<li class="touch-only">`, hidden via `display:none`, shown via `@media (pointer: coarse)`)
 - **Ghost finger animation**: `showPinchHint()` fires 300ms after welcome modal dismisses; two 48px semi-transparent circles animate toward each other (2 cycles, 1s each) with a 2s fade envelope
 - **Touch-only gate**: `window.matchMedia('(pointer: coarse)')` — no hint on desktop
 - **Non-blocking**: `pointer-events: none` on hint overlay; user can pinch immediately while animation plays
 - **Self-cleaning**: Hint DOM removed on `animationend`
-
-### Atomic Zoom Reset (Back Button Flash Fix)
-- **Problem**: Back button from zoomed-out state flashed 0,0 before centering. `lockScroll()` zeroed scroll position; old `unlockScroll()` restored overflow without positioning, leaving a 1-2 frame gap before `centerGalleryView()` ran via `requestAnimationFrame`
-- **Fix**: Replaced `unlockScroll()` with `unlockScrollTo(scrollX, scrollY)` — atomic function that restores overflow and sets scroll position in one operation. Scroll is never visible at 0,0
-- **`getCenterScrollPosition()`**: Extracted center calculation into reusable helper; `centerGalleryView()` refactored to use it
-- **API design**: `unlockScrollTo` requires a target position — impossible to call without specifying where scroll goes, eliminating the temporal coupling bug
-- **Double-tap removed**: Removed unused double-tap-to-reset gesture and related state tracking from zoom
-
----
-
-## Recent Changes (2026-02-05)
-
-### Pinch-to-Zoom (Mobile)
-- **Architecture**: Separate scroll container (`.gallery-wall-wrapper`) and zoom wrapper (`.zoom-wrapper`)
-- **Transform**: `transform-origin: 0 0` with `translate(tx, ty) scale(s)`
-- **Max zoom-out**: Grid fits viewport width exactly (edge-to-edge), vertically centered with equal padding
-- **Panning**: Single-finger drag when zoomed out, clamped to grid edges (20px padding)
-- **Back button**: Integrated with ConicalNav using compound hashes (`#zoom/art/ribbon`); layers unwind in order: ribbon → popup → zoom → leave page
-- **Scroll locking**: Native scroll disabled when zoomed out, re-enabled at scale=1
-- **Modal awareness**: Zoom disabled when welcome/upload/admin/popup modals are open
-- **Wall refresh**: Zoom resets to 1.0x after `refreshWallFromServer()` (shuffle, clear, move, undo)
-
-### Centered Gallery View
-- **Initial position**: Gallery loads centered at 50%, 50% (not 0,0)
-- **Pre-positioned**: Centering happens on page load, before welcome modal dismissal
-- **Matches zoom**: Same center point as pinch-to-zoom for seamless UX
-- **Nav arrows removed**: Replaced by ghost finger pinch-out animation (see 2026-02-06 hint animation)
 
 ---
 
