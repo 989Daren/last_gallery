@@ -725,16 +725,6 @@ label {
   border-radius: 4px;
 }
 
-.modal-body-tier2 .success-text {
-  margin-top: 12px;
-  padding: 8px 12px;
-  background: rgba(40, 167, 69, 0.15);
-  border-left: 3px solid #28a745;
-  color: #5fda7d;
-  font-size: 0.9rem;
-  border-radius: 4px;
-}
-
 /* Tier-2 actions */
 .modal-actions-tier2 {
   display: flex;

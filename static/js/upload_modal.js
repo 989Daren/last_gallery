@@ -157,13 +157,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // =========================================================
-  // Upload + place (Tier-1 only: image/crop)
-  //
-  // Contract:
-  // POST /api/upload_assets (multipart/form-data)
-  //   - tile_image: cropped square (for grid)
-  //   - popup_image: cropped square (for popup)
-  // Returns JSON. After success we refresh wall via /api/wall_state.
+  // Upload: POST /api/upload_assets (multipart/form-data)
+  //   - tile_image: cropped 512x512 square (for grid)
+  //   - popup_image: original file (for full-size popup)
   // =========================================================
 
   function canvasToBlob(canvas, mimeType, quality) {
@@ -215,8 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const ts = Date.now();
       const formData = new FormData();
       formData.append("tile_image", tileBlob, `tile_${ts}.jpg`);
-      formData.append("popup_image", selectedFile, selectedFile?.name || `popup_${ts}.jpg`);// Keep metadata empty for now (site is in "metadata purge" mode).
-      // If/when re-enabled, append fields here.
+      formData.append("popup_image", selectedFile, selectedFile?.name || `popup_${ts}.jpg`);
 
       const result = await postUpload(formData);
       console.log(`${LOG_PREFIX} Upload success:`, result);
@@ -241,7 +236,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Continue button now performs: upload + placement (server-side) + refresh
   continueBtn.addEventListener("click", () => {
     if (continueBtn.dataset.busy === "1") return;
     uploadCroppedAndRefresh();
@@ -262,14 +256,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // ========================================
 
   const metaOverlay = document.getElementById("metaModalOverlay");
-  const metaModal = document.getElementById("metaModal");
   const metaCloseBtn = document.getElementById("metaCloseBtn");
   const metaSkipBtn = document.getElementById("metaSkipBtn");
   const metaSaveBtn = document.getElementById("metaSaveBtn");
   const metaArtistInput = document.getElementById("metaArtistInput");
   const metaTitleInput = document.getElementById("metaTitleInput");
   const metaError = document.getElementById("metaError");
-  const metaSuccess = document.getElementById("metaSuccess");
 
   // Extended metadata field refs
   const metaYearInput = document.getElementById("metaYearInput");
@@ -364,8 +356,8 @@ document.addEventListener("DOMContentLoaded", () => {
     updateContactPlaceholder(contact1Radios, metaContact1Input);
     updateContactPlaceholder(contact2Radios, metaContact2Input);
     if (metaError) metaError.classList.add("hidden");
-    if (metaSuccess) metaSuccess.classList.add("hidden");
     if (metaRequiredError) metaRequiredError.classList.add("hidden");
+    if (metaContactError) metaContactError.classList.add("hidden");
     if (metaSaveBtn) metaSaveBtn.disabled = false;
 
     // Reset for-sale checkboxes
@@ -398,6 +390,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Required fields validation
   const metaRequiredError = document.getElementById("metaRequiredError");
+  const metaContactError = document.getElementById("metaContactError");
 
   function validateRequiredFields() {
     const artistName = (metaArtistInput?.value || "").trim();
@@ -419,6 +412,22 @@ document.addEventListener("DOMContentLoaded", () => {
   if (metaTitleInput) {
     metaTitleInput.addEventListener("input", validateRequiredFields);
   }
+
+  // Live validation for contact: hide error when both type + value are present
+  function validateContactField() {
+    const hasType = Array.from(contact1Radios).some(r => r.checked);
+    const hasValue = (metaContact1Input?.value || "").trim().length > 0;
+    if (hasType && hasValue && metaContactError) {
+      metaContactError.classList.add("hidden");
+    }
+  }
+
+  if (metaContact1Input) {
+    metaContact1Input.addEventListener("input", validateContactField);
+  }
+  contact1Radios.forEach(radio => {
+    radio.addEventListener("change", validateContactField);
+  });
 
   async function saveMetaToDb(tileId) {
     if (!tileId) {
@@ -472,10 +481,23 @@ document.addEventListener("DOMContentLoaded", () => {
       metaRequiredError.classList.add("hidden");
     }
 
+    // Validate contact field (at least one contact required)
+    if (!contact1Type || !contact1Value) {
+      if (metaContactError) {
+        metaContactError.classList.remove("hidden");
+      }
+      if (metaContact1Input) metaContact1Input.focus();
+      return; // Block submission
+    }
+
+    // Hide contact error if validation passed
+    if (metaContactError) {
+      metaContactError.classList.add("hidden");
+    }
+
     // Disable save button
     if (metaSaveBtn) metaSaveBtn.disabled = true;
     if (metaError) metaError.classList.add("hidden");
-    if (metaSuccess) metaSuccess.classList.add("hidden");
 
     try {
       const response = await fetch(`/api/tile/${tileId}/metadata`, {
@@ -506,14 +528,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       console.log(`${LOG_PREFIX} Metadata saved successfully:`, result);
-      
-      // Show success briefly
-      if (metaSuccess) {
-        metaSuccess.classList.remove("hidden");
-        setTimeout(() => {
-          metaSuccess.classList.add("hidden");
-        }, 2000);
-      }
 
       // Refresh wall to pick up the new metadata
       await refreshWall();

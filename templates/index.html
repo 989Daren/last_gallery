@@ -152,13 +152,16 @@
           </div>
         </div>
 
-        <label class="contact-group-label">Contact Info</label>
+        <label class="contact-group-label">Contact Info <span class="required-mark">*</span></label>
         <div class="contact-type-radios">
           <label><input type="radio" name="contact1Type" value="email"> Email</label>
           <label><input type="radio" name="contact1Type" value="social"> Social Media</label>
           <label><input type="radio" name="contact1Type" value="website"> Website</label>
         </div>
         <input id="metaContact1Input" type="text" maxlength="120" placeholder="Select a contact type above" />
+        <div id="metaContactError" class="required-error hidden" style="margin-top:8px; font-size:0.85rem;">
+          At least one contact source is required.
+        </div>
 
         <label class="contact-group-label">Additional Contact (optional)</label>
         <div class="contact-type-radios">
@@ -169,7 +172,6 @@
         <input id="metaContact2Input" type="text" maxlength="120" placeholder="Select a contact type above" />
 
         <div id="metaError" class="error-text hidden"></div>
-        <div id="metaSuccess" class="success-text hidden">Saved!</div>
       </div>
 
       <div class="modal-actions-tier2">
