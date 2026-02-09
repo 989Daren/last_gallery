@@ -161,7 +161,7 @@ Tiles are classified by size and numbered sequentially:
 2. Upload sends: `tile_image` (512x512 thumbnail) + `popup_image` (original)
 3. Server optimizes popup image (see below) and saves to `/uploads/`, creates DB records
 4. Metadata modal appears → user enters required + optional fields → saved to DB
-5. Wall refreshes to show new image
+5. Wall refreshes → modals close → viewport scrolls to new tile → highlight sheen plays
 
 ### Image Optimization (server-side)
 - **Tile image**: Saved as-is (already 512x512 JPEG from client)
@@ -233,6 +233,7 @@ window.refreshAdminOverlays()     // Refresh admin UI (from admin.js)
 window.isAdminActive()            // Check admin session (from admin.js)
 window.initZoom()                 // Initialize pinch-to-zoom
 window.resetZoom()                // Reset zoom to 1.0x
+window.highlightNewTile(tileId)   // Scroll to tile + sheen animation
 ```
 
 ### admin.js Module
@@ -243,6 +244,13 @@ window.resetZoom()                // Reset zoom to 1.0x
 - Guards prevent duplicate event handler registration
 
 ## Recent Changes (2026-02-08)
+
+### New Upload Highlight (scroll-to-tile + sheen)
+- **`highlightNewTile(tileId)`**: After metadata save, resets zoom to 1.0x, scrolls viewport to center the new tile, and plays a reflective sheen animation
+- **Sheen CSS**: `.tile-highlight-sheen::before` — diagonal gradient sweep (0.42 opacity peak, 30%-70% band), 4 iterations × 600ms = 2400ms total
+- **Self-cleaning**: `animationend` listener removes class after animation completes (same pattern as pinch hint)
+- **Zoom inline reset**: Resets `zoomState` and calls `unlockScrollTo(scrollX, scrollY)` directly (avoids `resetZoom()` which scrolls to 0,0)
+- **Upload flow change**: `saveMetaToDb()` closes modals immediately, then calls `highlightNewTile` after 300ms delay
 
 ### Focal-Point Zoom Rewrite
 - **Replaced center-origin zoom** with unified focal-point model: content under fingers stays anchored during pinch. Seamless direction reversal within a single gesture.
