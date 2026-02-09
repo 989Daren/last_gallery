@@ -518,12 +518,19 @@ document.addEventListener("DOMContentLoaded", () => {
       // Refresh wall to pick up the new metadata
       await refreshWall();
 
-      // Close Tier-2 modal after short delay
+      // Capture tile ID before closing (closeModal resets state)
+      const savedTileId = currentUploadTileId;
+
+      // Close modals immediately
+      closeMetaModal();
+      closeModal(true);
+
+      // Highlight new tile after modals are gone
       setTimeout(() => {
-        closeMetaModal();
-        // Close Tier-1 upload modal
-        closeModal(true);
-      }, 500);
+        if (typeof window.highlightNewTile === 'function') {
+          window.highlightNewTile(savedTileId);
+        }
+      }, 300);
       
     } catch (err) {
       console.error(`${LOG_PREFIX} Metadata save failed:`, err);

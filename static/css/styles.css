@@ -1834,3 +1834,34 @@ label {
   80%  { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* =========================
+   Highlight Sheen for Newly Uploaded Tiles
+   Sweeps a reflective gradient across the tile 4 times after upload
+   ========================= */
+
+.tile-highlight-sheen {
+  overflow: hidden;
+}
+.tile-highlight-sheen::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255,255,255,0.00) 30%,
+    rgba(255,255,255,0.42) 50%,
+    rgba(255,255,255,0.00) 70%,
+    transparent 100%
+  );
+  transform: translateX(-80%);
+  animation: tileHighlightSheen 600ms linear 4;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes tileHighlightSheen {
+  0%   { transform: translateX(-80%); }
+  100% { transform: translateX(80%); }
+}

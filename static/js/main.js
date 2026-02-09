@@ -469,9 +469,47 @@ function resetZoom(silent) {
   }
 }
 
+// Highlight a newly uploaded tile: reset zoom, scroll to tile, play sheen animation
+function highlightNewTile(tileId) {
+  // 1. Reset zoom to 1.0x (clear transform, restore native scroll)
+  zoomState.scale = 1.0;
+  zoomState.tx = 0;
+  zoomState.ty = 0;
+  if (zoomState._zoomWrapper) zoomState._zoomWrapper.style.transform = '';
+
+  // 2. Compute scroll target to center tile in viewport
+  const tileData = wallState.tiles[tileId];
+  if (!tileData) return;
+  const units = sizeToUnits(tileData.size);
+  const tileW = units * BASE_UNIT;
+  const tileH = units * BASE_UNIT;
+
+  const wrapper = zoomState._wrapper || document.querySelector('.gallery-wall-wrapper');
+  const vw = wrapper ? wrapper.clientWidth : window.innerWidth;
+  const vh = window.innerHeight;
+
+  const scrollX = Math.max(0, tileData.x + tileW / 2 - vw / 2);
+  const scrollY = Math.max(0, tileData.y + tileH / 2 - vh / 2);
+
+  // 3. Unlock scroll and jump to tile position
+  unlockScrollTo(scrollX, scrollY);
+
+  // 4. Find tile DOM element and add sheen class
+  const tileEl = document.querySelector('.tile[data-id="' + tileId + '"]');
+  if (!tileEl) return;
+  tileEl.classList.add('tile-highlight-sheen');
+
+  // 5. Self-clean: remove class after animation ends
+  tileEl.addEventListener('animationend', function handler() {
+    tileEl.classList.remove('tile-highlight-sheen');
+    tileEl.removeEventListener('animationend', handler);
+  });
+}
+
 // Expose for external use (e.g., after wall refresh)
 window.initZoom = initZoom;
 window.resetZoom = resetZoom;
+window.highlightNewTile = highlightNewTile;
 
 // ==============================
 // ConicalNav: Back button closes UI layers (no history weirdness).
