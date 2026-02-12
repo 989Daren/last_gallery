@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def get_db():
@@ -140,6 +140,19 @@ def init_db():
 
         _set_schema_version(cursor, 3)
         print("Migration 3 complete: Contact info fields added")
+
+    # Migration 4: Edit codes table
+    if current_version < 4:
+        print("Applying migration 4: Edit codes table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS edit_codes (
+                email TEXT PRIMARY KEY,
+                code TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        _set_schema_version(cursor, 4)
+        print("Migration 4 complete: Edit codes table created")
 
     conn.commit()
     conn.close()
