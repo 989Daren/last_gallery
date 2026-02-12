@@ -15,6 +15,11 @@
 - **Orphaned code cleanup**: When email changes, old email's edit code is deleted from `edit_codes` only if no other assets reference that email
 - **`send_edit_code()` stub**: Console-only logger, ready to swap for SendGrid
 
+### Housekeeping
+- Removed test record with incorrect email from gallery.db (and associated edit code)
+- Added documentation files: `docs/Zoom_behavior.md`, `docs/chromebook_migration_guide.md`, `docs/focal-point-zoom-implementation.md`, `docs/zoom-system.md`
+- Deleted stray `nul` Windows artifact
+
 ### Welcome Modal Subtitle
 - Added italic tagline beneath title: "A dynamic time capsule of creative works"
 - Styled as light-weight subtitle (font-weight 300, italic, 75% opacity)
