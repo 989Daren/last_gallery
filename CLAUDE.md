@@ -76,9 +76,16 @@ CREATE TABLE tiles (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE SET NULL
 );
+
+-- Edit codes: one code per email for artwork editing
+CREATE TABLE edit_codes (
+    email TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
-Current schema version: **3**
+Current schema version: **4**
 
 ## Tile Registration
 
@@ -120,6 +127,7 @@ Tiles are classified by size and numbered sequentially:
 | `/api/upload_assets` | POST | Upload tile + popup images (multipart form) |
 | `/api/tile/<tile_id>/metadata` | POST | Save all metadata fields |
 | `/api/tile/<tile_id>/metadata` | GET | Get metadata for a tile |
+| `/api/verify_edit_code` | POST | Verify artwork title + edit code, returns matching tile_id |
 
 ### Admin (requires `X-Admin-Pin: 8375` header)
 | Endpoint | Method | Purpose |

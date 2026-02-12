@@ -287,6 +287,11 @@ def _save_optimized_popup(fs, asset_id: str):
     return filename
 
 
+def send_edit_code(email, code):
+    """Send edit code to artist. Logs to console only — replace internals for SendGrid later."""
+    print(f"[EDIT CODE] To: {email} | Code: {code}")
+
+
 # ---- Routes ----
 @app.route("/")
 def index():
@@ -513,6 +518,11 @@ def save_tile_metadata(tile_id):
 
         asset_id = row["asset_id"]
 
+        # Capture old email before update (for edit code cleanup)
+        cursor.execute("SELECT contact1_value FROM assets WHERE asset_id = ?", (asset_id,))
+        old_asset = cursor.fetchone()
+        old_email = (old_asset["contact1_value"] or "").strip().lower() if old_asset else ""
+
         # Update the asset's metadata (all fields)
         cursor.execute(
             """UPDATE assets SET
@@ -527,8 +537,36 @@ def save_tile_metadata(tile_id):
              contact1_type, contact1_value, contact2_type, contact2_value, asset_id)
         )
 
+        # Generate or reuse edit code if email contact provided
+        edit_code = None
+        if contact1_value:
+            normalized_email = contact1_value.lower()
+            cursor.execute("SELECT code FROM edit_codes WHERE email = ?", (normalized_email,))
+            code_row = cursor.fetchone()
+            if code_row:
+                edit_code = code_row["code"]
+            else:
+                edit_code = uuid.uuid4().hex[:8]
+                cursor.execute(
+                    "INSERT INTO edit_codes(email, code) VALUES(?, ?)",
+                    (normalized_email, edit_code)
+                )
+
+        # Clean up old email's edit code if email changed and no other tiles use it
+        if old_email and old_email != (contact1_value or "").lower():
+            cursor.execute(
+                "SELECT COUNT(*) FROM assets WHERE LOWER(contact1_value) = ?",
+                (old_email,)
+            )
+            remaining = cursor.fetchone()[0]
+            if remaining == 0:
+                cursor.execute("DELETE FROM edit_codes WHERE email = ?", (old_email,))
+
         conn.commit()
         conn.close()
+
+        if edit_code and contact1_value:
+            send_edit_code(contact1_value, edit_code)
 
         return jsonify({
             "ok": True,
@@ -637,6 +675,54 @@ def get_tile_metadata(tile_id):
             "ok": False,
             "error": str(e)
         }), 500
+
+
+@app.route("/api/verify_edit_code", methods=["POST"])
+def verify_edit_code():
+    """Verify an edit code + artwork title to find the matching tile."""
+    try:
+        data = request.get_json() or {}
+        code = (data.get("code") or "").strip()
+        title = (data.get("title") or "").strip()
+
+        if not code or not title:
+            return jsonify({"ok": False, "error": "Please enter both your artwork title and edit code."}), 400
+
+        # Normalize title: lowercase, strip trailing periods
+        normalized_title = title.lower().rstrip(".")
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Look up code in edit_codes → get email
+        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Invalid edit code."})
+
+        code_email = code_row["email"].lower()
+
+        # Find tile where artwork title matches AND contact email matches
+        cursor.execute("""
+            SELECT t.tile_id
+            FROM tiles t
+            JOIN assets a ON a.asset_id = t.asset_id
+            WHERE LOWER(TRIM(a.artwork_title)) = ?
+              AND LOWER(a.contact1_value) = ?
+        """, (normalized_title, code_email))
+        match = cursor.fetchone()
+        conn.close()
+
+        if not match:
+            return jsonify({"ok": False, "error": "No matching artwork found. Check your title and edit code."})
+
+        return jsonify({"ok": True, "tile_id": match["tile_id"]})
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ---- Admin API endpoints ----

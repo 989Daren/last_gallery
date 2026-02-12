@@ -16,6 +16,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Track current upload tile ID for Tier-2 metadata modal
   let currentUploadTileId = null;
 
+  // Edit mode state
+  let isEditMode = false;
+  let editOriginalEmail = "";
+
   // ================================
   // Cropper: Block Android "Copy image"
   // ================================
@@ -258,7 +262,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const metaOverlay = document.getElementById("metaModalOverlay");
   const metaCloseBtn = document.getElementById("metaCloseBtn");
   const metaSkipBtn = document.getElementById("metaSkipBtn");
-  const metaSaveBtn = document.getElementById("metaSaveBtn");
+  const metaContinueBtn = document.getElementById("metaContinueBtn");
+
+  // Tier-3 confirmation banner refs
+  const confirmBannerOverlay = document.getElementById("confirmBannerOverlay");
+  const confirmCancelBtn = document.getElementById("confirmCancelBtn");
+  const confirmSaveBtn = document.getElementById("confirmSaveBtn");
   const metaArtistInput = document.getElementById("metaArtistInput");
   const metaTitleInput = document.getElementById("metaTitleInput");
   const metaError = document.getElementById("metaError");
@@ -269,13 +278,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const metaDimensionsInput = document.getElementById("metaDimensionsInput");
   const metaEditionInput = document.getElementById("metaEditionInput");
 
-  // Contact fields (2 sets with radio buttons)
+  // Contact fields
   const metaContact1Input = document.getElementById("metaContact1Input");
   const metaContact2Input = document.getElementById("metaContact2Input");
-  const contact1Radios = document.querySelectorAll('input[name="contact1Type"]');
   const contact2Radios = document.querySelectorAll('input[name="contact2Type"]');
+  const metaEmailChangeWarning = document.getElementById("metaEmailChangeWarning");
 
-  // Dynamic placeholder based on contact type selection
+  // Dynamic placeholder for contact2 (radio-driven)
   const contactPlaceholders = {
     email: "e.g., artist@example.com",
     social: "e.g., instagram.com/artistname",
@@ -291,10 +300,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Wire up radio button change handlers for dynamic placeholders
-  contact1Radios.forEach(radio => {
-    radio.addEventListener("change", () => updateContactPlaceholder(contact1Radios, metaContact1Input));
-  });
   contact2Radios.forEach(radio => {
     radio.addEventListener("change", () => updateContactPlaceholder(contact2Radios, metaContact2Input));
   });
@@ -351,14 +356,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Reset contact fields
     if (metaContact1Input) metaContact1Input.value = "";
     if (metaContact2Input) metaContact2Input.value = "";
-    contact1Radios.forEach(r => r.checked = false);
     contact2Radios.forEach(r => r.checked = false);
-    updateContactPlaceholder(contact1Radios, metaContact1Input);
     updateContactPlaceholder(contact2Radios, metaContact2Input);
     if (metaError) metaError.classList.add("hidden");
     if (metaRequiredError) metaRequiredError.classList.add("hidden");
     if (metaContactError) metaContactError.classList.add("hidden");
-    if (metaSaveBtn) metaSaveBtn.disabled = false;
+    if (metaContinueBtn) metaContinueBtn.disabled = false;
 
     // Reset for-sale checkboxes
     if (metaForSaleYes) metaForSaleYes.checked = false;
@@ -379,12 +382,94 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log(`${LOG_PREFIX} Tier-2 metadata modal opened for tile: ${tileId}`);
   }
 
+  async function openMetaModalForEdit(tileId) {
+    if (!metaOverlay) return;
+
+    isEditMode = true;
+    currentUploadTileId = tileId;
+
+    // Fetch current metadata
+    try {
+      const res = await fetch(`/api/tile/${tileId}/metadata`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Failed to fetch metadata");
+
+      // Prefill text inputs
+      if (metaArtistInput) metaArtistInput.value = data.artist_name || "";
+      if (metaTitleInput) metaTitleInput.value = data.artwork_title || "";
+      if (metaYearInput) metaYearInput.value = data.year_created || "";
+      if (metaMediumInput) metaMediumInput.value = data.medium || "";
+      if (metaDimensionsInput) metaDimensionsInput.value = data.dimensions || "";
+      if (metaEditionInput) metaEditionInput.value = data.edition_info || "";
+
+      // Prefill contact fields
+      if (metaContact1Input) metaContact1Input.value = data.contact1_value || "";
+      if (metaContact2Input) metaContact2Input.value = data.contact2_value || "";
+      editOriginalEmail = (data.contact1_value || "").trim().toLowerCase();
+
+      // Prefill contact2 radio
+      contact2Radios.forEach(r => {
+        r.checked = (r.value === data.contact2_type);
+      });
+      updateContactPlaceholder(contact2Radios, metaContact2Input);
+
+      // Prefill for-sale checkboxes
+      if (metaForSaleYes) metaForSaleYes.checked = (data.for_sale === "yes");
+      if (metaForSaleNo) metaForSaleNo.checked = (data.for_sale === "no");
+
+      // Prefill sale type
+      if (data.sale_type === "both") {
+        if (metaSaleOriginal) metaSaleOriginal.checked = true;
+        if (metaSalePrint) metaSalePrint.checked = true;
+      } else {
+        if (metaSaleOriginal) metaSaleOriginal.checked = (data.sale_type === "original");
+        if (metaSalePrint) metaSalePrint.checked = (data.sale_type === "print");
+      }
+      updateSaleTypeState();
+
+      // Clear errors and warnings
+      if (metaError) metaError.classList.add("hidden");
+      if (metaRequiredError) metaRequiredError.classList.add("hidden");
+      if (metaContactError) metaContactError.classList.add("hidden");
+      if (metaEmailChangeWarning) metaEmailChangeWarning.classList.add("hidden");
+      if (metaContinueBtn) metaContinueBtn.disabled = false;
+
+      // Disable skip button (block return to image editing)
+      if (metaSkipBtn) {
+        metaSkipBtn.disabled = true;
+        metaSkipBtn.classList.add("edit-mode-disabled");
+      }
+
+      // Show overlay
+      metaOverlay.classList.remove("hidden");
+      metaOverlay.setAttribute("aria-hidden", "false");
+
+      setTimeout(() => {
+        if (metaArtistInput) metaArtistInput.focus();
+      }, 100);
+
+      console.log(`${LOG_PREFIX} Edit mode metadata modal opened for tile: ${tileId}`);
+    } catch (err) {
+      console.error(`${LOG_PREFIX} Failed to open edit metadata:`, err);
+      isEditMode = false;
+    }
+  }
+
   function closeMetaModal() {
     if (!metaOverlay) return;
-    
+
     metaOverlay.classList.add("hidden");
     metaOverlay.setAttribute("aria-hidden", "true");
-    
+
+    // Reset edit mode
+    isEditMode = false;
+    editOriginalEmail = "";
+    if (metaEmailChangeWarning) metaEmailChangeWarning.classList.add("hidden");
+    if (metaSkipBtn) {
+      metaSkipBtn.disabled = false;
+      metaSkipBtn.classList.remove("edit-mode-disabled");
+    }
+
     console.log(`${LOG_PREFIX} Tier-2 metadata modal closed`);
   }
 
@@ -414,20 +499,77 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Live validation for contact: hide error when both type + value are present
+  // Live validation: hide email error as user types valid email
   function validateContactField() {
-    const hasType = Array.from(contact1Radios).some(r => r.checked);
-    const hasValue = (metaContact1Input?.value || "").trim().length > 0;
-    if (hasType && hasValue && metaContactError) {
+    const val = (metaContact1Input?.value || "").trim();
+    if (val && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) && metaContactError) {
       metaContactError.classList.add("hidden");
     }
   }
 
   if (metaContact1Input) {
     metaContact1Input.addEventListener("input", validateContactField);
+    metaContact1Input.addEventListener("input", () => {
+      if (!isEditMode || !metaEmailChangeWarning) return;
+      const current = (metaContact1Input.value || "").trim().toLowerCase();
+      if (current !== editOriginalEmail && current.length > 0) {
+        metaEmailChangeWarning.classList.remove("hidden");
+      } else {
+        metaEmailChangeWarning.classList.add("hidden");
+      }
+    });
   }
-  contact1Radios.forEach(radio => {
-    radio.addEventListener("change", validateContactField);
-  });
+
+  // ========================================
+  // Validation (shared by Continue + Save)
+  // ========================================
+
+  function validateAllMetaFields() {
+    const artistName = (metaArtistInput?.value || "").trim();
+    const artworkTitle = (metaTitleInput?.value || "").trim();
+
+    // Validate required text fields
+    if (!artistName || !artworkTitle) {
+      if (metaRequiredError) metaRequiredError.classList.remove("hidden");
+      if (!artistName && metaArtistInput) metaArtistInput.focus();
+      else if (!artworkTitle && metaTitleInput) metaTitleInput.focus();
+      return false;
+    }
+    if (metaRequiredError) metaRequiredError.classList.add("hidden");
+
+    // Validate email (required)
+    const contact1Value = (metaContact1Input?.value || "").trim();
+    if (!contact1Value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact1Value)) {
+      if (metaContactError) metaContactError.classList.remove("hidden");
+      if (metaContact1Input) metaContact1Input.focus();
+      return false;
+    }
+    if (metaContactError) metaContactError.classList.add("hidden");
+
+    return true;
+  }
+
+  // ========================================
+  // Tier-3 Confirmation Banner
+  // ========================================
+
+  function openConfirmBanner() {
+    if (!confirmBannerOverlay) return;
+    confirmBannerOverlay.classList.remove("hidden");
+    confirmBannerOverlay.setAttribute("aria-hidden", "false");
+    console.log(`${LOG_PREFIX} Confirmation banner opened`);
+  }
+
+  function closeConfirmBanner() {
+    if (!confirmBannerOverlay) return;
+    confirmBannerOverlay.classList.add("hidden");
+    confirmBannerOverlay.setAttribute("aria-hidden", "true");
+    console.log(`${LOG_PREFIX} Confirmation banner closed`);
+  }
+
+  // ========================================
+  // Save metadata to DB (called after confirmation)
+  // ========================================
 
   async function saveMetaToDb(tileId) {
     if (!tileId) {
@@ -435,7 +577,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Get and trim values
+    // Collect form values
     const artistName = (metaArtistInput?.value || "").trim();
     const artworkTitle = (metaTitleInput?.value || "").trim();
     const yearCreated = (metaYearInput?.value || "").trim();
@@ -443,15 +585,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const dimensions = (metaDimensionsInput?.value || "").trim();
     const editionInfo = (metaEditionInput?.value || "").trim();
 
-    // Get contact fields (type + value)
-    const contact1TypeRadio = Array.from(contact1Radios).find(r => r.checked);
-    const contact1Type = contact1TypeRadio ? contact1TypeRadio.value : "";
+    const contact1Type = "email";
     const contact1Value = (metaContact1Input?.value || "").trim();
     const contact2TypeRadio = Array.from(contact2Radios).find(r => r.checked);
     const contact2Type = contact2TypeRadio ? contact2TypeRadio.value : "";
     const contact2Value = (metaContact2Input?.value || "").trim();
 
-    // Determine for_sale and sale_type from checkboxes
     let forSale = "";
     if (metaForSaleYes?.checked) forSale = "yes";
     else if (metaForSaleNo?.checked) forSale = "no";
@@ -461,42 +600,8 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (metaSaleOriginal?.checked) saleType = "original";
     else if (metaSalePrint?.checked) saleType = "print";
 
-    // Validate required fields
-    if (!artistName || !artworkTitle) {
-      // Show required fields error
-      if (metaRequiredError) {
-        metaRequiredError.classList.remove("hidden");
-      }
-      // Focus first missing field
-      if (!artistName && metaArtistInput) {
-        metaArtistInput.focus();
-      } else if (!artworkTitle && metaTitleInput) {
-        metaTitleInput.focus();
-      }
-      return; // Block submission
-    }
-
-    // Hide required error if validation passed
-    if (metaRequiredError) {
-      metaRequiredError.classList.add("hidden");
-    }
-
-    // Validate contact field (at least one contact required)
-    if (!contact1Type || !contact1Value) {
-      if (metaContactError) {
-        metaContactError.classList.remove("hidden");
-      }
-      if (metaContact1Input) metaContact1Input.focus();
-      return; // Block submission
-    }
-
-    // Hide contact error if validation passed
-    if (metaContactError) {
-      metaContactError.classList.add("hidden");
-    }
-
-    // Disable save button
-    if (metaSaveBtn) metaSaveBtn.disabled = true;
+    // Disable save button on confirmation banner
+    if (confirmSaveBtn) confirmSaveBtn.disabled = true;
     if (metaError) metaError.classList.add("hidden");
 
     try {
@@ -520,76 +625,88 @@ document.addEventListener("DOMContentLoaded", () => {
           contact2_value: contact2Value
         })
       });
-      
+
       const result = await response.json();
-      
+
       if (!response.ok || !result.ok) {
         throw new Error(result.error || `HTTP ${response.status}`);
       }
-      
+
       console.log(`${LOG_PREFIX} Metadata saved successfully:`, result);
 
       // Refresh wall to pick up the new metadata
       await refreshWall();
 
-      // Capture tile ID before closing (closeModal resets state)
+      // Capture state before closing (closeMetaModal resets isEditMode)
       const savedTileId = currentUploadTileId;
+      const wasEditMode = isEditMode;
 
-      // Close modals immediately
+      // Close all modals
+      closeConfirmBanner();
       closeMetaModal();
-      closeModal(true);
+      if (!wasEditMode) {
+        closeModal(true);
+      }
 
-      // Highlight new tile after modals are gone
+      // Highlight tile after modals are gone
       setTimeout(() => {
         if (typeof window.highlightNewTile === 'function') {
           window.highlightNewTile(savedTileId);
         }
       }, 300);
-      
+
     } catch (err) {
       console.error(`${LOG_PREFIX} Metadata save failed:`, err);
-      
-      // Show error
+
+      // Close banner, go back to meta modal to show error
+      closeConfirmBanner();
       if (metaError) {
         metaError.textContent = `Save failed: ${err.message}`;
         metaError.classList.remove("hidden");
       }
-      
-      // Re-enable save button
-      if (metaSaveBtn) metaSaveBtn.disabled = false;
+      if (metaContinueBtn) metaContinueBtn.disabled = false;
+    } finally {
+      if (confirmSaveBtn) confirmSaveBtn.disabled = false;
     }
   }
 
+  // ========================================
   // Wire Tier-2 modal buttons
+  // ========================================
+
   if (metaCloseBtn) {
     metaCloseBtn.addEventListener("click", () => {
+      const wasEditMode = isEditMode;
       closeMetaModal();
-      // Close Tier-1 (wall already refreshed after upload)
-      closeModal(true);
-    });
-  }
-
-  if (metaSkipBtn) {
-    metaSkipBtn.addEventListener("click", () => {
-      closeMetaModal();
-      // Close Tier-1 (wall already refreshed after upload)
-      closeModal(true);
-    });
-  }
-
-  if (metaSaveBtn) {
-    metaSaveBtn.addEventListener("click", () => {
-      if (currentUploadTileId) {
-        saveMetaToDb(currentUploadTileId);
+      if (!wasEditMode) {
+        closeModal(true);
       }
     });
   }
 
-  // Allow Enter key to save in inputs
+  // "Return to Artwork Edit" — close meta modal, keep upload modal + cropper intact
+  if (metaSkipBtn) {
+    metaSkipBtn.addEventListener("click", () => {
+      if (isEditMode) return;
+      closeMetaModal();
+    });
+  }
+
+  // "Continue" validates then shows confirmation banner
+  if (metaContinueBtn) {
+    metaContinueBtn.addEventListener("click", () => {
+      if (!currentUploadTileId) return;
+      if (validateAllMetaFields()) {
+        openConfirmBanner();
+      }
+    });
+  }
+
+  // Allow Enter key to advance to confirmation banner
   if (metaArtistInput) {
     metaArtistInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter" && currentUploadTileId) {
-        saveMetaToDb(currentUploadTileId);
+        if (validateAllMetaFields()) openConfirmBanner();
       }
     });
   }
@@ -597,8 +714,134 @@ document.addEventListener("DOMContentLoaded", () => {
   if (metaTitleInput) {
     metaTitleInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter" && currentUploadTileId) {
+        if (validateAllMetaFields()) openConfirmBanner();
+      }
+    });
+  }
+
+  // ========================================
+  // Wire Tier-3 confirmation banner buttons
+  // ========================================
+
+  // "Cancel" returns to metadata modal
+  if (confirmCancelBtn) {
+    confirmCancelBtn.addEventListener("click", () => {
+      closeConfirmBanner();
+    });
+  }
+
+  // "Save" commits the submission
+  if (confirmSaveBtn) {
+    confirmSaveBtn.addEventListener("click", () => {
+      if (currentUploadTileId) {
         saveMetaToDb(currentUploadTileId);
       }
     });
   }
+
+  // ========================================
+  // Edit Submission Banner (hamburger menu)
+  // ========================================
+
+  const editBannerOverlay = document.getElementById("editBannerOverlay");
+  const editBannerCancelBtn = document.getElementById("editBannerCancelBtn");
+  const editBannerContinueBtn = document.getElementById("editBannerContinueBtn");
+  const menuItemEdit = document.getElementById("menu-item-edit");
+  const editTitleInput = document.getElementById("editTitleInput");
+  const editCodeInput = document.getElementById("editCodeInput");
+  const editCodeError = document.getElementById("editCodeError");
+
+  function openEditBanner() {
+    if (!editBannerOverlay) return;
+    if (editTitleInput) editTitleInput.value = "";
+    if (editCodeInput) editCodeInput.value = "";
+    if (editCodeError) editCodeError.classList.add("hidden");
+    editBannerOverlay.classList.remove("hidden");
+    editBannerOverlay.setAttribute("aria-hidden", "false");
+    setTimeout(() => {
+      if (editTitleInput) editTitleInput.focus();
+    }, 100);
+  }
+
+  function closeEditBanner() {
+    if (!editBannerOverlay) return;
+    editBannerOverlay.classList.add("hidden");
+    editBannerOverlay.setAttribute("aria-hidden", "true");
+  }
+
+  // Hamburger menu "Edit Your Artwork Submission" opens the banner
+  if (menuItemEdit) {
+    menuItemEdit.addEventListener("click", () => {
+      // Close hamburger menu
+      const hamburgerMenu = document.getElementById("hamburger-menu");
+      const hamburgerBtn = document.getElementById("hamburger-btn");
+      if (hamburgerMenu) hamburgerMenu.classList.remove("open");
+      if (hamburgerBtn) {
+        hamburgerBtn.setAttribute("aria-expanded", "false");
+      }
+      if (hamburgerMenu) hamburgerMenu.setAttribute("aria-hidden", "true");
+
+      openEditBanner();
+    });
+  }
+
+  if (editBannerCancelBtn) {
+    editBannerCancelBtn.addEventListener("click", closeEditBanner);
+  }
+
+  if (editBannerContinueBtn) {
+    editBannerContinueBtn.addEventListener("click", async () => {
+      const title = (editTitleInput?.value || "").trim();
+      const code = (editCodeInput?.value || "").trim();
+
+      if (!title || !code) {
+        if (editCodeError) {
+          editCodeError.textContent = "Please enter both your artwork title and edit code.";
+          editCodeError.classList.remove("hidden");
+        }
+        return;
+      }
+
+      try {
+        editBannerContinueBtn.disabled = true;
+        const res = await fetch("/api/verify_edit_code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, code })
+        });
+        const result = await res.json();
+
+        if (!result.ok) {
+          if (editCodeError) {
+            editCodeError.textContent = result.error || "No matching artwork found. Check your title and edit code.";
+            editCodeError.classList.remove("hidden");
+          }
+          return;
+        }
+
+        // Success — close banner and open prefilled metadata modal
+        closeEditBanner();
+        openMetaModalForEdit(result.tile_id);
+      } catch (err) {
+        console.error(`${LOG_PREFIX} Edit code verification error:`, err);
+        if (editCodeError) {
+          editCodeError.textContent = "Verification failed. Please try again.";
+          editCodeError.classList.remove("hidden");
+        }
+      } finally {
+        editBannerContinueBtn.disabled = false;
+      }
+    });
+  }
+
+  // Enter key on edit fields triggers Continue
+  [editTitleInput, editCodeInput].forEach(input => {
+    if (input) {
+      input.addEventListener("keypress", (e) => {
+        if (e.key === "Enter" && editBannerContinueBtn) {
+          editBannerContinueBtn.click();
+        }
+      });
+    }
+  });
 });

@@ -160,6 +160,9 @@
         <div id="metaContactError" class="required-error hidden" style="margin-top:8px; font-size:0.85rem;">
           A valid email address is required.
         </div>
+        <div id="metaEmailChangeWarning" class="email-change-warning hidden">
+          Changing your email will invalidate your current edit code. A new code will be sent to the new address.
+        </div>
 
         <label class="contact-group-label">Additional Contact (optional)</label>
         <div class="contact-type-radios">
@@ -196,6 +199,13 @@
     <div id="editBanner" class="confirm-banner" role="dialog" aria-modal="true">
       <h2 class="confirm-banner-heading">A note about editing</h2>
       <p class="confirm-banner-text">Once submitted, artwork becomes a permanent part of The Last Gallery time capsule. However, if you need to correct artist or artwork related information, you're welcome to do that here.</p>
+      <div class="edit-code-section">
+        <label for="editTitleInput" class="edit-code-label">Artwork title</label>
+        <input id="editTitleInput" type="text" maxlength="120" placeholder="Enter the title of your artwork" autocomplete="off" spellcheck="false" />
+        <label for="editCodeInput" class="edit-code-label">Edit code sent to your email</label>
+        <input id="editCodeInput" type="text" maxlength="8" placeholder="e.g., a3f7b2c1" autocomplete="off" spellcheck="false" />
+        <div id="editCodeError" class="edit-code-error hidden">Invalid edit code. Please try again.</div>
+      </div>
       <div class="confirm-banner-actions">
         <button id="editBannerCancelBtn" type="button" class="secondary-btn">Cancel</button>
         <button id="editBannerContinueBtn" type="button" class="primary-btn">Continue</button>
