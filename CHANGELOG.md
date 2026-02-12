@@ -4,6 +4,17 @@
 
 ## 2026-02-12
 
+### Edit Artwork Flow
+- **Edit code system**: On metadata save, an 8-character edit code is generated per email and logged to server console (`[EDIT CODE] To: ... | Code: ...`). Same email reuses same code.
+- **Schema migration 4**: New `edit_codes` table (email PK, code, created_at)
+- **Verification endpoint**: `POST /api/verify_edit_code` accepts artwork title + edit code, returns matching tile_id. Title matching is case-insensitive with whitespace/trailing period tolerance.
+- **Edit banner UI**: Hamburger → "Edit Your Artwork Submission" opens banner with artwork title and edit code fields. No tile click required.
+- **Prefilled metadata form**: On successful verification, metadata modal opens in edit mode with all fields prefilled from database
+- **Edit mode guards**: "Return to Artwork Edit" button disabled (opacity 0.3, pointer-events none, HTML disabled). Close (X) returns to gallery instead of upload modal.
+- **Email change warning**: Yellow inline warning appears when email field is modified in edit mode, informing user their current edit code will be invalidated
+- **Orphaned code cleanup**: When email changes, old email's edit code is deleted from `edit_codes` only if no other assets reference that email
+- **`send_edit_code()` stub**: Console-only logger, ready to swap for SendGrid
+
 ### Welcome Modal Subtitle
 - Added italic tagline beneath title: "A dynamic time capsule of creative works"
 - Styled as light-weight subtitle (font-weight 300, italic, 75% opacity)
