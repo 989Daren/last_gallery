@@ -30,13 +30,8 @@
     moveTile: '/api/admin/move_tile_asset',
     historyStatus: '/api/admin/history_status',
   };
-  const getSel = () => window.SEL || {
-    tile: '.tile',
-    adminTileLabel: '.admin-tile-label',
-    tileLabel: '.tile-label',
-  };
   const getDebugMode = () => window.DEBUG || false;
-  const getAdminDebug = () => window.ADMIN_DEBUG || false;
+
 
   // ========================================
   // Admin State
@@ -61,8 +56,6 @@
       return {
         shuffle_count: data.shuffle_count,
         non_shuffle_count: data.non_shuffle_count,
-        non_shuffle_total: data.non_shuffle_total ?? data.non_shuffle_count,
-        last_shuffle_id: data.last_shuffle_id ?? null
       };
     }
 
@@ -94,22 +87,6 @@
     allLabels.forEach(label => label.remove());
   }
 
-  function applyAdminTileLabel(tileEl) {
-    if (!isAdminActive() || !showTileLabels) return;
-
-    let label = tileEl.querySelector('.admin-tile-label');
-    if (label) {
-      label.textContent = tileEl.dataset.id;
-      label.style.display = 'block';
-      return;
-    }
-
-    label = document.createElement('div');
-    label.classList.add('admin-tile-label');
-    label.textContent = tileEl.dataset.id;
-    tileEl.appendChild(label);
-  }
-
   function updateAllAdminTileLabels() {
     if (!isAdminActive() || !showTileLabels) return;
 
@@ -124,6 +101,7 @@
         const label = document.createElement('div');
         label.classList.add('admin-tile-label');
         label.textContent = tile.dataset.id;
+        label.style.display = 'block';
         tile.appendChild(label);
       } else {
         existingLabels[0].textContent = tile.dataset.id;
@@ -148,29 +126,10 @@
       clearAllAdminTileLabels();
     }
 
-    if (getAdminDebug() && isAdminActive()) {
-      const data = historyData || window.lastHistoryData || {};
-      const normalized = normalizeHistoryCounts(data);
-      updateAdminDebugFooter(normalized.shuffle_count, normalized.non_shuffle_count);
-    }
   }
 
   // Expose globally for main.js
   window.refreshAdminOverlays = refreshAdminOverlays;
-
-  function updateAdminDebugFooter(shuffle_count, non_shuffle_count) {
-    if (!getAdminDebug()) return;
-
-    const footer = $("adminDebugFooter");
-    if (!footer) return;
-
-    const data = window.lastHistoryData || {};
-    const non_shuffle_total = data.non_shuffle_total ?? '?';
-    const last_shuffle_id = data.last_shuffle_id ?? 'none';
-
-    footer.textContent = `Undo: ${non_shuffle_count} eligible / ${non_shuffle_total} total | Shuffle Undo: ${shuffle_count} | Last Shuffle ID: ${last_shuffle_id}`;
-    footer.style.display = 'block';
-  }
 
   // ========================================
   // Undo Button State
@@ -504,9 +463,6 @@
         const confirmMsg = `Remove "${tileInfo.artwork_name}" by ${tileInfo.artist_name} from ${tileId}?`;
         if (!confirm(confirmMsg)) return;
 
-        if (typeof window.captureStateSnapshot === 'function') {
-          window.captureStateSnapshot();
-        }
 
         const response = await fetch(getApi().clearTile, {
           method: 'POST',
@@ -551,9 +507,6 @@
       clearAllTilesBtn.disabled = true;
 
       try {
-        if (typeof window.captureStateSnapshot === 'function') {
-          window.captureStateSnapshot();
-        }
 
         const response = await fetch(getApi().clearAll, {
           method: 'POST',
@@ -704,9 +657,6 @@
           if (!confirm(confirmMsg)) return;
         }
 
-        if (typeof window.captureStateSnapshot === 'function') {
-          window.captureStateSnapshot();
-        }
 
         const response = await fetch(getApi().moveTile, {
           method: 'POST',
@@ -885,9 +835,6 @@
       shuffleButton.disabled = true;
 
       try {
-        if (typeof window.captureStateSnapshot === 'function') {
-          window.captureStateSnapshot();
-        }
 
         const response = await fetch("/shuffle", {
           method: "POST",
@@ -941,14 +888,6 @@
         showTileLabels = e.target.checked;
         refreshAdminOverlays();
 
-        if (showTileLabels) {
-          setTimeout(() => {
-            if (showTileLabels === e.target.checked) {
-              refreshAdminOverlays();
-            }
-          }, 0);
-        }
-
         if (getDebugMode()) console.log('Show Tile Labels:', showTileLabels);
       });
     }
@@ -971,9 +910,6 @@
     initAdminActions();
     initShuffleHandlers();
     initTileLabelsToggle();
-
-    // Track selected tile for admin operations
-    window.selectedTileId = null;
   }
 
   // Initialize when DOM is ready
@@ -982,14 +918,5 @@
   } else {
     init();
   }
-
-  // Expose necessary functions globally
-  window.AdminModule = {
-    isAdminActive,
-    refreshAdminOverlays,
-    updateUndoButton,
-    fetchHistoryStatus,
-    showAdminStatus
-  };
 
 })();

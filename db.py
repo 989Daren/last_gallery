@@ -67,9 +67,6 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
 
-    # Enable foreign keys
-    cursor.execute("PRAGMA foreign_keys = ON")
-
     # Get current schema version
     current_version = _get_schema_version(cursor)
 

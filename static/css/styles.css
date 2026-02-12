@@ -381,8 +381,7 @@ label {
 }
 
 /* Artwork inside each tile */
-.tile img,
-.tile-art {
+.tile img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1007,37 +1006,6 @@ label {
 /* =====================================================
    UPLOAD MODAL — specifics
    ===================================================== */
-
-/* Upload metadata inputs */
-.upload-metadata {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 14px 0;
-}
-
-.upload-metadata label {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
-  margin-bottom: 2px;
-}
-
-.upload-metadata input {
-  padding: 8px 10px;
-  background: var(--input-bg);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  color: #fff;
-  font-size: 14px;
-  font-family: inherit;
-}
-
-.upload-metadata input:focus {
-  outline: none;
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 2px rgba(200, 220, 255, 0.2);
-}
 
 /* The preview area — shows selected image */
 .previewBox {
@@ -1732,47 +1700,6 @@ label {
 
   /* ✅ match direction: slide OUT to the left */
   transform: translateX(-40px);
-}
-
-/* X close inside gradient (top-right) */
-.popup-info-close {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-
-  /* ✅ change: more prominent X with solid round black background */
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.90);
-
-  border: 1px solid rgba(255,255,255,0.22);
-  color: rgba(255,255,255,0.98);
-
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1;
-
-  cursor: pointer;
-
-  opacity: 0.92;
-  transition: opacity 120ms ease, transform 120ms ease;
-
-  pointer-events: auto; /* allow clicks */
-}
-
-.popup-info-close:hover {
-  opacity: 1;
-  transform: scale(1.08);
-}
-
-.popup-info-close:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
 }
 
 /* Mobile tweaks: reduce max image height a touch */

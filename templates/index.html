@@ -16,10 +16,6 @@
   <!-- Expose server state to JS (single source of truth) -->
   <script>
     window.SERVER_GRID_COLOR = "{{ grid_color|default('#b84c27') }}";
-    window.GRID_SVG_URL = "{{ url_for('static', filename='grid_full.svg') }}";
-    // DISABLED: No longer inject demo placement data
-    // Tiles start empty - artwork only comes from upload system database
-    window.SERVER_PLACEMENT = {};
   </script>
 
 </head>
@@ -97,7 +93,7 @@
       </div>
 
       <!-- Preview area -->
-      <div class="previewBox" id="previewBox">
+      <div class="previewBox">
         <img id="previewImage" src="" alt="Preview" class="hidden">
       </div>
 
