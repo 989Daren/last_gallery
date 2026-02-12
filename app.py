@@ -14,9 +14,6 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 # Initialize database schema on startup
 init_db()
 
-# ---- Debug toggle ----
-SERVER_DEBUG = False
-
 # ---- Grid color config ----
 DEFAULT_GRID_COLOR = "#b84c27"
 
@@ -304,25 +301,9 @@ def index():
     return render_template("index.html", grid_color=grid_color)
 
 
-@app.route("/__debug/static_check")
-def debug_static_check():
-    """Debug endpoint to verify Flask can see grid_full.svg."""
-    p = os.path.join(app.static_folder, "grid_full.svg")
-    exists = os.path.exists(p)
-    size = os.path.getsize(p) if exists else None
-    return {
-        "static_folder": app.static_folder,
-        "static_url_path": app.static_url_path,
-        "cwd": os.getcwd(),
-        "grid_full_svg_path": p,
-        "exists": exists,
-        "size": size,
-    }, 200
-
-
 @app.route("/api/grid-color", methods=["POST"])
 def set_grid_color():
-    """Owner-only endpoint: update the global grid color."""
+    """Update the global grid color."""
     data = request.get_json(silent=True) or {}
     color = data.get("color")
 
@@ -384,7 +365,6 @@ def uploads(filename):
 
 
 @app.route("/api/upload_assets", methods=["POST"])
-@app.route("/api/upload_asset", methods=["POST"])
 def upload_assets():
     """Upload cropped tile image + popup image and place into next available XS tile.
 
@@ -495,7 +475,6 @@ def save_tile_metadata(tile_id):
         edition_info = (data.get("edition_info") or "").strip()
         for_sale = (data.get("for_sale") or "").strip()
         sale_type = (data.get("sale_type") or "").strip()
-        artist_contact = (data.get("artist_contact") or "").strip()
         contact1_type = (data.get("contact1_type") or "").strip()
         contact1_value = (data.get("contact1_value") or "").strip()
         contact2_type = (data.get("contact2_type") or "").strip()
@@ -528,12 +507,12 @@ def save_tile_metadata(tile_id):
             """UPDATE assets SET
                 artist_name = ?, artwork_title = ?, year_created = ?,
                 medium = ?, dimensions = ?, edition_info = ?,
-                for_sale = ?, sale_type = ?, artist_contact = ?,
+                for_sale = ?, sale_type = ?,
                 contact1_type = ?, contact1_value = ?,
                 contact2_type = ?, contact2_value = ?
                WHERE asset_id = ?""",
             (artist_name, artwork_title, year_created, medium, dimensions,
-             edition_info, for_sale, sale_type, artist_contact,
+             edition_info, for_sale, sale_type,
              contact1_type, contact1_value, contact2_type, contact2_value, asset_id)
         )
 

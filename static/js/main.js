@@ -18,7 +18,6 @@ const BASE_UNIT = 85;
 
 const ENDPOINTS = {
   gridColor: "/api/grid-color",
-  shuffle: "/shuffle",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -245,7 +244,7 @@ function isZoomDisabled() {
   if (welcomeModal && !welcomeModal.classList.contains('hidden')) return true;
   if (typeof isArtworkPopupOpen === 'function' && isArtworkPopupOpen()) return true;
   const uploadModal = document.getElementById('uploadModal');
-  if (uploadModal && uploadModal.classList.contains('is-open')) return true;
+  if (uploadModal && !uploadModal.classList.contains('hidden')) return true;
   const adminModal = document.getElementById('adminModal');
   if (adminModal && !adminModal.classList.contains('hidden')) return true;
   return false;
@@ -630,14 +629,8 @@ window.ConicalNav = ConicalNav;
 // Repeated selector/ID/API string constants
 // ========================================
 const SEL = {
-  wall: 'galleryWall',           // ID for getElementById/$(...)
-  wallQuery: '#galleryWall',     // Selector for querySelector
-  tile: '.tile',
-  artFrame: '.art-frame',
-  artImgwrap: '.art-imgwrap',
-  adminTileLabel: '.admin-tile-label',
+  wall: 'galleryWall',
   tileLabel: '.tile-label',
-  tileHasAsset: '.tile.has-asset',
 };
 
 const IDS = {
@@ -664,10 +657,6 @@ window.API = API;
 
 const LOG = {
   render: '[RENDER]',
-  admin: '[ADMIN]',
-  state: '[STATE]',
-  undo: '[UNDO]',
-  boot: '[BOOT]',
 };
 
 // ========================================
@@ -925,10 +914,6 @@ function wirePopupEventsOnce() {
   }
   window.closeInfoRibbon = closeInfoRibbon;
 
-  function closeImagePopup() {
-    closeArtworkPopup();
-  }
-
   // Unified state-machine click handler
   // Implements two-click dismiss: first click closes ribbon, second closes popup
   overlay.addEventListener("click", (e) => {
@@ -949,7 +934,7 @@ function wirePopupEventsOnce() {
     }
 
     // Second click: close popup
-    closeImagePopup();
+    closeArtworkPopup();
   });
 }
 
@@ -1146,41 +1131,6 @@ function buildLayoutTiles(tiles, totalHeight) {
   });
 }
 
-/**
- * Select a random empty XS tile from the gallery.
- *
- * @returns {HTMLElement|null} - The selected tile element, or null if none available
- */
-function selectRandomEmptyXSTile() {
-  const wall = document.getElementById(SEL.wall);
-  if (!wall) {
-    console.warn("[selectRandomEmptyXSTile] Gallery wall not found");
-    return null;
-  }
-
-  // Find all XS tiles that are NOT occupied
-  const emptyXSTiles = Array.from(wall.querySelectorAll(SEL.tile + '[data-size="xs"]'))
-    .filter(tile => tile.dataset.occupied !== "1");
-
-  if (emptyXSTiles.length === 0) {
-    console.warn("[selectRandomEmptyXSTile] No empty XS tiles available");
-    alert("No empty XS tiles available. Please clear some space first.");
-    return null;
-  }
-
-  // Select randomly
-  const randomIndex = Math.floor(Math.random() * emptyXSTiles.length);
-  const selectedTile = emptyXSTiles[randomIndex];
-
-  const tileId = selectedTile.dataset.id;
-  if (DEBUG) console.log("[selectRandomEmptyXSTile] Selected tile:", tileId);
-
-  return selectedTile;
-}
-
-// Export for use by other scripts
-window.selectRandomEmptyXSTile = selectRandomEmptyXSTile;
-
 // Size wall overlays to full scrollable dimensions (mobile pan support)
 function sizeWallOverlays(wall) {
   const w = wall.scrollWidth;
@@ -1197,7 +1147,7 @@ function finalizeAfterRender(wall) {
   void wall.offsetWidth;
 
   // Clear any lingering transforms that could cause shift/clipping
-  wall.querySelectorAll('.art-imgwrap, .art-imgwrap img, img.tile-art').forEach(el => {
+  wall.querySelectorAll('.art-imgwrap, .art-imgwrap img').forEach(el => {
     if (el && el.style && el.style.transform && el.style.transform !== 'none') {
       el.style.transform = 'none';
     }
@@ -1447,11 +1397,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Expose for other modules (e.g., upload_modal.js, admin.js)
   window.refreshWallFromServer = refreshWallFromServer;
 
-  // Expose captureStateSnapshot stub (admin.js may call it)
-  window.captureStateSnapshot = function() {
-    // State snapshots handled server-side via undo history
-  };
-
   if (!wall) {
     error("galleryWall element not found");
     return;
@@ -1512,10 +1457,6 @@ document.addEventListener("DOMContentLoaded", () => {
       wall.addEventListener("click", (e) => {
         const tileEl = e.target.closest(".tile");
         if (!tileEl) return;
-
-        // Track selected tile for admin operations
-        window.selectedTileId = tileEl.dataset.id;
-        if (DEBUG) console.log('Selected tile:', window.selectedTileId);
 
         // Check for uploaded asset with metadata (from database hydration)
         const popupUrl = tileEl.dataset.popupUrl;
