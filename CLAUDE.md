@@ -24,7 +24,7 @@ python app.py
 |------|---------|
 | `app.py` | Flask application, all API endpoints |
 | `db.py` | Database connection, schema initialization, versioned migrations |
-| `data/gallery.db` | SQLite database (assets + tiles + schema_version tables) |
+| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + schema_version tables) |
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
 
 ### Frontend
@@ -187,11 +187,14 @@ Tiles are classified by size and numbered sequentially:
 - **Animation**: Diagonal reflection sweep across modal (simpleWelcomeSheen)
 - Dismissed via "Enter" button, backdrop click, or Escape key
 
-## Edit Submission Banner
+## Edit Artwork Flow
 - **Trigger**: Hamburger menu → "Edit Your Artwork Submission"
-- **Title**: "A note about editing"
-- **Body**: Explains artwork is permanent; allows correcting artist/artwork text info
-- **Actions**: Cancel and Continue buttons
+- **Edit banner**: Title "A note about editing", body text, two input fields (artwork title + edit code), Cancel/Continue buttons
+- **Verification**: `POST /api/verify_edit_code` with `{title, code}`. Title matching is case-insensitive, trims whitespace and trailing periods. Code maps to email, then finds asset where both title and email match.
+- **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Logged to console via `send_edit_code()` stub. Reused across multiple uploads with same email.
+- **Edit mode**: Metadata modal opens prefilled. "Return to Artwork Edit" button disabled (CSS `edit-mode-disabled` + HTML `disabled`). Close (X) returns to gallery, not upload modal.
+- **Email change warning**: Yellow inline warning when email field differs from original, informing user their edit code will be invalidated and a new one sent.
+- **Orphaned code cleanup**: On email change, old email's `edit_codes` row deleted only if no other assets reference that email.
 
 ## Initial Gallery View
 - **Origin on load**: Gallery starts at 0, 0 (top-left corner)
