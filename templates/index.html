@@ -45,9 +45,11 @@
         <!-- Dropdown menu (hidden by default) -->
         <ul id="hamburger-menu" role="menu" aria-hidden="true">
           <li role="none">
+            <button id="menu-item-edit" role="menuitem">Edit Your Artwork Submission</button>
+          </li>
+          <li role="none">
             <button id="menu-item-admin" role="menuitem">Admin</button>
           </li>
-          <!-- Future menu items go here -->
         </ul>
       </div>
     </div>
@@ -56,6 +58,7 @@
   <div id="simpleWelcome" class="simpleWelcome hidden" role="dialog" aria-modal="true" aria-label="Welcome">
     <div class="simpleWelcomeCard" role="document">
       <div class="simpleWelcomeTitle">Welcome to The Last Gallery</div>
+      <div class="simpleWelcomeSubtitle">A dynamic time capsule of creative works</div>
       <div class="welcome-content-row">
         <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="The Last Gallery" class="welcome-logo">
         <ul class="welcome-instructions">
@@ -152,15 +155,10 @@
           </div>
         </div>
 
-        <label class="contact-group-label">Contact Info <span class="required-mark">*</span></label>
-        <div class="contact-type-radios">
-          <label><input type="radio" name="contact1Type" value="email"> Email</label>
-          <label><input type="radio" name="contact1Type" value="social"> Social Media</label>
-          <label><input type="radio" name="contact1Type" value="website"> Website</label>
-        </div>
-        <input id="metaContact1Input" type="text" maxlength="120" placeholder="Select a contact type above" />
+        <label class="contact-group-label">Email <span class="required-mark">*</span></label>
+        <input id="metaContact1Input" type="email" maxlength="120" placeholder="e.g., artist@example.com" />
         <div id="metaContactError" class="required-error hidden" style="margin-top:8px; font-size:0.85rem;">
-          At least one contact source is required.
+          A valid email address is required.
         </div>
 
         <label class="contact-group-label">Additional Contact (optional)</label>
@@ -175,8 +173,32 @@
       </div>
 
       <div class="modal-actions-tier2">
-        <button id="metaSkipBtn" type="button" class="secondary-btn">Skip for now</button>
-        <button id="metaSaveBtn" type="button" class="primary-btn">Save</button>
+        <button id="metaSkipBtn" type="button" class="secondary-btn">Return to Artwork Edit</button>
+        <button id="metaContinueBtn" type="button" class="primary-btn">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tier-3: Submission Confirmation Banner (overlays Tier-2 metadata modal) -->
+  <div id="confirmBannerOverlay" class="confirm-banner-overlay hidden" aria-hidden="true">
+    <div id="confirmBanner" class="confirm-banner" role="dialog" aria-modal="true">
+      <h2 class="confirm-banner-heading">Important...</h2>
+      <p class="confirm-banner-text">Know this: your creative work is about to become part of a finite collection—a living time capsule of creative expression that will endure for the life of the gallery. Once every tile is filled, submissions end forever. Because of this, edits are intentionally minimal: the artist and artwork text may be modified, but the image itself becomes preserved, not revisable. It's a rare opportunity to leave a definitive mark and take part in a closed constellation of art that can never be expanded, only experienced.</p>
+      <div class="confirm-banner-actions">
+        <button id="confirmCancelBtn" type="button" class="secondary-btn">Cancel</button>
+        <button id="confirmSaveBtn" type="button" class="primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Submission Banner (shown when user clicks "Edit Your Artwork Submission") -->
+  <div id="editBannerOverlay" class="confirm-banner-overlay hidden" aria-hidden="true">
+    <div id="editBanner" class="confirm-banner" role="dialog" aria-modal="true">
+      <h2 class="confirm-banner-heading">A note about editing</h2>
+      <p class="confirm-banner-text">Once submitted, artwork becomes a permanent part of The Last Gallery time capsule. However, if you need to correct artist or artwork related information, you're welcome to do that here.</p>
+      <div class="confirm-banner-actions">
+        <button id="editBannerCancelBtn" type="button" class="secondary-btn">Cancel</button>
+        <button id="editBannerContinueBtn" type="button" class="primary-btn">Continue</button>
       </div>
     </div>
   </div>
