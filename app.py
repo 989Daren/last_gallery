@@ -5,9 +5,13 @@ import uuid
 import re
 import io
 import xml.etree.ElementTree as ET
+import resend
+from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from PIL import Image
 from db import init_db, get_db
+
+load_dotenv()
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 
@@ -285,8 +289,30 @@ def _save_optimized_popup(fs, asset_id: str):
 
 
 def send_edit_code(email, code):
-    """Send edit code to artist. Logs to console only — replace internals for SendGrid later."""
-    print(f"[EDIT CODE] To: {email} | Code: {code}")
+    """Send edit code to artist via Resend API."""
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        app.logger.warning("[EDIT CODE] RESEND_API_KEY not set — code not emailed. To: %s | Code: %s", email, code)
+        return
+
+    resend.api_key = api_key
+    try:
+        resend.Emails.send({
+            "from": "The Last Gallery <noreply@thelastgallery.com>",
+            "to": [email],
+            "subject": "Your Last Gallery edit code",
+            "text": (
+                "Thank you for participating in The Last Gallery "
+                "\u2014 a dynamic time capsule of creative works.\n\n"
+                f"Your edit code is: {code}\n\n"
+                "Keep this somewhere safe. You\u2019ll need it if you ever "
+                "want to update your artist or artwork information.\n\n"
+                "\u2014 The Last Gallery"
+            ),
+        })
+        app.logger.info("[EDIT CODE] Email sent to %s", email)
+    except Exception:
+        app.logger.exception("[EDIT CODE] Failed to send email to %s", email)
 
 
 # ---- Routes ----
