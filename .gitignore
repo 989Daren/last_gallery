@@ -5,6 +5,9 @@ __pycache__/
 data/grid_color.json
 data/gallery.db
 
+# Environment variables
+.env
+
 # Claude Code working directory
 .claude/
 
