@@ -8,6 +8,7 @@ A Flask-based web gallery application where users can upload artwork images that
 - **Database**: SQLite (single source of truth) with versioned migrations
 - **Frontend**: Vanilla JavaScript (modular), CSS
 - **Image Processing**: Cropper.js (client-side cropping), Pillow (server-side optimization)
+- **Email**: Resend API (edit code delivery), `python-dotenv` for env config
 
 ## How to Run
 ```bash
@@ -191,7 +192,7 @@ Tiles are classified by size and numbered sequentially:
 - **Trigger**: Hamburger menu → "Edit Your Artwork Submission"
 - **Edit banner**: Title "A note about editing", body text, two input fields (artwork title + edit code), Cancel/Continue buttons
 - **Verification**: `POST /api/verify_edit_code` with `{title, code}`. Title matching is case-insensitive, trims whitespace and trailing periods. Code maps to email, then finds asset where both title and email match.
-- **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Logged to console via `send_edit_code()` stub. Reused across multiple uploads with same email.
+- **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Emailed to artist via Resend API (`send_edit_code()`). Reused across multiple uploads with same email.
 - **Edit mode**: Metadata modal opens prefilled. "Return to Artwork Edit" button disabled (CSS `edit-mode-disabled` + HTML `disabled`). Close (X) returns to gallery, not upload modal.
 - **Email change warning**: Yellow inline warning when email field differs from original, informing user their edit code will be invalidated and a new one sent.
 - **Orphaned code cleanup**: On email change, old email's `edit_codes` row deleted only if no other assets reference that email.
@@ -266,6 +267,8 @@ window.highlightNewTile(tileId)   // Scroll to tile + sheen animation
 - Images stored in `/uploads/` directory with UUID filenames
 - No authentication beyond admin PIN for admin functions
 - Schema migrations run automatically on startup
+- Environment variables loaded from `.env` via `python-dotenv` (`.env` is gitignored)
+- `RESEND_API_KEY` required for edit code emails; if missing, logs a warning and skips sending
 
 ## Working with Claude (claude.ai)
 - When drafting instructions for Claude Code handoff, keep guidance intent-based
