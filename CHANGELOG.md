@@ -14,6 +14,9 @@
 ### Uploads Cleanup
 - Deleted 338 orphaned image files (276.4 MB) from `uploads/` — files not referenced by any active tile in the database
 
+### Docs Cleanup
+- Removed 7 outdated files: `DEBUG_UPLOAD_RELOAD`, `focal-point-zoom-implementation`, `last_gallery_reference_index`, `phase2_state_architecture_summary`, `phase3_performance_optimization_summary`, `pulldown`, `adminlook`
+
 ---
 
 ## 2026-02-12
