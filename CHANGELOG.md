@@ -2,10 +2,24 @@
 
 ---
 
+## 2026-02-13
+
+### Email Integration — Resend API
+- **`send_edit_code()` wired up**: Edit codes now emailed to artists via Resend API (plain text, from `noreply@thelastgallery.com`)
+- **Environment config**: Added `python-dotenv`; API key loaded from `.env` file (`RESEND_API_KEY`)
+- **Graceful fallback**: If API key is missing, logs a warning via `app.logger` and skips sending — submission flow is never interrupted
+- **New dependencies**: `resend>=2.0`, `python-dotenv>=1.0`
+- **`.env` gitignored**: Added to `.gitignore` to prevent key leakage
+
+### Uploads Cleanup
+- Deleted 338 orphaned image files (276.4 MB) from `uploads/` — files not referenced by any active tile in the database
+
+---
+
 ## 2026-02-12
 
 ### Edit Artwork Flow
-- **Edit code system**: On metadata save, an 8-character edit code is generated per email and logged to server console (`[EDIT CODE] To: ... | Code: ...`). Same email reuses same code.
+- **Edit code system**: On metadata save, an 8-character edit code is generated per email. Same email reuses same code.
 - **Schema migration 4**: New `edit_codes` table (email PK, code, created_at)
 - **Verification endpoint**: `POST /api/verify_edit_code` accepts artwork title + edit code, returns matching tile_id. Title matching is case-insensitive with whitespace/trailing period tolerance.
 - **Edit banner UI**: Hamburger → "Edit Your Artwork Submission" opens banner with artwork title and edit code fields. No tile click required.
@@ -13,7 +27,6 @@
 - **Edit mode guards**: "Return to Artwork Edit" button disabled (opacity 0.3, pointer-events none, HTML disabled). Close (X) returns to gallery instead of upload modal.
 - **Email change warning**: Yellow inline warning appears when email field is modified in edit mode, informing user their current edit code will be invalidated
 - **Orphaned code cleanup**: When email changes, old email's edit code is deleted from `edit_codes` only if no other assets reference that email
-- **`send_edit_code()` stub**: Console-only logger, ready to swap for SendGrid
 
 ### Housekeeping
 - Removed test record with incorrect email from gallery.db (and associated edit code)
