@@ -12,8 +12,6 @@ data/gallery.db
 .claude/
 
 # Working docs/specs (not for repo)
-adminlook.md
-pulldown.md
 nav_arrows.pdf
 docs/upload-modal-report.md
 
