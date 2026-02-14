@@ -1,0 +1,1 @@
+Query the database to get a list of all image filenames currently referenced by active gallery tiles. Then compare that list against all files in the images/ (or uploads/) folder. Delete any image files that are NOT referenced in the database. Show me the list of files to be deleted before actually deleting anything, and ask for my confirmation.
