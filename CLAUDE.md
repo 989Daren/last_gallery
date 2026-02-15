@@ -131,6 +131,7 @@ Tiles are classified by size and numbered sequentially:
 | `/api/tile/<tile_id>/metadata` | POST | Save all metadata fields (accepts `is_edit` flag to control email sending) |
 | `/api/tile/<tile_id>/metadata` | GET | Get metadata for a tile |
 | `/api/verify_edit_code` | POST | Verify artwork title + edit code, returns matching tile_id |
+| `/api/resend_edit_code` | POST | Resend edit code to email (privacy-safe: same response regardless) |
 
 ### Admin (requires `X-Admin-Pin: 8375` header)
 | Endpoint | Method | Purpose |
@@ -192,10 +193,12 @@ Tiles are classified by size and numbered sequentially:
 
 ## Edit Artwork Flow
 - **Trigger**: Hamburger menu → "Edit Your Artwork Submission", or deep-link via `/edit` (auto-opens edit banner, skips welcome modal)
-- **Edit banner**: Title "A note about editing", body text, two input fields (artwork title + edit code), Cancel/Continue buttons
+- **Edit banner**: Title "A note about editing", body text, two input fields (artwork title + edit code), Cancel/Continue buttons. "Forgot your edit code?" link toggles inline email resend form.
+- **Admin edit shortcut**: When admin is active, edit banner hides the edit code field and accepts a tile ID instead. Uses `/api/admin/tile_info` with PIN header for lookup.
 - **Verification**: `POST /api/verify_edit_code` with `{title, code}`. Title matching is case-insensitive, trims whitespace and trailing periods. Code maps to email, then finds asset where both title and email match.
 - **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Emailed to artist via Resend API (`send_edit_code(email, code, artwork_title)`). HTML email includes artwork title, edit code, link to `/edit` with title prefilled, and Creator of the Month teaser linking to `/creator-of-the-month`. Plain-text fallback included. Reused across multiple uploads with same email.
-- **Email send logic**: Client passes `is_edit` flag in metadata POST. New uploads always send the email. Edit saves skip the email unless the email address changed (new code generated).
+- **Email send logic**: Client passes `is_edit` flag in metadata POST. New uploads always send the email. Edit saves skip the email unless the email address changed (even if new email already has a code).
+- **Resend edit code**: `POST /api/resend_edit_code` takes email, looks up existing code, resends. Privacy-safe: always returns success message regardless of email existence.
 - **Edit mode**: Metadata modal opens prefilled. "Return to Artwork Edit" button disabled (CSS `edit-mode-disabled` + HTML `disabled`). Close (X) returns to gallery, not upload modal.
 - **Email change warning**: Yellow inline warning when email field differs from original, informing user their edit code will be invalidated and a new one sent.
 - **Orphaned code cleanup**: On email change, old email's `edit_codes` row deleted only if no other assets reference that email.
@@ -260,6 +263,7 @@ window.refreshWallFromServer()    // Refresh wall from database
 window.captureStateSnapshot()     // Stub for state snapshots
 window.refreshAdminOverlays()     // Refresh admin UI (from admin.js)
 window.isAdminActive()            // Check admin session (from admin.js)
+window.getAdminPin()              // Get admin PIN for cross-module requests (from admin.js)
 window.initZoom()                 // Initialize pinch-to-zoom
 window.resetZoom()                // Reset zoom to 1.0x
 window.highlightNewTile(tileId)   // Scroll to tile + sheen animation
@@ -269,7 +273,7 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
 ### admin.js Module
 - IIFE pattern with initialization guards
 - PIN validated server-side via `/api/admin/history_status` before unlocking modal
-- PIN stored in closure-scoped `_adminPin` variable (not exposed to window), persists until page refresh
+- PIN stored in closure-scoped `_adminPin` variable, exposed via `window.getAdminPin()` for cross-module admin requests, persists until page refresh
 - Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
 - Guards prevent duplicate event handler registration
 

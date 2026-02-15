@@ -19,8 +19,19 @@
 ### New Environment Variable
 - **`TLG_BASE_URL`**: Base URL for email links (default: `https://thelastgallery.com`), configurable via env
 
+### Admin Tile Edit Shortcut
+- **Tile ID lookup**: When admin is active, the edit banner accepts a tile ID (e.g., `X144`) instead of artwork title + edit code. Uses existing `/api/admin/tile_info` endpoint with PIN header — zero new server code.
+- **UI toggle**: Edit code field and "Forgot your edit code?" link hidden in admin mode; title label changes to "Tile ID" with "Admin" placeholder
+- **`window.getAdminPin()`**: New bridge exposed from `admin.js` for cross-module admin requests
+
+### Resend Edit Code
+- **"Forgot your edit code?" link**: Added below edit code input in the edit banner. Toggles an email input + Resend button inline.
+- **`POST /api/resend_edit_code`**: New endpoint looks up code by email and resends. Privacy-safe: always returns same success message regardless of whether the email exists.
+- **Enter key support**: Enter on email input triggers resend
+
 ### Bug Fixes
 - **Edit code email on repeat uploads**: Emails were not sent for new uploads when the same email was reused. Now the client passes `is_edit` flag so the server always sends on new uploads but skips during edit-only saves (unless email changed)
+- **Edit code email on email change**: Email now sends whenever the email address changes during any edit (admin or user), even if the new email already has a code in the system
 - **Sale ribbon missing for uploads without sale type**: Ribbon now shows generic "available for sale" message when `for_sale` is "yes" but no sale type (Original/Print) was selected
 - **Edit code placeholder confusion**: Changed placeholder from `e.g., a3f7b2c1` to `enter/paste your edit code here` to avoid confusion when artwork title is prefilled via deep-link
 
