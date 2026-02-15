@@ -751,12 +751,47 @@ document.addEventListener("DOMContentLoaded", () => {
   const editTitleInput = document.getElementById("editTitleInput");
   const editCodeInput = document.getElementById("editCodeInput");
   const editCodeError = document.getElementById("editCodeError");
+  const editCodeLabel = document.querySelector('label[for="editCodeInput"]');
+  const editTitleLabel = document.querySelector('label[for="editTitleInput"]');
+  const forgotCodeLink = document.getElementById("forgotCodeLink");
+  const resendCodeSection = document.getElementById("resendCodeSection");
+  const resendEmailInput = document.getElementById("resendEmailInput");
+  const resendCodeBtn = document.getElementById("resendCodeBtn");
+  const resendCodeMsg = document.getElementById("resendCodeMsg");
 
   function openEditBanner() {
     if (!editBannerOverlay) return;
     if (editTitleInput) editTitleInput.value = "";
     if (editCodeInput) editCodeInput.value = "";
     if (editCodeError) editCodeError.classList.add("hidden");
+
+    // Reset resend section
+    if (resendCodeSection) resendCodeSection.classList.add("hidden");
+    if (resendEmailInput) resendEmailInput.value = "";
+    if (resendCodeMsg) resendCodeMsg.classList.add("hidden");
+
+    // Admin mode: hide edit code field, change title field to accept tile ID
+    const adminMode = typeof window.isAdminActive === "function" && window.isAdminActive();
+    if (adminMode) {
+      if (editCodeLabel) editCodeLabel.style.display = "none";
+      if (editCodeInput) editCodeInput.style.display = "none";
+      if (forgotCodeLink) forgotCodeLink.style.display = "none";
+      if (editTitleLabel) editTitleLabel.textContent = "Tile ID";
+      if (editTitleInput) {
+        editTitleInput.placeholder = "Admin";
+        editTitleInput.maxLength = 10;
+      }
+    } else {
+      if (editCodeLabel) editCodeLabel.style.display = "";
+      if (editCodeInput) editCodeInput.style.display = "";
+      if (forgotCodeLink) forgotCodeLink.style.display = "";
+      if (editTitleLabel) editTitleLabel.textContent = "Artwork title";
+      if (editTitleInput) {
+        editTitleInput.placeholder = "Enter the title of your artwork";
+        editTitleInput.maxLength = 120;
+      }
+    }
+
     editBannerOverlay.classList.remove("hidden");
     editBannerOverlay.setAttribute("aria-hidden", "false");
     setTimeout(() => {
@@ -797,7 +832,51 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (editBannerContinueBtn) {
     editBannerContinueBtn.addEventListener("click", async () => {
+      const adminMode = typeof window.isAdminActive === "function" && window.isAdminActive();
       const title = (editTitleInput?.value || "").trim();
+
+      // Admin path: tile ID lookup (no edit code required)
+      if (adminMode) {
+        const tileId = title.toUpperCase();
+        if (!tileId) {
+          if (editCodeError) {
+            editCodeError.textContent = "Please enter a tile ID.";
+            editCodeError.classList.remove("hidden");
+          }
+          return;
+        }
+
+        try {
+          editBannerContinueBtn.disabled = true;
+          const pin = typeof window.getAdminPin === "function" ? window.getAdminPin() : "";
+          const res = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(tileId)}`, {
+            headers: { "X-Admin-Pin": pin }
+          });
+          const result = await res.json();
+
+          if (!result.ok || !result.occupied) {
+            if (editCodeError) {
+              editCodeError.textContent = result.error || "Tile is empty or not found.";
+              editCodeError.classList.remove("hidden");
+            }
+            return;
+          }
+
+          closeEditBanner();
+          openMetaModalForEdit(tileId);
+        } catch (err) {
+          console.error(`${LOG_PREFIX} Admin tile lookup error:`, err);
+          if (editCodeError) {
+            editCodeError.textContent = "Lookup failed. Please try again.";
+            editCodeError.classList.remove("hidden");
+          }
+        } finally {
+          editBannerContinueBtn.disabled = false;
+        }
+        return;
+      }
+
+      // Normal user path: artwork title + edit code
       const code = (editCodeInput?.value || "").trim();
 
       if (!title || !code) {
@@ -837,6 +916,63 @@ document.addEventListener("DOMContentLoaded", () => {
       } finally {
         editBannerContinueBtn.disabled = false;
       }
+    });
+  }
+
+  // "Forgot your edit code?" link toggles resend section
+  if (forgotCodeLink) {
+    forgotCodeLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (resendCodeSection) {
+        resendCodeSection.classList.toggle("hidden");
+        if (!resendCodeSection.classList.contains("hidden") && resendEmailInput) {
+          resendEmailInput.focus();
+        }
+      }
+    });
+  }
+
+  // Resend edit code button
+  if (resendCodeBtn) {
+    resendCodeBtn.addEventListener("click", async () => {
+      const email = (resendEmailInput?.value || "").trim();
+      if (!email) {
+        if (resendCodeMsg) {
+          resendCodeMsg.textContent = "Please enter your email address.";
+          resendCodeMsg.classList.remove("hidden");
+        }
+        return;
+      }
+
+      try {
+        resendCodeBtn.disabled = true;
+        const res = await fetch("/api/resend_edit_code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+        const result = await res.json();
+
+        if (resendCodeMsg) {
+          resendCodeMsg.textContent = result.message || "If an edit code exists for this email, it has been resent.";
+          resendCodeMsg.classList.remove("hidden");
+        }
+      } catch (err) {
+        console.error(`${LOG_PREFIX} Resend edit code error:`, err);
+        if (resendCodeMsg) {
+          resendCodeMsg.textContent = "Request failed. Please try again.";
+          resendCodeMsg.classList.remove("hidden");
+        }
+      } finally {
+        resendCodeBtn.disabled = false;
+      }
+    });
+  }
+
+  // Enter key on resend email input triggers Resend
+  if (resendEmailInput) {
+    resendEmailInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && resendCodeBtn) resendCodeBtn.click();
     });
   }
 

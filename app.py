@@ -621,8 +621,9 @@ def save_tile_metadata(tile_id):
         conn.commit()
         conn.close()
 
-        # Send email for new uploads (always) or edits only when email changed (new code)
-        if edit_code and contact1_value and (not is_edit or is_new_code):
+        # Send email for new uploads (always) or edits when email changed
+        email_changed = old_email != (contact1_value or "").lower()
+        if edit_code and contact1_value and (not is_edit or is_new_code or email_changed):
             send_edit_code(contact1_value, edit_code, artwork_title)
 
         return jsonify({
@@ -775,6 +776,37 @@ def verify_edit_code():
             return jsonify({"ok": False, "error": "No matching artwork found. Check your title and edit code."})
 
         return jsonify({"ok": True, "tile_id": match["tile_id"]})
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/resend_edit_code", methods=["POST"])
+def resend_edit_code_endpoint():
+    """Resend edit code to an email address (privacy-safe: same response regardless)."""
+    try:
+        data = request.get_json() or {}
+        email = (data.get("email") or "").strip().lower()
+
+        if not email:
+            return jsonify({"ok": False, "error": "Please enter your email address."}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT code FROM edit_codes WHERE email = ?", (email,))
+        code_row = cursor.fetchone()
+
+        if code_row:
+            edit_code = code_row["code"]
+            send_edit_code(email, edit_code)
+
+        conn.close()
+
+        # Always return success (don't reveal if email exists)
+        return jsonify({"ok": True, "message": "If an edit code exists for this email, it has been resent."})
 
     except Exception as e:
         if 'conn' in locals():
