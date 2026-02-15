@@ -128,7 +128,7 @@ Tiles are classified by size and numbered sequentially:
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/upload_assets` | POST | Upload tile + popup images (multipart form) |
-| `/api/tile/<tile_id>/metadata` | POST | Save all metadata fields |
+| `/api/tile/<tile_id>/metadata` | POST | Save all metadata fields (accepts `is_edit` flag to control email sending) |
 | `/api/tile/<tile_id>/metadata` | GET | Get metadata for a tile |
 | `/api/verify_edit_code` | POST | Verify artwork title + edit code, returns matching tile_id |
 
@@ -164,7 +164,7 @@ Tiles are classified by size and numbered sequentially:
 3. Medium
 4. Dimensions
 5. Edition
-6. Sale availability text (if applicable, ends with "by contacting the owner.")
+6. Sale availability text (if for_sale is "yes"; generic message if no sale type selected, specific if original/print/both chosen; "not available" if "no")
 7. Contact links (clickable - mailto for email, https for web)
 
 ## Upload Flow
@@ -194,7 +194,8 @@ Tiles are classified by size and numbered sequentially:
 - **Trigger**: Hamburger menu → "Edit Your Artwork Submission", or deep-link via `/edit` (auto-opens edit banner, skips welcome modal)
 - **Edit banner**: Title "A note about editing", body text, two input fields (artwork title + edit code), Cancel/Continue buttons
 - **Verification**: `POST /api/verify_edit_code` with `{title, code}`. Title matching is case-insensitive, trims whitespace and trailing periods. Code maps to email, then finds asset where both title and email match.
-- **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Emailed to artist via Resend API (`send_edit_code(email, code, artwork_title)`). HTML email includes artwork title, edit code, link to `/edit`, and Creator of the Month teaser linking to `/artist-of-the-month`. Plain-text fallback included. Reused across multiple uploads with same email.
+- **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Emailed to artist via Resend API (`send_edit_code(email, code, artwork_title)`). HTML email includes artwork title, edit code, link to `/edit` with title prefilled, and Creator of the Month teaser linking to `/artist-of-the-month`. Plain-text fallback included. Reused across multiple uploads with same email.
+- **Email send logic**: Client passes `is_edit` flag in metadata POST. New uploads always send the email. Edit saves skip the email unless the email address changed (new code generated).
 - **Edit mode**: Metadata modal opens prefilled. "Return to Artwork Edit" button disabled (CSS `edit-mode-disabled` + HTML `disabled`). Close (X) returns to gallery, not upload modal.
 - **Email change warning**: Yellow inline warning when email field differs from original, informing user their edit code will be invalidated and a new one sent.
 - **Orphaned code cleanup**: On email change, old email's `edit_codes` row deleted only if no other assets reference that email.
