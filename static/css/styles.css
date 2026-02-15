@@ -939,6 +939,51 @@ label {
   display: none;
 }
 
+.forgot-code-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: #aaa;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.forgot-code-link:hover {
+  color: #ccc;
+}
+
+.resend-code-section {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.resend-code-section.hidden {
+  display: none;
+}
+
+.resend-code-section input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.resend-code-section button {
+  white-space: nowrap;
+}
+
+.resend-code-msg {
+  width: 100%;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.resend-code-msg.hidden {
+  display: none;
+}
+
 .email-change-warning {
   margin-top: 8px;
   padding: 10px 14px;

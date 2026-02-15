@@ -49,6 +49,7 @@
 
   // Expose globally for main.js refreshAdminOverlays call
   window.isAdminActive = isAdminActive;
+  window.getAdminPin = () => _adminPin;
 
   function normalizeHistoryCounts(data) {
     // New format: separate counts

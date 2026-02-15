@@ -202,6 +202,12 @@
         <label for="editCodeInput" class="edit-code-label">Edit code sent to your email</label>
         <input id="editCodeInput" type="text" maxlength="8" placeholder="enter/paste your edit code here" autocomplete="off" spellcheck="false" />
         <div id="editCodeError" class="edit-code-error hidden">Invalid edit code. Please try again.</div>
+        <a href="#" id="forgotCodeLink" class="forgot-code-link">Forgot your edit code?</a>
+        <div id="resendCodeSection" class="resend-code-section hidden">
+          <input id="resendEmailInput" type="email" maxlength="120" placeholder="enter your email address" autocomplete="off" />
+          <button id="resendCodeBtn" type="button" class="secondary-btn">Resend</button>
+          <div id="resendCodeMsg" class="resend-code-msg hidden"></div>
+        </div>
       </div>
       <div class="confirm-banner-actions">
         <button id="editBannerCancelBtn" type="button" class="secondary-btn">Cancel</button>
