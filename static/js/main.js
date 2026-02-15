@@ -796,7 +796,7 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
     if (editionInfo) ribbonParts.push(`<div class="ribbon-edition">${escapeHtml(editionInfo)}</div>`);
 
     // Line 6: Sale availability text
-    if (forSale === "yes" && saleType) {
+    if (forSale === "yes") {
       let saleText = "";
       if (saleType === "original") {
         saleText = "This original creative work is available for sale by contacting the owner.";
@@ -804,8 +804,10 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
         saleText = "A high quality print of this creative work is available for sale by contacting the owner.";
       } else if (saleType === "both") {
         saleText = "This original creative work and high quality prints are available for sale by contacting the owner.";
+      } else {
+        saleText = "This creative work is available for sale by contacting the owner.";
       }
-      if (saleText) ribbonParts.push(`<div class="ribbon-sale">${saleText}</div>`);
+      ribbonParts.push(`<div class="ribbon-sale">${saleText}</div>`);
     } else if (forSale === "no") {
       ribbonParts.push(`<div class="ribbon-sale">This creative work is currently not available for sale.</div>`);
     }
