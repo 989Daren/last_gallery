@@ -1451,7 +1451,34 @@ document.addEventListener("DOMContentLoaded", () => {
       // PHASE 3: Single render after state hydration
       commitWallStateChange(assignments.length ? 'boot hydration' : 'boot hydration (no-db)');
       // Show welcome banner AFTER boot hydration/render has completed
-      requestAnimationFrame(() => initSimpleWelcomeAlways());
+      // Skip welcome if PAGE_MODE is set (edit or creator-of-the-month)
+      if (!window.PAGE_MODE) {
+        requestAnimationFrame(() => initSimpleWelcomeAlways());
+      } else {
+        window.__simpleWelcomeInit = true;
+
+        // Creator of the Month banner handler
+        if (window.PAGE_MODE === "creator-of-the-month") {
+          const creatorOverlay = document.getElementById("creatorBannerOverlay");
+          if (creatorOverlay) {
+            creatorOverlay.classList.remove("hidden");
+            creatorOverlay.setAttribute("aria-hidden", "false");
+
+            const dismiss = () => {
+              creatorOverlay.classList.add("hidden");
+              creatorOverlay.setAttribute("aria-hidden", "true");
+              history.replaceState(null, '', '/');
+              window.PAGE_MODE = "";
+            };
+
+            const enterBtn = document.getElementById("creatorBannerEnterBtn");
+            if (enterBtn) enterBtn.addEventListener("click", dismiss);
+            creatorOverlay.addEventListener("click", (e) => {
+              if (e.target === creatorOverlay) dismiss();
+            });
+          }
+        }
+      }
 
       // Tile click → open popup (delegated; only for tiles with uploaded artwork)
       wall.addEventListener("click", (e) => {
