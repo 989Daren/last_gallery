@@ -622,7 +622,8 @@ document.addEventListener("DOMContentLoaded", () => {
           contact1_type: contact1Type,
           contact1_value: contact1Value,
           contact2_type: contact2Type,
-          contact2_value: contact2Value
+          contact2_value: contact2Value,
+          is_edit: isEditMode
         })
       });
 

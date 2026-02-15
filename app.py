@@ -553,6 +553,7 @@ def save_tile_metadata(tile_id):
         contact1_value = (data.get("contact1_value") or "").strip()
         contact2_type = (data.get("contact2_type") or "").strip()
         contact2_value = (data.get("contact2_value") or "").strip()
+        is_edit = bool(data.get("is_edit"))
 
         # Get database connection
         conn = get_db()
@@ -620,7 +621,8 @@ def save_tile_metadata(tile_id):
         conn.commit()
         conn.close()
 
-        if is_new_code and contact1_value:
+        # Send email for new uploads (always) or edits only when email changed (new code)
+        if edit_code and contact1_value and (not is_edit or is_new_code):
             send_edit_code(contact1_value, edit_code, artwork_title)
 
         return jsonify({
