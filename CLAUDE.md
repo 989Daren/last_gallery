@@ -120,7 +120,7 @@ Tiles are classified by size and numbered sequentially:
 |----------|--------|---------|
 | `/` | GET | Main gallery page |
 | `/edit` | GET | Gallery page in edit mode — auto-opens edit banner, skips welcome |
-| `/artist-of-the-month` | GET | Gallery page with Creator of the Month coming-soon banner |
+| `/creator-of-the-month` | GET | Gallery page with Creator of the Month coming-soon banner |
 | `/api/wall_state` | GET | Get all tile assignments from database |
 | `/uploads/<filename>` | GET | Serve uploaded images |
 
@@ -194,7 +194,7 @@ Tiles are classified by size and numbered sequentially:
 - **Trigger**: Hamburger menu → "Edit Your Artwork Submission", or deep-link via `/edit` (auto-opens edit banner, skips welcome modal)
 - **Edit banner**: Title "A note about editing", body text, two input fields (artwork title + edit code), Cancel/Continue buttons
 - **Verification**: `POST /api/verify_edit_code` with `{title, code}`. Title matching is case-insensitive, trims whitespace and trailing periods. Code maps to email, then finds asset where both title and email match.
-- **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Emailed to artist via Resend API (`send_edit_code(email, code, artwork_title)`). HTML email includes artwork title, edit code, link to `/edit` with title prefilled, and Creator of the Month teaser linking to `/artist-of-the-month`. Plain-text fallback included. Reused across multiple uploads with same email.
+- **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Emailed to artist via Resend API (`send_edit_code(email, code, artwork_title)`). HTML email includes artwork title, edit code, link to `/edit` with title prefilled, and Creator of the Month teaser linking to `/creator-of-the-month`. Plain-text fallback included. Reused across multiple uploads with same email.
 - **Email send logic**: Client passes `is_edit` flag in metadata POST. New uploads always send the email. Edit saves skip the email unless the email address changed (new code generated).
 - **Edit mode**: Metadata modal opens prefilled. "Return to Artwork Edit" button disabled (CSS `edit-mode-disabled` + HTML `disabled`). Close (X) returns to gallery, not upload modal.
 - **Email change warning**: Yellow inline warning when email field differs from original, informing user their edit code will be invalidated and a new one sent.
@@ -245,7 +245,7 @@ Focal-point zoom for touch devices — content under fingers stays anchored duri
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `TLG_ADMIN_PIN` | `8375` | Admin PIN for admin endpoints |
-| `TLG_BASE_URL` | `https://thelastgallery.com` | Base URL used in email links (`/edit`, `/artist-of-the-month`) |
+| `TLG_BASE_URL` | `https://thelastgallery.com` | Base URL used in email links (`/edit`, `/creator-of-the-month`) |
 | `RESEND_API_KEY` | *(none)* | Resend API key for sending edit code emails |
 
 ## JavaScript Architecture
