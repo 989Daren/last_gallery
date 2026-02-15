@@ -16,6 +16,7 @@
   <!-- Expose server state to JS (single source of truth) -->
   <script>
     window.SERVER_GRID_COLOR = "{{ grid_color|default('#b84c27') }}";
+    window.PAGE_MODE = "{{ page_mode|default('') }}";
   </script>
 
 </head>
@@ -205,6 +206,19 @@
       <div class="confirm-banner-actions">
         <button id="editBannerCancelBtn" type="button" class="secondary-btn">Cancel</button>
         <button id="editBannerContinueBtn" type="button" class="primary-btn">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Creator of the Month overlay (stub) -->
+  <div id="creatorBannerOverlay" class="confirm-banner-overlay hidden" aria-hidden="true">
+    <div class="confirm-banner" role="dialog" aria-modal="true">
+      <h2 class="confirm-banner-heading" style="text-align:center;">Coming soon!</h2>
+      <p class="confirm-banner-text" style="text-align:center; font-size:1.1rem;">
+        <strong>The Last Gallery's Creator of the Month!</strong>
+      </p>
+      <div class="confirm-banner-actions" style="justify-content:center;">
+        <button id="creatorBannerEnterBtn" type="button" class="primary-btn">Enter Gallery</button>
       </div>
     </div>
   </div>

@@ -4,6 +4,8 @@ import json
 import uuid
 import re
 import io
+import html as html_mod
+from urllib.parse import quote
 import xml.etree.ElementTree as ET
 import resend
 from dotenv import load_dotenv
@@ -32,6 +34,9 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # Minimal admin pin (only used if you later re-enable admin routes)
 ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "8375")
+
+# Base URL for links in emails (override via env for production)
+BASE_URL = os.environ.get("TLG_BASE_URL", "https://thelastgallery.com")
 
 # Popup image optimization settings
 POPUP_MAX_DIMENSION = 2560  # Max pixels on longest side
@@ -288,12 +293,41 @@ def _save_optimized_popup(fs, asset_id: str):
     return filename
 
 
-def send_edit_code(email, code):
-    """Send edit code to artist via Resend API."""
+def send_edit_code(email, code, artwork_title=""):
+    """Send edit code to artist via Resend API (HTML + plain-text fallback)."""
     api_key = os.environ.get("RESEND_API_KEY")
     if not api_key:
         app.logger.warning("[EDIT CODE] RESEND_API_KEY not set — code not emailed. To: %s | Code: %s", email, code)
         return
+
+    safe_title = html_mod.escape(artwork_title) if artwork_title else ""
+    title_param = f"?title={quote(artwork_title, safe='')}" if artwork_title else ""
+    edit_link = f"{BASE_URL}/edit{title_param}"
+    cotm_link = f"{BASE_URL}/artist-of-the-month"
+
+    html_body = (
+        '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
+        f'<p style="font-size:18px;"><strong>Artwork Title:</strong> {safe_title}</p>'
+        f'<p style="font-size:18px;"><strong>Your Edit Code:</strong> {html_mod.escape(code)}</p>'
+        '<p>Copy and paste your Edit Code into the link below.</p>'
+        f'<p><a href="{html_mod.escape(edit_link)}">{html_mod.escape(edit_link)}</a></p>'
+        '<hr style="margin:24px 0;">'
+        '<p style="font-size:16px;"><strong>Coming Soon for Premium Members!</strong><br>'
+        "The Last Gallery's Creator of the Month!</p>"
+        f'<p><a href="{html_mod.escape(cotm_link)}">{html_mod.escape(cotm_link)}</a></p>'
+        '</div>'
+    )
+
+    plain_body = (
+        f"Artwork Title: {artwork_title}\n"
+        f"Your Edit Code: {code}\n\n"
+        "Copy and paste your Edit Code into the link below.\n"
+        f"{edit_link}\n\n"
+        "---\n\n"
+        "Coming Soon for Premium Members!\n"
+        "The Last Gallery's Creator of the Month!\n"
+        f"{cotm_link}\n"
+    )
 
     resend.api_key = api_key
     try:
@@ -301,14 +335,8 @@ def send_edit_code(email, code):
             "from": "The Last Gallery <noreply@thelastgallery.com>",
             "to": [email],
             "subject": "Your Last Gallery edit code",
-            "text": (
-                "Thank you for participating in The Last Gallery "
-                "\u2014 a dynamic time capsule of creative works.\n\n"
-                f"Your edit code is: {code}\n\n"
-                "Keep this somewhere safe. You\u2019ll need it if you ever "
-                "want to update your artist or artwork information.\n\n"
-                "\u2014 The Last Gallery"
-            ),
+            "html": html_body,
+            "text": plain_body,
         })
         app.logger.info("[EDIT CODE] Email sent to %s", email)
     except Exception:
@@ -325,6 +353,26 @@ def index():
         grid_color = DEFAULT_GRID_COLOR
 
     return render_template("index.html", grid_color=grid_color)
+
+
+@app.route("/edit")
+def edit_page():
+    """Gallery page in edit mode — auto-opens edit banner."""
+    try:
+        grid_color = load_grid_color()
+    except Exception:
+        grid_color = DEFAULT_GRID_COLOR
+    return render_template("index.html", grid_color=grid_color, page_mode="edit")
+
+
+@app.route("/artist-of-the-month")
+def artist_of_the_month():
+    """Stub page for Creator of the Month — shows coming-soon banner."""
+    try:
+        grid_color = load_grid_color()
+    except Exception:
+        grid_color = DEFAULT_GRID_COLOR
+    return render_template("index.html", grid_color=grid_color, page_mode="creator-of-the-month")
 
 
 @app.route("/api/grid-color", methods=["POST"])
@@ -544,6 +592,7 @@ def save_tile_metadata(tile_id):
 
         # Generate or reuse edit code if email contact provided
         edit_code = None
+        is_new_code = False
         if contact1_value:
             normalized_email = contact1_value.lower()
             cursor.execute("SELECT code FROM edit_codes WHERE email = ?", (normalized_email,))
@@ -552,6 +601,7 @@ def save_tile_metadata(tile_id):
                 edit_code = code_row["code"]
             else:
                 edit_code = uuid.uuid4().hex[:8]
+                is_new_code = True
                 cursor.execute(
                     "INSERT INTO edit_codes(email, code) VALUES(?, ?)",
                     (normalized_email, edit_code)
@@ -570,8 +620,8 @@ def save_tile_metadata(tile_id):
         conn.commit()
         conn.close()
 
-        if edit_code and contact1_value:
-            send_edit_code(contact1_value, edit_code)
+        if is_new_code and contact1_value:
+            send_edit_code(contact1_value, edit_code, artwork_title)
 
         return jsonify({
             "ok": True,

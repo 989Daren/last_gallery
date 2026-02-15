@@ -767,6 +767,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!editBannerOverlay) return;
     editBannerOverlay.classList.add("hidden");
     editBannerOverlay.setAttribute("aria-hidden", "true");
+    // Clean up URL when dismissing edit banner from /edit deep-link
+    if (window.PAGE_MODE === "edit") {
+      history.replaceState(null, '', '/');
+      window.PAGE_MODE = "";
+    }
   }
 
   // Hamburger menu "Edit Your Artwork Submission" opens the banner
@@ -844,4 +849,19 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
   });
+
+  // Auto-open edit banner when arriving via /edit deep-link
+  if (window.PAGE_MODE === "edit") {
+    setTimeout(() => {
+      openEditBanner();
+      // Prefill artwork title from query param (e.g. /edit?title=My%20Artwork)
+      const params = new URLSearchParams(window.location.search);
+      const prefillTitle = params.get("title");
+      if (prefillTitle && editTitleInput) {
+        editTitleInput.value = prefillTitle;
+        // Move focus to the edit code field since title is already filled
+        if (editCodeInput) editCodeInput.focus();
+      }
+    }, 300);
+  }
 });
