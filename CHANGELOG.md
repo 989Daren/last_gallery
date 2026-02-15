@@ -19,6 +19,11 @@
 ### New Environment Variable
 - **`TLG_BASE_URL`**: Base URL for email links (default: `https://thelastgallery.com`), configurable via env
 
+### Bug Fixes
+- **Edit code email on repeat uploads**: Emails were not sent for new uploads when the same email was reused. Now the client passes `is_edit` flag so the server always sends on new uploads but skips during edit-only saves (unless email changed)
+- **Sale ribbon missing for uploads without sale type**: Ribbon now shows generic "available for sale" message when `for_sale` is "yes" but no sale type (Original/Print) was selected
+- **Edit code placeholder confusion**: Changed placeholder from `e.g., a3f7b2c1` to `enter/paste your edit code here` to avoid confusion when artwork title is prefilled via deep-link
+
 ---
 
 ## 2026-02-13
