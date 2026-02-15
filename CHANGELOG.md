@@ -6,14 +6,14 @@
 
 ### Edit Code Email Revamp
 - **HTML email**: `send_edit_code()` now sends styled HTML with plain-text fallback (was plain text only)
-- **Email content**: Artwork title, edit code, direct link to `/edit` with title prefilled, and "Creator of the Month" teaser with link to `/artist-of-the-month`
+- **Email content**: Artwork title, edit code, direct link to `/edit` with title prefilled, and "Creator of the Month" teaser with link to `/creator-of-the-month`
 - **Title prefill**: Edit link includes `?title=` query param; edit banner auto-fills artwork title and focuses the code field
 - **No redundant emails**: Edit code email only sent when a new code is generated (first upload or email change), not on every metadata save
 - **New signature**: `send_edit_code(email, code, artwork_title="")`
 
 ### Deep-Link Routes
 - **`/edit`**: Loads gallery in edit mode — skips welcome modal, auto-opens edit banner after 300ms. URL cleaned to `/` on dismiss via `history.replaceState`
-- **`/artist-of-the-month`**: Stub page showing "Coming soon!" banner with "Enter Gallery" dismiss button. URL cleaned on dismiss.
+- **`/creator-of-the-month`**: Stub page showing "Coming soon!" banner with "Enter Gallery" dismiss button. URL cleaned on dismiss.
 - **`PAGE_MODE` bridge**: Server sets `window.PAGE_MODE` via template variable; JS uses it to skip welcome modal and trigger mode-specific behavior
 
 ### New Environment Variable

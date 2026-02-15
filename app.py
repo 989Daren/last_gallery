@@ -303,7 +303,7 @@ def send_edit_code(email, code, artwork_title=""):
     safe_title = html_mod.escape(artwork_title) if artwork_title else ""
     title_param = f"?title={quote(artwork_title, safe='')}" if artwork_title else ""
     edit_link = f"{BASE_URL}/edit{title_param}"
-    cotm_link = f"{BASE_URL}/artist-of-the-month"
+    cotm_link = f"{BASE_URL}/creator-of-the-month"
 
     html_body = (
         '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
@@ -365,7 +365,7 @@ def edit_page():
     return render_template("index.html", grid_color=grid_color, page_mode="edit")
 
 
-@app.route("/artist-of-the-month")
+@app.route("/creator-of-the-month")
 def artist_of_the_month():
     """Stub page for Creator of the Month — shows coming-soon banner."""
     try:
