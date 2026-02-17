@@ -290,6 +290,15 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
   and avoid specific variable names, class names, or implementation details —
   Claude Code should read the actual files and determine those itself
 
+## Development Environment
+
+- **Runtime**: Node.js v24.13.1 via nvm (`~/.nvm`). Source with:
+  `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh"`
+- **Claude Code**: v2.1.45 installed globally (`npm install -g @anthropic-ai/claude-code`)
+- **Starting a session**: `cd last_gallery && claude`
+- **Auth**: Run `claude auth login` from a **local terminal on the chromebook** — not via SSH from a remote machine. The auth code paste does not work over SSH.
+- **Non-interactive use**: `claude -p "instruction" --dangerously-skip-permissions`
+
 ## Maintenance Notes
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
