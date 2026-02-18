@@ -300,7 +300,7 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
 - **Non-interactive use**: `claude -p "instruction" --dangerously-skip-permissions`
 
 ## GitHub
-- Remote: `git@github.com:989daren/last_gallery.git` (SSH)
+- Remote: `git@github.com:989Daren/last_gallery.git` (SSH)
 - SSH key auth configured — `git push` works without credentials
 
 ## Maintenance Notes
