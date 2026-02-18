@@ -299,6 +299,10 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
 - **Auth**: Run `claude auth login` from a **local terminal on the chromebook** — not via SSH from a remote machine. The auth code paste does not work over SSH.
 - **Non-interactive use**: `claude -p "instruction" --dangerously-skip-permissions`
 
+## GitHub
+- Remote: `git@github.com:989daren/last_gallery.git` (SSH)
+- SSH key auth configured — `git push` works without credentials
+
 ## Maintenance Notes
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
