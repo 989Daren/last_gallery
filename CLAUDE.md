@@ -299,6 +299,23 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
 - **Auth**: Run `claude auth login` from a **local terminal on the chromebook** — not via SSH from a remote machine. The auth code paste does not work over SSH.
 - **Non-interactive use**: `claude -p "instruction" --dangerously-skip-permissions`
 
+## Remote Access (Tailscale + SSH)
+
+- **Tailscale** installed on both Chromebook (Linux container) and PC for a private network
+- **Chromebook Tailscale IP**: `100.113.92.21`
+- **SSH from PC**: `ssh chromebook` (config in `C:\Users\user\.ssh\config`)
+- **PC SSH config entry**:
+  ```
+  Host chromebook
+      HostName 100.113.92.21
+      User daren
+      IdentityFile ~/.ssh/id_ed25519
+  ```
+- **Note**: The Chromebook Linux container SSH server does not auto-start. If connection is refused, open the Chromebook terminal and run:
+  ```bash
+  sudo service ssh start
+  ```
+
 ## GitHub
 - Remote: `git@github.com:989Daren/last_gallery.git` (SSH)
 - SSH key auth configured — `git push` works without credentials
