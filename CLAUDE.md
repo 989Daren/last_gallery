@@ -315,8 +315,11 @@ systemctl --user status thelastgallery-tunnel.service
 ```
 
 ### Tailscale + SSH (Remote Dev Access)
-- **Tailscale** installed on both Chromebook (Linux container) and PC for a private network
-- **Chromebook Tailscale IP**: `100.113.92.21`
+- **Tailscale** installed on Chromebook (Linux, via apt), PC, and S25 Ultra phone
+- **Tailscale IPs**:
+  - Chromebook Linux: `100.113.92.21`
+  - PC: `100.122.187.18`
+  - S25 Ultra: `100.73.156.120`
 - **SSH from PC**: `ssh chromebook` (config in `C:\Users\user\.ssh\config`)
 - **PC SSH config entry**:
   ```
@@ -325,10 +328,8 @@ systemctl --user status thelastgallery-tunnel.service
       User daren
       IdentityFile ~/.ssh/id_ed25519
   ```
-- **Note**: The Chromebook Linux container SSH server does not auto-start. If connection is refused, open the Chromebook terminal and run:
-  ```bash
-  sudo service ssh start
-  ```
+- **SSH from phone**: Termius app (S25 Ultra) → saved host `chromebook` → `100.113.92.21`, username `daren`, port `22`
+- **SSH server**: Enabled to auto-start on boot (`sudo systemctl enable ssh`)
 
 ## GitHub
 - Remote: `git@github.com:989Daren/last_gallery.git` (SSH)
