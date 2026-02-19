@@ -301,6 +301,17 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
 
 ## Hosting & Remote Access
 
+### PC File Access (SSHFS)
+- PC's `C:\Users\user\chromepull` folder is mounted at `~/pc` on the Chromebook
+- Auto-mounts on boot via `pc-mount.service` (user-level systemd)
+- Drop files into `chromepull` on the PC → instantly readable by Claude Code at `~/pc/`
+- Service file: `~/.config/systemd/user/pc-mount.service`
+- Useful commands:
+  ```bash
+  systemctl --user status pc-mount.service
+  systemctl --user restart pc-mount.service
+  ```
+
 ### How the Site Runs
 - **Flask app**: Managed by a user-level systemd service (`flask.service`), auto-starts on boot
 - **Public domain**: Cloudflare Tunnel (`thelastgallery-tunnel.service`) exposes Flask to the internet — no port forwarding required
