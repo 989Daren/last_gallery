@@ -299,8 +299,22 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
 - **Auth**: Run `claude auth login` from a **local terminal on the chromebook** — not via SSH from a remote machine. The auth code paste does not work over SSH.
 - **Non-interactive use**: `claude -p "instruction" --dangerously-skip-permissions`
 
-## Remote Access (Tailscale + SSH)
+## Hosting & Remote Access
 
+### How the Site Runs
+- **Flask app**: Managed by a user-level systemd service (`flask.service`), auto-starts on boot
+- **Public domain**: Cloudflare Tunnel (`thelastgallery-tunnel.service`) exposes Flask to the internet — no port forwarding required
+- Service files live in `~/.config/systemd/user/`
+- Tunnel config: `~/.cloudflared/thelastgallery.yml`, tunnel name: `thelastgallery`
+
+### Useful systemd commands
+```bash
+systemctl --user status flask.service
+systemctl --user restart flask.service
+systemctl --user status thelastgallery-tunnel.service
+```
+
+### Tailscale + SSH (Remote Dev Access)
 - **Tailscale** installed on both Chromebook (Linux container) and PC for a private network
 - **Chromebook Tailscale IP**: `100.113.92.21`
 - **SSH from PC**: `ssh chromebook` (config in `C:\Users\user\.ssh\config`)
