@@ -309,7 +309,7 @@ def send_edit_code(email, code, artwork_title=""):
         '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
         f'<p style="font-size:18px;"><strong>Artwork Title:</strong> {safe_title}</p>'
         f'<p style="font-size:18px;"><strong>Your Edit Code:</strong> {html_mod.escape(code)}</p>'
-        '<p>Copy and paste your Edit Code into the link below.</p>'
+        "<p>If you need to edit your artwork's information, copy and paste your Edit Code into the link below.</p>"
         f'<p><a href="{html_mod.escape(edit_link)}">{html_mod.escape(edit_link)}</a></p>'
         '<hr style="margin:24px 0;">'
         '<p style="font-size:16px;"><strong>Coming Soon for Premium Members!</strong><br>'
@@ -321,7 +321,7 @@ def send_edit_code(email, code, artwork_title=""):
     plain_body = (
         f"Artwork Title: {artwork_title}\n"
         f"Your Edit Code: {code}\n\n"
-        "Copy and paste your Edit Code into the link below.\n"
+        "If you need to edit your artwork's information, copy and paste your Edit Code into the link below.\n"
         f"{edit_link}\n\n"
         "---\n\n"
         "Coming Soon for Premium Members!\n"
