@@ -312,6 +312,10 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
   systemctl --user restart pc-mount.service
   ```
 
+### CLAUDE.md Auto-Sync
+- A git `post-commit` hook (`.git/hooks/post-commit`) copies `CLAUDE.md` to `~/pc/` (chromepull) whenever a commit touches it
+- Warns in terminal if `~/pc` is not mounted
+
 ### How the Site Runs
 - **Flask app**: Managed by a user-level systemd service (`flask.service`), auto-starts on boot
 - **Public domain**: Cloudflare Tunnel (`thelastgallery-tunnel.service`) exposes Flask to the internet — no port forwarding required
