@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def get_db():
@@ -150,6 +150,18 @@ def init_db():
         """)
         _set_schema_version(cursor, 4)
         print("Migration 4 complete: Edit codes table created")
+
+    # Migration 5: Unlocked column on assets
+    if current_version < 5:
+        print("Applying migration 5: Unlocked column...")
+        cursor.execute("PRAGMA table_info(assets)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if 'unlocked' not in columns:
+            cursor.execute("ALTER TABLE assets ADD COLUMN unlocked INTEGER NOT NULL DEFAULT 0")
+
+        _set_schema_version(cursor, 5)
+        print("Migration 5 complete: Unlocked column added")
 
     conn.commit()
     conn.close()

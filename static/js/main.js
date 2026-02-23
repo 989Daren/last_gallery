@@ -468,15 +468,15 @@ function resetZoom(silent) {
   }
 }
 
-// Highlight a newly uploaded tile: reset zoom, scroll to tile, play sheen animation
-function highlightNewTile(tileId) {
-  // 1. Reset zoom to 1.0x (clear transform, restore native scroll)
+// Scroll viewport to center a tile (reset zoom, no sheen)
+function scrollToTile(tileId) {
+  // Reset zoom to 1.0x (clear transform, restore native scroll)
   zoomState.scale = 1.0;
   zoomState.tx = 0;
   zoomState.ty = 0;
   if (zoomState._zoomWrapper) zoomState._zoomWrapper.style.transform = '';
 
-  // 2. Compute scroll target to center tile in viewport
+  // Compute scroll target to center tile in viewport
   const tileData = wallState.tiles[tileId];
   if (!tileData) return;
   const units = sizeToUnits(tileData.size);
@@ -490,25 +490,34 @@ function highlightNewTile(tileId) {
   const scrollX = Math.max(0, tileData.x + tileW / 2 - vw / 2);
   const scrollY = Math.max(0, tileData.y + tileH / 2 - vh / 2);
 
-  // 3. Unlock scroll and jump to tile position
+  // Unlock scroll and jump to tile position
   unlockScrollTo(scrollX, scrollY);
+}
 
-  // 4. Find tile DOM element and add sheen class
+// Play sheen animation on a tile (no scroll)
+function playTileSheen(tileId) {
   const tileEl = document.querySelector('.tile[data-id="' + tileId + '"]');
   if (!tileEl) return;
   tileEl.classList.add('tile-highlight-sheen');
 
-  // 5. Self-clean: remove class after animation ends
   tileEl.addEventListener('animationend', function handler() {
     tileEl.classList.remove('tile-highlight-sheen');
     tileEl.removeEventListener('animationend', handler);
   });
 }
 
+// Combined convenience: scroll to tile + play sheen
+function highlightNewTile(tileId) {
+  scrollToTile(tileId);
+  playTileSheen(tileId);
+}
+
 // Expose for external use (e.g., after wall refresh)
 window.initZoom = initZoom;
 window.resetZoom = resetZoom;
 window.highlightNewTile = highlightNewTile;
+window.scrollToTile = scrollToTile;
+window.playTileSheen = playTileSheen;
 
 // ==============================
 // ConicalNav: Back button closes UI layers (no history weirdness).
@@ -754,7 +763,7 @@ function isArtworkPopupOpen() {
 }
 window.isArtworkPopupOpen = isArtworkPopupOpen;
 
-function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value }) {
+function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value, unlocked, assetId, tileId }) {
   const overlay = ensurePopupDom();
 
   const titleEl  = $(IDS.popupTitle);
@@ -843,6 +852,25 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
         e.stopPropagation();
       });
     });
+
+    // Add unlock icon to ribbon if artwork is unlocked
+    const popupInfo = overlay.querySelector(".popup-info");
+    // Remove any existing unlock icon
+    const existingIcon = popupInfo?.querySelector(".ribbon-unlock-icon");
+    if (existingIcon) existingIcon.remove();
+
+    if (String(unlocked) === "1" && popupInfo) {
+      const iconDiv = document.createElement("div");
+      iconDiv.className = "ribbon-unlock-icon";
+      iconDiv.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+      iconDiv.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (typeof window.openUnlockModal === "function") {
+          window.openUnlockModal(assetId || null, tileId || null);
+        }
+      });
+      popupInfo.appendChild(iconDiv);
+    }
   }
 
   // Reset state
@@ -1111,7 +1139,8 @@ function hydrateWallStateFromExistingData(layoutTiles, assignments = []) {
         contact1_type: assignment.contact1_type || "",
         contact1_value: assignment.contact1_value || "",
         contact2_type: assignment.contact2_type || "",
-        contact2_value: assignment.contact2_value || ""
+        contact2_value: assignment.contact2_value || "",
+        unlocked: assignment.unlocked || 0
       };
     }
   });
@@ -1287,6 +1316,7 @@ function renderWallFromState() {
       el.dataset.contact2Type = tileData.asset.contact2_type || '';
       el.dataset.contact2Value = tileData.asset.contact2_value || '';
       if (tileData.assetId) el.dataset.assetId = tileData.assetId;
+      el.dataset.unlocked = tileData.asset.unlocked || 0;
 
       // 6. Apply occupied class
       el.classList.add('occupied');
@@ -1382,7 +1412,8 @@ document.addEventListener("DOMContentLoaded", () => {
             contact1_type: assignment.contact1_type || "",
             contact1_value: assignment.contact1_value || "",
             contact2_type: assignment.contact2_type || "",
-            contact2_value: assignment.contact2_value || ""
+            contact2_value: assignment.contact2_value || "",
+            unlocked: assignment.unlocked || 0
           };
         }
       });
@@ -1509,7 +1540,10 @@ document.addEventListener("DOMContentLoaded", () => {
           contact1Type: tileEl.dataset.contact1Type || "",
           contact1Value: tileEl.dataset.contact1Value || "",
           contact2Type: tileEl.dataset.contact2Type || "",
-          contact2Value: tileEl.dataset.contact2Value || ""
+          contact2Value: tileEl.dataset.contact2Value || "",
+          unlocked: tileEl.dataset.unlocked || "0",
+          assetId: tileEl.dataset.assetId || "",
+          tileId: tileEl.dataset.id || ""
         });
       });
 

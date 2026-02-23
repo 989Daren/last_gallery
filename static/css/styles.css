@@ -1005,6 +1005,42 @@ label {
   pointer-events: none;
 }
 
+/* Admin-only Unlock Checkbox (inside metadata modal) */
+.meta-unlock-section {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 215, 0, 0.06);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 6px;
+}
+
+.meta-unlock-section.hidden {
+  display: none;
+}
+
+.meta-unlock-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: #ffd700;
+  cursor: pointer;
+  margin: 0;
+}
+
+.meta-unlock-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ffd700;
+  cursor: pointer;
+}
+
+.meta-unlock-icon {
+  color: #ffd700;
+  filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.3));
+  flex-shrink: 0;
+}
+
 /* Modal overlay (shown by default unless .hidden is present) */
 .modalOverlay {
   position: fixed;
@@ -2016,4 +2052,352 @@ label {
 @keyframes tileHighlightSheen {
   0%   { transform: translateX(-80%); }
   100% { transform: translateX(80%); }
+}
+
+/* =====================================================
+   HAMBURGER MENU — Unlock Item (gold styling)
+   ===================================================== */
+
+#menu-item-unlock {
+  color: #ffd700 !important;
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-unlock-icon {
+  color: #ffd700;
+  filter: drop-shadow(0 0 4px rgba(255,215,0,0.4));
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* =====================================================
+   SUCCESS BANNER (Post-Upload)
+   ===================================================== */
+
+.success-banner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.success-banner-overlay.hidden {
+  display: none;
+}
+
+.success-banner {
+  width: min(420px, 90%);
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 12px;
+  color: #fff;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.success-banner-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+}
+
+.success-banner-body {
+  padding: 24px 28px;
+}
+
+.success-banner-headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.success-banner-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4caf50;
+  flex-shrink: 0;
+  animation: successPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes successPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(76, 175, 80, 0); }
+}
+
+.success-banner-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.success-banner-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 16px 0;
+}
+
+.success-banner-email-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+}
+
+.success-banner-envelope {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.success-banner-email {
+  color: #ffd700;
+  font-style: italic;
+}
+
+.success-banner-unlock-hint {
+  background: #0d0d0d;
+  border-left: 3px solid #ffd700;
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.success-banner-unlock-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.success-banner-unlock-icon {
+  color: #ffd700;
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.4));
+  flex-shrink: 0;
+}
+
+.success-banner-next-step {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffd700;
+}
+
+.success-banner-unlock-text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+.success-banner-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.success-banner-dismiss {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.success-banner-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 600px) {
+  .success-banner-body {
+    padding: 20px 18px;
+  }
+}
+
+/* =====================================================
+   UNLOCK INFO MODAL
+   ===================================================== */
+
+.unlock-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.unlock-modal-overlay.hidden {
+  display: none;
+}
+
+.unlock-modal {
+  width: min(420px, 90%);
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 12px;
+  color: #fff;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.unlock-modal-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+}
+
+.unlock-modal-body {
+  padding: 24px 28px;
+}
+
+.unlock-modal-icon {
+  text-align: center;
+  color: #ffd700;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.3));
+}
+
+.unlock-modal-headline {
+  margin: 0 0 6px 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.unlock-modal-subtitle {
+  margin: 0 0 20px 0;
+  font-size: 0.9rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.unlock-modal-graphic {
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 32px 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+
+.unlock-modal-benefits {
+  margin-bottom: 24px;
+}
+
+.unlock-modal-benefits-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffd700;
+  margin-bottom: 12px;
+}
+
+.unlock-modal-benefit {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.unlock-modal-benefit:last-child {
+  margin-bottom: 0;
+}
+
+.unlock-modal-check {
+  color: #ffd700;
+  font-weight: bold;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.unlock-modal-cta {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  transition: filter 0.2s;
+  margin-bottom: 12px;
+}
+
+.unlock-modal-cta:hover {
+  filter: brightness(1.1);
+}
+
+.unlock-modal-close-link {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: center;
+  padding: 6px;
+  transition: color 0.2s;
+}
+
+.unlock-modal-close-link:hover {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+@media (max-width: 600px) {
+  .unlock-modal-body {
+    padding: 20px 18px;
+  }
+}
+
+/* =====================================================
+   RIBBON UNLOCK ICON (gold lock in popup ribbon)
+   ===================================================== */
+
+.ribbon-unlock-icon {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  color: #ffd700;
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.4));
+  cursor: pointer;
+  pointer-events: none;
+  opacity: 0;
+  transition: transform 0.2s, opacity 0.2s;
+  z-index: 5;
+}
+
+/* Show unlock icon only when ribbon text is visible (same timing as ribbon close btn) */
+.popup-overlay.stage-info-text:not(.hide-info) .ribbon-unlock-icon {
+  opacity: 0.8;
+  pointer-events: auto;
+}
+
+.popup-overlay.stage-info-text:not(.hide-info) .ribbon-unlock-icon:hover {
+  transform: scale(1.15);
+  opacity: 1;
 }

@@ -264,6 +264,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const metaSkipBtn = document.getElementById("metaSkipBtn");
   const metaContinueBtn = document.getElementById("metaContinueBtn");
 
+  // Admin-only unlock checkbox
+  const metaUnlockSection = document.getElementById("metaUnlockSection");
+  const metaUnlockCheckbox = document.getElementById("metaUnlockCheckbox");
+  let _editOriginalUnlocked = false; // Track original value to detect changes
+
   // Tier-3 confirmation banner refs
   const confirmBannerOverlay = document.getElementById("confirmBannerOverlay");
   const confirmCancelBtn = document.getElementById("confirmCancelBtn");
@@ -369,16 +374,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (metaSaleOriginal) metaSaleOriginal.checked = false;
     if (metaSalePrint) metaSalePrint.checked = false;
     updateSaleTypeState();
-    
+
+    // Hide unlock checkbox for new uploads (admin can unlock via edit later)
+    if (metaUnlockSection) metaUnlockSection.classList.add("hidden");
+    if (metaUnlockCheckbox) metaUnlockCheckbox.checked = false;
+    _editOriginalUnlocked = false;
+
     // Show overlay
     metaOverlay.classList.remove("hidden");
     metaOverlay.setAttribute("aria-hidden", "false");
-    
+
     // Focus first input
     setTimeout(() => {
       if (metaArtistInput) metaArtistInput.focus();
     }, 100);
-    
+
     console.log(`${LOG_PREFIX} Tier-2 metadata modal opened for tile: ${tileId}`);
   }
 
@@ -434,6 +444,20 @@ document.addEventListener("DOMContentLoaded", () => {
       if (metaEmailChangeWarning) metaEmailChangeWarning.classList.add("hidden");
       if (metaContinueBtn) metaContinueBtn.disabled = false;
 
+      // Admin unlock checkbox: show when admin is active, prefill from data
+      const adminActive = typeof window.isAdminActive === "function" && window.isAdminActive();
+      if (metaUnlockSection && metaUnlockCheckbox) {
+        if (adminActive) {
+          metaUnlockSection.classList.remove("hidden");
+          metaUnlockCheckbox.checked = !!(data.unlocked);
+          _editOriginalUnlocked = !!(data.unlocked);
+        } else {
+          metaUnlockSection.classList.add("hidden");
+          metaUnlockCheckbox.checked = false;
+          _editOriginalUnlocked = false;
+        }
+      }
+
       // Disable skip button (block return to image editing)
       if (metaSkipBtn) {
         metaSkipBtn.disabled = true;
@@ -469,6 +493,11 @@ document.addEventListener("DOMContentLoaded", () => {
       metaSkipBtn.disabled = false;
       metaSkipBtn.classList.remove("edit-mode-disabled");
     }
+
+    // Reset unlock checkbox
+    if (metaUnlockSection) metaUnlockSection.classList.add("hidden");
+    if (metaUnlockCheckbox) metaUnlockCheckbox.checked = false;
+    _editOriginalUnlocked = false;
 
     console.log(`${LOG_PREFIX} Tier-2 metadata modal closed`);
   }
@@ -635,12 +664,39 @@ document.addEventListener("DOMContentLoaded", () => {
 
       console.log(`${LOG_PREFIX} Metadata saved successfully:`, result);
 
+      // If admin changed unlock status, toggle it via admin endpoint
+      if (metaUnlockCheckbox && !metaUnlockSection.classList.contains("hidden")) {
+        const currentUnlocked = metaUnlockCheckbox.checked;
+        if (currentUnlocked !== _editOriginalUnlocked) {
+          try {
+            const pin = typeof window.getAdminPin === "function" ? window.getAdminPin() : "";
+            const unlockRes = await fetch("/api/admin/toggle_unlock", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Admin-Pin": pin
+              },
+              body: JSON.stringify({ tile_id: tileId })
+            });
+            const unlockResult = await unlockRes.json();
+            if (unlockResult.ok) {
+              console.log(`${LOG_PREFIX} Unlock toggled:`, unlockResult);
+            } else {
+              console.warn(`${LOG_PREFIX} Unlock toggle failed:`, unlockResult);
+            }
+          } catch (unlockErr) {
+            console.error(`${LOG_PREFIX} Unlock toggle error:`, unlockErr);
+          }
+        }
+      }
+
       // Refresh wall to pick up the new metadata
       await refreshWall();
 
       // Capture state before closing (closeMetaModal resets isEditMode)
       const savedTileId = currentUploadTileId;
       const wasEditMode = isEditMode;
+      const savedEmail = (metaContact1Input?.value || "").trim();
 
       // Close all modals
       closeConfirmBanner();
@@ -649,10 +705,28 @@ document.addEventListener("DOMContentLoaded", () => {
         closeModal(true);
       }
 
-      // Highlight tile after modals are gone
+      // Post-save flow: scroll to tile, then show success banner (or just sheen for edits)
       setTimeout(() => {
-        if (typeof window.highlightNewTile === 'function') {
-          window.highlightNewTile(savedTileId);
+        if (typeof window.scrollToTile === 'function') {
+          window.scrollToTile(savedTileId);
+        }
+
+        if (!wasEditMode && typeof window.showSuccessBanner === 'function') {
+          // New upload: show success banner, sheen plays on dismiss
+          window.showSuccessBanner({
+            email: savedEmail,
+            tileId: savedTileId,
+            onDismiss: function() {
+              if (typeof window.playTileSheen === 'function') {
+                window.playTileSheen(savedTileId);
+              }
+            }
+          });
+        } else {
+          // Edit mode: play sheen directly
+          if (typeof window.playTileSheen === 'function') {
+            window.playTileSheen(savedTileId);
+          }
         }
       }, 300);
 
