@@ -281,7 +281,7 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
 - **New uploads** always land in an XS tile (`pick_next_xs_tile_id()` in `app.py`).
 - **Locked** (`unlocked = 0`): Artwork is restricted to XS tiles only during shuffle. Never overflows to larger tiles.
 - **Unlocked** (`unlocked = 1`): Artwork shuffles into any tile size (XS through XL) with equal probability.
-- **Upgrade floor (future)**: When Stripe is wired up, a paid upgrade will set a `min_tile_size` column on the asset (e.g. `'m'`). That artwork can then only shuffle into tiles of that size or larger — it never falls back down. This requires a new DB column and shuffle logic update; not yet implemented.
+- **Upgrade floor (future)**: When Stripe is wired up, a paid upgrade will set a `min_tile_size` column on the asset (e.g. `'m'`). That artwork can then only shuffle into tiles of that size or larger — it never falls back down. A committed tile is removed from the shuffle pool, but if the owner's art later shuffles into an even larger tile and they upgrade again, their previous size tile is released back into the pool. This requires a new DB column and shuffle logic update; not yet implemented.
 
 ## Notes
 - Undo history is in-memory (resets on server restart)
