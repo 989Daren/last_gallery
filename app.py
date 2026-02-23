@@ -1197,13 +1197,24 @@ def shuffle_tiles():
         # Clear all tile assignments
         cursor.execute("UPDATE tiles SET asset_id = NULL, updated_at = datetime('now')")
 
-        # Assign locked assets → XS tiles only (never overflow to larger tiles)
-        available_xs = list(xs_tile_ids)
-        available_non_xs = list(non_xs_tile_ids)
+        # Unlocked assets are assigned FIRST so their probability reflects the
+        # true tile-size distribution (e.g. 181 XS / 218 total = 83%).
+        # Locked assets swap among remaining XS tiles afterward.
 
-        for asset_id in locked_assets:
-            if available_xs:
-                tid = available_xs.pop(0)
+        # Assign unlocked assets → equal chance across ALL tiles
+        # TODO: When Stripe upgrade flow is implemented, add a `min_tile_size`
+        # column (e.g. 'xs','s','m','lg','xlg') to assets. Once a user pays to
+        # keep a larger tile, their artwork's floor is set to that size and it
+        # can only shuffle into tiles of that size or larger — never falls back.
+        # A committed tile is removed from the pool, reducing probability of
+        # other unlocked art landing on that size. However, if the owner's art
+        # shuffles into an even larger tile and they pay to upgrade again, their
+        # previous size tile is released back into the pool for others.
+        available_all = list(xs_tile_ids) + list(non_xs_tile_ids)
+        random.shuffle(available_all)
+        for asset_id in unlocked_assets:
+            if available_all:
+                tid = available_all.pop(0)
             else:
                 break
             cursor.execute(
@@ -1211,16 +1222,13 @@ def shuffle_tiles():
                 (tid, asset_id)
             )
 
-        # Assign unlocked assets → equal chance across ALL remaining tiles
-        # TODO: When Stripe upgrade flow is implemented, add a `min_tile_size`
-        # column (e.g. 'xs','s','m','lg','xlg') to assets. Once a user pays to
-        # keep a larger tile, their artwork's floor is set to that size and it
-        # can only shuffle into tiles of that size or larger — never falls back.
-        available_all = available_xs + available_non_xs
-        random.shuffle(available_all)
-        for asset_id in unlocked_assets:
-            if available_all:
-                tid = available_all.pop(0)
+        # Assign locked assets → XS tiles only (never overflow to larger tiles)
+        # Only XS tiles that weren't claimed by unlocked assets remain.
+        available_xs = [t for t in available_all if t in set(xs_tile_ids)]
+        random.shuffle(available_xs)
+        for asset_id in locked_assets:
+            if available_xs:
+                tid = available_xs.pop(0)
             else:
                 break
             cursor.execute(
