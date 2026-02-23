@@ -17,6 +17,26 @@ load_dotenv()
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 
+
+@app.template_filter('cachebust')
+def cachebust_filter(url):
+    """Append file mtime as query param for automatic cache busting."""
+    if '?' in url:
+        path = url.split('?')[0]
+    else:
+        path = url
+    # Strip leading /static/ to get relative path
+    if path.startswith('/static/'):
+        rel = path[len('/static/'):]
+        filepath = os.path.join(app.static_folder, rel)
+        try:
+            mtime = int(os.path.getmtime(filepath))
+            return url.split('?')[0] + '?v=' + str(mtime)
+        except OSError:
+            pass
+    return url
+
+
 # Initialize database schema on startup
 init_db()
 
@@ -312,7 +332,7 @@ def send_edit_code(email, code, artwork_title=""):
         "<p>If you need to edit your artwork's information, copy and paste your Edit Code into the link below.</p>"
         f'<p><a href="{html_mod.escape(edit_link)}">{html_mod.escape(edit_link)}</a></p>'
         '<hr style="margin:24px 0;">'
-        '<p style="font-size:16px;"><strong>Coming Soon for Premium Members!</strong><br>'
+        '<p style="font-size:16px;"><strong>Coming Soon for Unlocked/Upgraded Artwork!</strong><br>'
         "The Last Gallery's Creator of the Month!</p>"
         f'<p><a href="{html_mod.escape(cotm_link)}">{html_mod.escape(cotm_link)}</a></p>'
         '</div>'
@@ -324,7 +344,7 @@ def send_edit_code(email, code, artwork_title=""):
         "If you need to edit your artwork's information, copy and paste your Edit Code into the link below.\n"
         f"{edit_link}\n\n"
         "---\n\n"
-        "Coming Soon for Premium Members!\n"
+        "Coming Soon for Unlocked/Upgraded Artwork!\n"
         "The Last Gallery's Creator of the Month!\n"
         f"{cotm_link}\n"
     )
@@ -401,7 +421,8 @@ def wall_state():
                    a.medium, a.dimensions, a.edition_info,
                    a.for_sale, a.sale_type, a.artist_contact,
                    a.contact1_type, a.contact1_value,
-                   a.contact2_type, a.contact2_value
+                   a.contact2_type, a.contact2_value,
+                   a.unlocked
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
             ORDER BY t.tile_id
@@ -425,6 +446,7 @@ def wall_state():
                 "contact1_value": row["contact1_value"] or "",
                 "contact2_type": row["contact2_type"] or "",
                 "contact2_value": row["contact2_value"] or "",
+                "unlocked": row["unlocked"] or 0,
             })
         conn.close()
         return jsonify({"ok": True, "assignments": assignments})
@@ -678,7 +700,8 @@ def get_tile_metadata(tile_id):
                    a.year_created, a.medium, a.dimensions, a.edition_info,
                    a.for_sale, a.sale_type, a.artist_contact,
                    a.contact1_type, a.contact1_value,
-                   a.contact2_type, a.contact2_value
+                   a.contact2_type, a.contact2_value,
+                   a.unlocked
             FROM tiles t
             LEFT JOIN assets a ON a.asset_id = t.asset_id
             WHERE t.tile_id = ?
@@ -704,7 +727,8 @@ def get_tile_metadata(tile_id):
                 "contact1_type": "",
                 "contact1_value": "",
                 "contact2_type": "",
-                "contact2_value": ""
+                "contact2_value": "",
+                "unlocked": 0
             })
 
         # Return data (use empty strings for null values)
@@ -723,7 +747,8 @@ def get_tile_metadata(tile_id):
             "contact1_type": row["contact1_type"] or "",
             "contact1_value": row["contact1_value"] or "",
             "contact2_type": row["contact2_type"] or "",
-            "contact2_value": row["contact2_value"] or ""
+            "contact2_value": row["contact2_value"] or "",
+            "unlocked": row["unlocked"] or 0
         })
 
     except Exception as e:
@@ -766,7 +791,7 @@ def verify_edit_code():
             SELECT t.tile_id
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
-            WHERE LOWER(TRIM(a.artwork_title)) = ?
+            WHERE RTRIM(LOWER(TRIM(a.artwork_title)), '.') = ?
               AND LOWER(a.contact1_value) = ?
         """, (normalized_title, code_email))
         match = cursor.fetchone()
@@ -831,7 +856,8 @@ def _get_db_snapshot():
                              year_created, medium, dimensions, edition_info,
                              for_sale, sale_type, artist_contact,
                              contact1_type, contact1_value,
-                             contact2_type, contact2_value FROM assets""")
+                             contact2_type, contact2_value,
+                             unlocked FROM assets""")
     assets = [dict(row) for row in cursor.fetchall()]
     cursor.execute("SELECT tile_id, asset_id FROM tiles")
     tiles = [dict(row) for row in cursor.fetchall()]
@@ -855,14 +881,16 @@ def _restore_db_snapshot(snapshot):
                                   year_created, medium, dimensions, edition_info,
                                   for_sale, sale_type, artist_contact,
                                   contact1_type, contact1_value,
-                                  contact2_type, contact2_value)
-               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                  contact2_type, contact2_value,
+                                  unlocked)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (a["asset_id"], a["artist_name"], a["artwork_title"], a["tile_url"], a["popup_url"],
              a.get("year_created", ""), a.get("medium", ""), a.get("dimensions", ""),
              a.get("edition_info", ""), a.get("for_sale", ""), a.get("sale_type", ""),
              a.get("artist_contact", ""),
              a.get("contact1_type", ""), a.get("contact1_value", ""),
-             a.get("contact2_type", ""), a.get("contact2_value", ""))
+             a.get("contact2_type", ""), a.get("contact2_value", ""),
+             a.get("unlocked", 0))
         )
 
     # Restore tiles
@@ -1135,14 +1163,16 @@ def shuffle_tiles():
         conn = get_db()
         cursor = conn.cursor()
 
-        # Get ALL tiles from database and extract asset IDs
-        cursor.execute("SELECT tile_id, asset_id FROM tiles")
-        all_tiles = [dict(row) for row in cursor.fetchall()]
-        
-        # Get only the asset IDs (not None)
-        asset_ids = [t["asset_id"] for t in all_tiles if t["asset_id"] is not None]
+        # Get occupied tiles with unlocked flag
+        cursor.execute("""
+            SELECT t.tile_id, t.asset_id, a.unlocked
+            FROM tiles t
+            JOIN assets a ON a.asset_id = t.asset_id
+            WHERE t.asset_id IS NOT NULL
+        """)
+        occupied = [dict(row) for row in cursor.fetchall()]
 
-        if not asset_ids:
+        if not occupied:
             conn.close()
             return jsonify({
                 "ok": True,
@@ -1151,21 +1181,51 @@ def shuffle_tiles():
                 "non_shuffle_count": len(_undo_history)
             })
 
-        # Get ALL tile IDs from database
-        all_tile_ids = [t["tile_id"] for t in all_tiles]
-        
-        # Shuffle both lists independently for true randomization
-        random.shuffle(asset_ids)
-        random.shuffle(all_tile_ids)
+        # Separate locked vs unlocked assets
+        locked_assets = [o["asset_id"] for o in occupied if not o["unlocked"]]
+        unlocked_assets = [o["asset_id"] for o in occupied if o["unlocked"]]
+        random.shuffle(locked_assets)
+        random.shuffle(unlocked_assets)
+
+        # Get XS vs non-XS tile IDs from SVG
+        svg_tiles = get_tiles_from_svg()
+        xs_tile_ids = [t["id"] for t in svg_tiles if t.get("size") == "xs"]
+        non_xs_tile_ids = [t["id"] for t in svg_tiles if t.get("size") != "xs"]
+        random.shuffle(xs_tile_ids)
+        random.shuffle(non_xs_tile_ids)
 
         # Clear all tile assignments
         cursor.execute("UPDATE tiles SET asset_id = NULL, updated_at = datetime('now')")
 
-        # Assign shuffled assets to shuffled tile positions
-        for i, asset_id in enumerate(asset_ids):
+        # Assign locked assets → XS tiles only (never overflow to larger tiles)
+        available_xs = list(xs_tile_ids)
+        available_non_xs = list(non_xs_tile_ids)
+
+        for asset_id in locked_assets:
+            if available_xs:
+                tid = available_xs.pop(0)
+            else:
+                break
             cursor.execute(
-                "UPDATE tiles SET asset_id = ?, updated_at = datetime('now') WHERE tile_id = ?",
-                (asset_id, all_tile_ids[i])
+                "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
+                (tid, asset_id)
+            )
+
+        # Assign unlocked assets → equal chance across ALL remaining tiles
+        # TODO: When Stripe upgrade flow is implemented, add a `min_tile_size`
+        # column (e.g. 'xs','s','m','lg','xlg') to assets. Once a user pays to
+        # keep a larger tile, their artwork's floor is set to that size and it
+        # can only shuffle into tiles of that size or larger — never falls back.
+        available_all = available_xs + available_non_xs
+        random.shuffle(available_all)
+        for asset_id in unlocked_assets:
+            if available_all:
+                tid = available_all.pop(0)
+            else:
+                break
+            cursor.execute(
+                "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
+                (tid, asset_id)
             )
 
         conn.commit()
@@ -1173,11 +1233,59 @@ def shuffle_tiles():
 
         return jsonify({
             "ok": True,
-            "message": f"Shuffled {len(asset_ids)} tiles",
+            "message": f"Shuffled {len(occupied)} tiles",
             "shuffle_count": len(_shuffle_history),
             "non_shuffle_count": len(_undo_history)
         })
     except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/toggle_unlock", methods=["POST"])
+def admin_toggle_unlock():
+    """Toggle the unlocked status of an artwork on a tile."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    data = request.get_json() or {}
+    tile_id = (data.get("tile_id") or "").strip().upper()
+    if not tile_id:
+        return jsonify({"ok": False, "error": "missing tile_id"}), 400
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT t.asset_id, a.unlocked
+            FROM tiles t
+            JOIN assets a ON a.asset_id = t.asset_id
+            WHERE t.tile_id = ?
+        """, (tile_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            conn.close()
+            return jsonify({"ok": False, "error": "tile has no assigned asset"}), 404
+
+        asset_id = row["asset_id"]
+        new_value = 0 if row["unlocked"] else 1
+
+        cursor.execute("UPDATE assets SET unlocked = ? WHERE asset_id = ?", (new_value, asset_id))
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "ok": True,
+            "tile_id": tile_id,
+            "asset_id": asset_id,
+            "unlocked": new_value
+        })
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

@@ -6,12 +6,12 @@
   <title>The Last Gallery</title>
 
   <!-- Main stylesheet -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-debug.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-tile-labels.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') | cachebust }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-debug.css') | cachebust }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-tile-labels.css') | cachebust }}">
 
   <!-- Cropper.js stylesheet -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/cropper/cropper.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/cropper/cropper.min.css') | cachebust }}">
 
   <!-- Expose server state to JS (single source of truth) -->
   <script>
@@ -43,6 +43,12 @@
         <ul id="hamburger-menu" role="menu" aria-hidden="true">
           <li role="none">
             <button id="menu-item-edit" role="menuitem">Edit Your Artwork Submission</button>
+          </li>
+          <li role="none">
+            <button id="menu-item-unlock" role="menuitem">
+              <svg class="menu-unlock-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+              Unlock to Upgrade Your Artwork!
+            </button>
           </li>
           <li role="none">
             <button id="menu-item-admin" role="menuitem">Admin</button>
@@ -168,6 +174,14 @@
           <label><input type="radio" name="contact2Type" value="website"> Website</label>
         </div>
         <input id="metaContact2Input" type="text" maxlength="120" placeholder="Select a contact type above" />
+
+        <div id="metaUnlockSection" class="meta-unlock-section hidden">
+          <label class="meta-unlock-label">
+            <input type="checkbox" id="metaUnlockCheckbox">
+            <svg class="meta-unlock-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+            Unlocked
+          </label>
+        </div>
 
         <div id="metaError" class="error-text hidden"></div>
       </div>
@@ -373,9 +387,11 @@
   <div id="adminDebugFooter" class="admin-debug-footer" style="display: none;"></div>
 
   <!-- JS -->
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
-  <script src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/upload_modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/main.js') | cachebust }}"></script>
+  <script src="{{ url_for('static', filename='js/admin.js') | cachebust }}"></script>
+  <script src="{{ url_for('static', filename='js/unlock_modal.js') | cachebust }}"></script>
+  <script src="{{ url_for('static', filename='js/success_banner.js') | cachebust }}"></script>
+  <script src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') | cachebust }}"></script>
+  <script src="{{ url_for('static', filename='js/upload_modal.js') | cachebust }}"></script>
 </body>
 </html>

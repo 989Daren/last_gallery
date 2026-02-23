@@ -361,6 +361,15 @@
     // Wire Menu Item Events
     // ========================================
 
+    // "Unlock to Upgrade" menu item opens the unlock modal
+    const menuItemUnlock = $("menu-item-unlock");
+    menuItemUnlock?.addEventListener("click", () => {
+      closeHamburgerMenu();
+      if (typeof window.openUnlockModal === "function") {
+        window.openUnlockModal(null, null);
+      }
+    });
+
     // "Admin" menu item opens the admin modal
     menuItemAdmin?.addEventListener("click", () => {
       closeHamburgerMenu();

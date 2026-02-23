@@ -277,6 +277,12 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (s
 - Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
 - Guards prevent duplicate event handler registration
 
+## Shuffle & Unlock Rules
+- **New uploads** always land in an XS tile (`pick_next_xs_tile_id()` in `app.py`).
+- **Locked** (`unlocked = 0`): Artwork is restricted to XS tiles only during shuffle. Never overflows to larger tiles.
+- **Unlocked** (`unlocked = 1`): Artwork shuffles into any tile size (XS through XL) with equal probability.
+- **Upgrade floor (future)**: When Stripe is wired up, a paid upgrade will set a `min_tile_size` column on the asset (e.g. `'m'`). That artwork can then only shuffle into tiles of that size or larger — it never falls back down. This requires a new DB column and shuffle logic update; not yet implemented.
+
 ## Notes
 - Undo history is in-memory (resets on server restart)
 - Images stored in `/uploads/` directory with UUID filenames
