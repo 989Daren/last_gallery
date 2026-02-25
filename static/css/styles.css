@@ -2290,13 +2290,14 @@ label {
 }
 
 .unlock-modal-graphic {
-  border: 2px dashed rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 32px 16px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.25);
-  font-size: 0.85rem;
   margin-bottom: 20px;
+}
+
+.unlock-modal-graphic img {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
 }
 
 .unlock-modal-benefits {

@@ -325,26 +325,33 @@ def send_edit_code(email, code, artwork_title=""):
     edit_link = f"{BASE_URL}/edit{title_param}"
     cotm_link = f"{BASE_URL}/creator-of-the-month"
 
+    if artwork_title:
+        artwork_line_html = f'<p style="font-size:18px;"><strong>Artwork Title:</strong> {safe_title}</p>'
+        artwork_line_plain = f"Artwork Title: {artwork_title}\n"
+    else:
+        artwork_line_html = '<p style="font-size:18px;"><strong>Artwork:</strong> This edit code applies to all artwork associated with this email address.</p>'
+        artwork_line_plain = "Artwork: This edit code applies to all artwork associated with this email address.\n"
+
     html_body = (
         '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
-        f'<p style="font-size:18px;"><strong>Artwork Title:</strong> {safe_title}</p>'
+        f'{artwork_line_html}'
         f'<p style="font-size:18px;"><strong>Your Edit Code:</strong> {html_mod.escape(code)}</p>'
         "<p>If you need to edit your artwork's information, copy and paste your Edit Code into the link below.</p>"
         f'<p><a href="{html_mod.escape(edit_link)}">{html_mod.escape(edit_link)}</a></p>'
         '<hr style="margin:24px 0;">'
-        '<p style="font-size:16px;"><strong>Coming Soon for Unlocked/Upgraded Artwork!</strong><br>'
+        '<p style="font-size:16px;"><strong>Coming Soon for all Unlocked Artwork!</strong><br>'
         "The Last Gallery's Creator of the Month!</p>"
         f'<p><a href="{html_mod.escape(cotm_link)}">{html_mod.escape(cotm_link)}</a></p>'
         '</div>'
     )
 
     plain_body = (
-        f"Artwork Title: {artwork_title}\n"
+        f"{artwork_line_plain}"
         f"Your Edit Code: {code}\n\n"
         "If you need to edit your artwork's information, copy and paste your Edit Code into the link below.\n"
         f"{edit_link}\n\n"
         "---\n\n"
-        "Coming Soon for Unlocked/Upgraded Artwork!\n"
+        "Coming Soon for all Unlocked Artwork!\n"
         "The Last Gallery's Creator of the Month!\n"
         f"{cotm_link}\n"
     )

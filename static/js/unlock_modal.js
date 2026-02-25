@@ -29,7 +29,7 @@
           '<div class="unlock-modal-icon">' + LOCK_OPEN_SVG + '</div>' +
           '<h2 class="unlock-modal-headline">Unlock Your Artwork</h2>' +
           '<p class="unlock-modal-subtitle">Take your submission to the next level.</p>' +
-          '<div class="unlock-modal-graphic"><span>[ unlock graphic ]</span></div>' +
+          '<div class="unlock-modal-graphic"><img src="/static/images/unlock_graphic.jpg" alt="Unlock your artwork to larger tiles"></div>' +
           '<div class="unlock-modal-benefits">' +
             '<div class="unlock-modal-benefits-label">What you get</div>' +
             '<div class="unlock-modal-benefit">' +
