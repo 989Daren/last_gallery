@@ -213,9 +213,9 @@ function initZoom() {
 function refreshViewportMetrics() {
   const wrapper = zoomState._wrapper;
   if (!wrapper) return;
-  const headerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
+  const totalFixedHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--total-fixed-height')) || 0;
   zoomState._vw = wrapper.clientWidth;
-  zoomState._vh = window.innerHeight - headerHeight;
+  zoomState._vh = window.innerHeight - totalFixedHeight;
 }
 
 function recalculateZoomLimits() {
@@ -536,6 +536,9 @@ const ConicalNav = {
   isUploadOpen() {
     return (typeof isUploadModalOpen === "function") ? isUploadModalOpen() : false;
   },
+  isUnlockOpen() {
+    return (typeof window.isUnlockModalOpen === "function") ? window.isUnlockModalOpen() : false;
+  },
   isZoomedOut() {
     return typeof zoomState !== "undefined" && zoomState.scale < 0.999;
   },
@@ -543,7 +546,8 @@ const ConicalNav = {
   // Choose the desired conical hash based on current UI state
   // Builds compound hash for layered states: #zoom/art/ribbon
   desiredHash() {
-    // Upload is full-screen, doesn't layer with zoom
+    // Full-screen overlays don't layer with zoom
+    if (this.isUnlockOpen()) return "#unlock";
     if (this.isUploadOpen()) return "#upload";
 
     // Build compound hash for zoom + popup layers
@@ -595,6 +599,12 @@ const ConicalNav = {
     // Close art if hash no longer includes art
     if (!wantsArt && this.isArtOpen()) {
       try { closeArtworkPopup(true); } catch (e) {}
+    }
+
+    // Close unlock if hash no longer includes unlock
+    const wantsUnlock = stack.includes("unlock");
+    if (!wantsUnlock && this.isUnlockOpen()) {
+      try { window.closeUnlockModal(true); } catch (e) {}
     }
 
     // Close upload if hash no longer includes upload/standalone upload
@@ -1351,10 +1361,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // to offset content below the fixed header
   function setHeaderOffset() {
     const header = document.querySelector('.controls');
+    const countdownBar = document.getElementById('countdownBar');
     if (header) {
-      const height = header.offsetHeight;
-      document.documentElement.style.setProperty('--header-height', `${height}px`);
-      if (DEBUG) console.log('Header offset set to:', height + 'px');
+      const headerH = header.offsetHeight;
+      document.documentElement.style.setProperty('--header-height', `${headerH}px`);
+      let totalH = headerH;
+      if (countdownBar && !countdownBar.classList.contains('hidden')) {
+        totalH += countdownBar.offsetHeight;
+      }
+      document.documentElement.style.setProperty('--total-fixed-height', `${totalH}px`);
+      if (DEBUG) console.log('Header offset set to:', headerH + 'px, total fixed:', totalH + 'px');
     }
   }
 

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+
 /* =====================================================
    THE LAST GALLERY — styles.css (refactored + cleaned)
    ===================================================== */
@@ -9,6 +11,7 @@
 
   /* Header offset (dynamically set by JS) */
   --header-height: 0px;
+  --total-fixed-height: 0px;
 
   /* Wall lighting controls */
   --spotEnabled: 1;
@@ -272,6 +275,311 @@ label {
 }
 
 /* =====================================================
+   COUNTDOWN BAR
+   ===================================================== */
+
+.countdown-bar {
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  z-index: 4999;
+  height: 40px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid #222;
+}
+
+.countdown-bar.hidden {
+  display: none;
+}
+
+.countdown-label {
+  color: #E0E0E0;
+  font-weight: bold;
+}
+
+.countdown-number {
+  color: #D4A843;
+}
+
+.countdown-unit {
+  color: #E0E0E0;
+}
+
+.countdown-text.shuffling {
+  color: #D4A843;
+  animation: countdownPulse 1s ease-in-out infinite;
+}
+
+@keyframes countdownPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ---- Countdown Info Button ---- */
+.countdown-info-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid #666;
+  background: transparent;
+  color: #888;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: bold;
+  line-height: 1;
+  padding: 0;
+  margin-left: 0.5em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.countdown-info-btn:hover,
+.countdown-info-btn:active {
+  color: #D4A843;
+  border-color: #D4A843;
+}
+
+/* ---- Countdown Info Modal ---- */
+.countdown-info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  background: var(--overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.countdown-info-overlay.hidden {
+  display: none;
+}
+
+.countdown-info-card {
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 28px 24px 24px;
+  max-width: 380px;
+  width: 88%;
+  color: #ccc;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  position: relative;
+}
+
+.countdown-info-card h3 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  color: #fff;
+}
+
+.countdown-info-card p {
+  margin: 0 0 10px;
+}
+
+.countdown-info-card p:last-of-type {
+  margin-bottom: 0;
+}
+
+.countdown-info-link {
+  display: inline-block;
+  margin-top: 14px;
+  color: #D4A843;
+  font-size: 0.9rem;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(212, 168, 67, 0.4);
+  transition: border-color 0.2s;
+}
+
+.countdown-info-link:hover {
+  border-color: #D4A843;
+}
+
+.countdown-info-close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.countdown-info-close:hover {
+  color: #fff;
+}
+
+@media (max-width: 375px) {
+  .countdown-bar {
+    font-size: 14px;
+    height: 36px;
+  }
+  .countdown-info-btn {
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+  }
+}
+
+/* ---- Countdown Control Modal ---- */
+.countdownModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  background: var(--overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.countdownModalOverlay.hidden {
+  display: none;
+}
+
+.countdownModalCard {
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  color: #ddd;
+  font-size: 0.95rem;
+}
+
+.countdownModalCard h3 {
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+  color: #fff;
+}
+
+.countdownModalCard .cd-state-display {
+  font-size: 0.85rem;
+  color: #999;
+  margin-bottom: 16px;
+  padding: 8px;
+  background: #111;
+  border-radius: 6px;
+}
+
+.countdownModalCard label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+  color: #bbb;
+}
+
+.countdownModalCard .cd-radio-group {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.countdownModalCard .cd-radio-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #ddd;
+  font-size: 0.95rem;
+}
+
+.countdownModalCard .cd-duration-section {
+  margin-bottom: 16px;
+}
+
+.countdownModalCard .cd-duration-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.countdownModalCard .cd-duration-row input {
+  width: 70px;
+  padding: 6px 8px;
+  background: var(--input-bg);
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.countdownModalCard .cd-duration-row span {
+  color: #bbb;
+  font-size: 0.85rem;
+  align-self: center;
+}
+
+.countdownModalCard .cd-delay-section {
+  margin-bottom: 16px;
+}
+
+.countdownModalCard .cd-delay-section label.cd-delay-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #ddd;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+}
+
+.countdownModalCard .cd-delay-section input[type="datetime-local"] {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--input-bg);
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+  color-scheme: dark;
+}
+
+.countdownModalCard .cd-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.countdownModalCard .cd-actions button {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: 1px solid var(--btn-border);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.countdownModalCard .cd-actions .cd-cancel-btn {
+  background: var(--btn-bg);
+  color: #ccc;
+}
+
+.countdownModalCard .cd-actions .cd-save-btn {
+  background: #D4A843;
+  color: #000;
+  border-color: #D4A843;
+  font-weight: bold;
+}
+
+/* =====================================================
    GALLERY WALL
    ===================================================== */
 
@@ -279,8 +587,8 @@ label {
   width: 100%;
   max-width: 100%;
 
-  /* Offset for fixed header */
-  padding-top: var(--header-height);
+  /* Offset for fixed header + countdown bar */
+  padding-top: var(--total-fixed-height);
 
   /* Keep horizontal scrolling available for the wall itself (if grid wider than viewport). */
   overflow-x: auto;
@@ -2371,7 +2679,19 @@ label {
 
 @media (max-width: 600px) {
   .unlock-modal-body {
-    padding: 20px 18px;
+    padding: 16px 18px;
+  }
+  .unlock-modal-icon {
+    margin-bottom: 8px;
+  }
+  .unlock-modal-subtitle {
+    margin-bottom: 14px;
+  }
+  .unlock-modal-graphic {
+    margin-bottom: 14px;
+  }
+  .unlock-modal-benefits {
+    margin-bottom: 18px;
   }
 }
 

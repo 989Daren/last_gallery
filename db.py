@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def get_db():
@@ -162,6 +162,25 @@ def init_db():
 
         _set_schema_version(cursor, 5)
         print("Migration 5 complete: Unlocked column added")
+
+    # Migration 6: Countdown schedule table (singleton)
+    if current_version < 6:
+        print("Applying migration 6: Countdown schedule table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS countdown_schedule (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                status TEXT NOT NULL DEFAULT 'cleared',
+                target_time TEXT,
+                start_time TEXT,
+                duration_seconds INTEGER NOT NULL DEFAULT 604800,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO countdown_schedule (id, status) VALUES (1, 'cleared')
+        """)
+        _set_schema_version(cursor, 6)
+        print("Migration 6 complete: Countdown schedule table created")
 
     conn.commit()
     conn.close()
