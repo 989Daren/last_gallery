@@ -5,6 +5,7 @@ import uuid
 import re
 import io
 import html as html_mod
+from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 import xml.etree.ElementTree as ET
 import resend
@@ -1302,6 +1303,117 @@ def admin_toggle_unlock():
             conn.rollback()
             conn.close()
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ---- Countdown Timer ----
+
+def _parse_iso_utc(s):
+    """Parse ISO 8601 string to UTC-aware datetime. Handles 'Z' suffix for Python 3.9."""
+    return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+@app.route("/api/countdown_state", methods=["GET"])
+def get_countdown_state():
+    """Return current countdown state, with server-side auto-transitions."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT status, target_time, start_time, duration_seconds FROM countdown_schedule WHERE id = 1")
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"status": "cleared", "target_time": None, "start_time": None, "duration_seconds": 604800})
+
+    status = row["status"]
+    target_time = row["target_time"]
+    start_time = row["start_time"]
+    duration_seconds = row["duration_seconds"]
+    now = datetime.now(timezone.utc)
+
+    # Auto-transition: scheduled -> active
+    if status == "scheduled" and start_time:
+        start_dt = _parse_iso_utc(start_time)
+        if now >= start_dt:
+            status = "active"
+            cursor.execute(
+                "UPDATE countdown_schedule SET status = 'active', updated_at = datetime('now') WHERE id = 1"
+            )
+            conn.commit()
+
+    # Auto-transition: active -> auto-reset (countdown expired)
+    if status == "active" and target_time:
+        target_dt = _parse_iso_utc(target_time)
+        if now >= target_dt:
+            new_target = now + timedelta(seconds=duration_seconds)
+            target_time = new_target.strftime("%Y-%m-%dT%H:%M:%SZ")
+            cursor.execute(
+                "UPDATE countdown_schedule SET target_time = ?, updated_at = datetime('now') WHERE id = 1",
+                (target_time,)
+            )
+            conn.commit()
+
+    conn.close()
+    return jsonify({
+        "status": status,
+        "target_time": target_time,
+        "start_time": start_time,
+        "duration_seconds": duration_seconds
+    })
+
+
+@app.route("/api/admin/countdown", methods=["POST"])
+def admin_countdown():
+    """Admin endpoint to control countdown timer."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    data = request.get_json(force=True)
+    action = data.get("action", "")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    now = datetime.now(timezone.utc)
+
+    if action == "set_active":
+        duration = int(data.get("duration_seconds", 604800))
+        target = now + timedelta(seconds=duration)
+        target_time = target.strftime("%Y-%m-%dT%H:%M:%SZ")
+        cursor.execute(
+            "UPDATE countdown_schedule SET status = 'active', target_time = ?, start_time = NULL, duration_seconds = ?, updated_at = datetime('now') WHERE id = 1",
+            (target_time, duration)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, "status": "active", "target_time": target_time, "duration_seconds": duration})
+
+    elif action == "set_scheduled":
+        duration = int(data.get("duration_seconds", 604800))
+        start_time = data.get("start_time", "")
+        if not start_time:
+            conn.close()
+            return jsonify({"ok": False, "error": "start_time is required for scheduling"}), 400
+        start_dt = _parse_iso_utc(start_time)
+        target_dt = start_dt + timedelta(seconds=duration)
+        target_time = target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        start_time_iso = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        cursor.execute(
+            "UPDATE countdown_schedule SET status = 'scheduled', target_time = ?, start_time = ?, duration_seconds = ?, updated_at = datetime('now') WHERE id = 1",
+            (target_time, start_time_iso, duration)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, "status": "scheduled", "target_time": target_time, "start_time": start_time_iso, "duration_seconds": duration})
+
+    elif action == "clear":
+        cursor.execute(
+            "UPDATE countdown_schedule SET status = 'cleared', target_time = NULL, start_time = NULL, updated_at = datetime('now') WHERE id = 1"
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, "status": "cleared"})
+
+    else:
+        conn.close()
+        return jsonify({"ok": False, "error": "Unknown action"}), 400
 
 
 if __name__ == "__main__":

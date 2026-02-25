@@ -370,6 +370,32 @@
       }
     });
 
+    // "A Human Centric Gallery" menu item opens the info modal
+    const menuItemHumanCentric = $("menu-item-human-centric");
+    const humanCentricOverlay = $("humanCentricOverlay");
+    const humanCentricCloseBtn = $("humanCentricCloseBtn");
+
+    function closeHumanCentricModal() {
+      if (humanCentricOverlay) humanCentricOverlay.classList.add("hidden");
+    }
+
+    menuItemHumanCentric?.addEventListener("click", () => {
+      closeHamburgerMenu();
+      if (humanCentricOverlay) humanCentricOverlay.classList.remove("hidden");
+    });
+
+    humanCentricCloseBtn?.addEventListener("click", closeHumanCentricModal);
+
+    humanCentricOverlay?.addEventListener("click", (e) => {
+      if (e.target === humanCentricOverlay) closeHumanCentricModal();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && humanCentricOverlay && !humanCentricOverlay.classList.contains("hidden")) {
+        closeHumanCentricModal();
+      }
+    });
+
     // "Admin" menu item opens the admin modal
     menuItemAdmin?.addEventListener("click", () => {
       closeHamburgerMenu();
@@ -904,6 +930,184 @@
   }
 
   // ========================================
+  // Countdown Admin Controls
+  // ========================================
+
+  let _countdownInitialized = false;
+
+  function initCountdownAdmin() {
+    if (_countdownInitialized) return;
+    _countdownInitialized = true;
+
+    const countdownAdminBtn = $("countdownAdminBtn");
+    const overlay = $("countdownModalOverlay");
+    const cancelBtn = $("cdCancelBtn");
+    const saveBtn = $("cdSaveBtn");
+    const delayCheck = $("cdDelayCheck");
+    const delayInput = $("cdDelayInput");
+    const durationSection = $("cdDurationSection");
+    const delaySection = $("cdDelaySection");
+    const radios = document.querySelectorAll('input[name="cdMode"]');
+
+    function closeCountdownModal() {
+      if (overlay) overlay.classList.add("hidden");
+    }
+
+    function getSelectedMode() {
+      const checked = document.querySelector('input[name="cdMode"]:checked');
+      return checked ? checked.value : "active";
+    }
+
+    function toggleDurationFields() {
+      const mode = getSelectedMode();
+      const show = mode === "active";
+      if (durationSection) durationSection.style.display = show ? "" : "none";
+      if (delaySection) delaySection.style.display = show ? "" : "none";
+    }
+
+    radios.forEach(r => r.addEventListener("change", toggleDurationFields));
+
+    if (delayCheck) {
+      delayCheck.addEventListener("change", () => {
+        if (delayInput) delayInput.disabled = !delayCheck.checked;
+      });
+    }
+
+    async function openCountdownModal() {
+      if (!overlay) return;
+
+      // Reset form
+      toggleDurationFields();
+      if (delayCheck) delayCheck.checked = false;
+      if (delayInput) { delayInput.disabled = true; delayInput.value = ""; }
+
+      const stateDisplay = $("cdStateDisplay");
+
+      // Fetch current state
+      try {
+        const resp = await fetch("/api/countdown_state", { cache: "no-store" });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (stateDisplay) {
+            if (data.status === "cleared") {
+              stateDisplay.textContent = "Current state: Hidden (cleared)";
+            } else if (data.status === "scheduled") {
+              stateDisplay.textContent = "Current state: Scheduled (waiting to start)";
+            } else if (data.status === "active" && data.target_time) {
+              const target = new Date(data.target_time);
+              stateDisplay.textContent = "Current state: Active \u2014 ends " + target.toLocaleString();
+            } else {
+              stateDisplay.textContent = "Current state: " + data.status;
+            }
+
+            // Pre-populate duration from current data
+            if (data.duration_seconds) {
+              const totalH = Math.floor(data.duration_seconds / 3600);
+              const days = Math.floor(totalH / 24);
+              const hours = totalH % 24;
+              const daysInput = $("cdDaysInput");
+              const hoursInput = $("cdHoursInput");
+              if (daysInput) daysInput.value = days;
+              if (hoursInput) hoursInput.value = hours;
+            }
+
+            // Pre-select radio
+            if (data.status === "cleared") {
+              const clearedRadio = document.querySelector('input[name="cdMode"][value="cleared"]');
+              if (clearedRadio) clearedRadio.checked = true;
+            } else {
+              const activeRadio = document.querySelector('input[name="cdMode"][value="active"]');
+              if (activeRadio) activeRadio.checked = true;
+            }
+            toggleDurationFields();
+          }
+        }
+      } catch (err) {
+        if (stateDisplay) stateDisplay.textContent = "Current state: unable to fetch";
+      }
+
+      overlay.classList.remove("hidden");
+    }
+
+    countdownAdminBtn?.addEventListener("click", openCountdownModal);
+    cancelBtn?.addEventListener("click", closeCountdownModal);
+
+    // Backdrop click to close
+    overlay?.addEventListener("click", (e) => {
+      if (e.target === overlay) closeCountdownModal();
+    });
+
+    saveBtn?.addEventListener("click", async () => {
+      if (!_adminPin) {
+        alert("Admin session expired. Please re-enter PIN.");
+        return;
+      }
+
+      const mode = getSelectedMode();
+      let body;
+
+      if (mode === "cleared") {
+        body = { action: "clear" };
+      } else {
+        // Active mode
+        const days = parseInt($("cdDaysInput")?.value || "0", 10);
+        const hours = parseInt($("cdHoursInput")?.value || "0", 10);
+        const durationSeconds = (days * 86400) + (hours * 3600);
+
+        if (durationSeconds <= 0) {
+          alert("Duration must be greater than zero.");
+          return;
+        }
+
+        if (delayCheck?.checked && delayInput?.value) {
+          // Scheduled (delayed start)
+          const localDate = new Date(delayInput.value);
+          body = {
+            action: "set_scheduled",
+            start_time: localDate.toISOString(),
+            duration_seconds: durationSeconds
+          };
+        } else {
+          // Immediate active
+          body = {
+            action: "set_active",
+            duration_seconds: durationSeconds
+          };
+        }
+      }
+
+      try {
+        const resp = await fetch("/api/admin/countdown", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Pin": _adminPin
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          alert(err.error || "Failed to save countdown settings");
+          return;
+        }
+
+        closeCountdownModal();
+
+        // Refresh countdown bar
+        if (typeof window.refreshCountdown === "function") {
+          window.refreshCountdown();
+        }
+
+        showAdminStatus("Countdown updated", "success");
+      } catch (err) {
+        console.error("[admin] Countdown save failed:", err);
+        alert("Failed to save: " + err.message);
+      }
+    });
+  }
+
+  // ========================================
   // Initialize Admin Module
   // ========================================
 
@@ -920,6 +1124,7 @@
     initAdminActions();
     initShuffleHandlers();
     initTileLabelsToggle();
+    initCountdownAdmin();
   }
 
   // Initialize when DOM is ready

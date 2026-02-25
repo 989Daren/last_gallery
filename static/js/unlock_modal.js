@@ -34,11 +34,11 @@
             '<div class="unlock-modal-benefits-label">What you get</div>' +
             '<div class="unlock-modal-benefit">' +
               '<span class="unlock-modal-check">\u2713</span>' +
-              '<div><strong>Larger tile eligibility</strong> &mdash; Your creative work becomes eligible to be placed into larger tiles during our weekly random gallery shuffle. You will then be given the opportunity to upgrade your work to the larger tile, ensuring it will never drop back down in size, for the life of the gallery.</div>' +
+              '<div><strong>Larger tile eligibility</strong> &mdash; Your work can land in larger tiles during the weekly shuffle. Lock it in so it never drops back down.</div>' +
             '</div>' +
             '<div class="unlock-modal-benefit">' +
               '<span class="unlock-modal-check">\u2713</span>' +
-              '<div><strong>Creator of the Month</strong> &mdash; You\'re entered into our monthly Creator of the Month drawing, where you and your creative work will be prominently featured on The Last Gallery website until the following month\'s drawing. Drawing winners will also receive a link to their work inside every email that goes out from The Last Gallery website &mdash; until the following month\'s drawing.</div>' +
+              '<div><strong>Creator of the Month</strong> &mdash; You\'re entered into our monthly drawing, where you and your work will be featured on The Last Gallery website.</div>' +
             '</div>' +
           '</div>' +
           '<button class="unlock-modal-cta" type="button">Unlock My Artwork</button>' +
@@ -67,9 +67,9 @@
       closeUnlockModal();
     });
 
-    // Backdrop click
-    _overlay.addEventListener("click", (e) => {
-      if (e.target === _overlay) closeUnlockModal();
+    // Tap anywhere to close (CTA + close link stopPropagation to stay interactive)
+    _overlay.addEventListener("click", () => {
+      closeUnlockModal();
     });
 
     // Escape key
@@ -88,12 +88,22 @@
     const overlay = createOverlay();
     overlay.classList.remove("hidden");
     overlay.setAttribute("aria-hidden", "false");
+    // Push hash for back-button support
+    window.ConicalNav && window.ConicalNav.pushToMatchUi();
   }
 
-  function closeUnlockModal() {
+  function closeUnlockModal(fromHashChange) {
     if (!_overlay) return;
     _overlay.classList.add("hidden");
     _overlay.setAttribute("aria-hidden", "true");
+    // Pop hash unless triggered by back button
+    if (!fromHashChange) {
+      window.ConicalNav && window.ConicalNav.popFromUiClose();
+    }
+  }
+
+  function isUnlockModalOpen() {
+    return _overlay ? !_overlay.classList.contains("hidden") : false;
   }
 
   // TODO: wire to Stripe checkout
@@ -104,6 +114,7 @@
 
   window.openUnlockModal = openUnlockModal;
   window.closeUnlockModal = closeUnlockModal;
+  window.isUnlockModalOpen = isUnlockModalOpen;
   window.initiateUnlockCheckout = initiateUnlockCheckout;
 
 })();

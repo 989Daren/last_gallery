@@ -42,13 +42,16 @@
         <!-- Dropdown menu (hidden by default) -->
         <ul id="hamburger-menu" role="menu" aria-hidden="true">
           <li role="none">
-            <button id="menu-item-edit" role="menuitem">Edit Your Artwork Submission</button>
-          </li>
-          <li role="none">
             <button id="menu-item-unlock" role="menuitem">
               <svg class="menu-unlock-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
               Unlock to Upgrade Your Artwork!
             </button>
+          </li>
+          <li role="none">
+            <button id="menu-item-edit" role="menuitem">Edit Your Artwork Submission</button>
+          </li>
+          <li role="none">
+            <button id="menu-item-human-centric" role="menuitem">A Human Centric Gallery</button>
           </li>
           <li role="none">
             <button id="menu-item-admin" role="menuitem">Admin</button>
@@ -57,6 +60,24 @@
       </div>
     </div>
   </header>
+
+  <!-- Countdown timer bar (below header) -->
+  <div id="countdownBar" class="countdown-bar hidden">
+    <span class="countdown-label">Artwork Shuffle:</span>
+    <span id="countdownText" class="countdown-unit"></span>
+    <button id="countdownInfoBtn" class="countdown-info-btn" type="button" aria-label="What is the artwork shuffle?">i</button>
+  </div>
+
+  <!-- Countdown Info Modal -->
+  <div id="countdownInfoOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
+    <div class="countdown-info-card">
+      <button id="countdownInfoCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
+      <h3>What is the Artwork Shuffle?</h3>
+      <p>The Last Gallery reshuffles all artwork weekly. When the countdown reaches zero, every piece is randomly reassigned to a new tile position.</p>
+      <p>Unlock your creative work for the chance to land in a larger, more prominent tile size... then lock it in!</p>
+      <a href="#" id="countdownInfoUnlockLink" class="countdown-info-link">Unlock Your Artwork</a>
+    </div>
+  </div>
 
   <div id="simpleWelcome" class="simpleWelcome hidden" role="dialog" aria-modal="true" aria-label="Welcome">
     <div class="simpleWelcomeCard" role="document">
@@ -341,6 +362,7 @@
         <div class="adminRow">
           <button id="shuffleButton" type="button">Shuffle Tiles</button>
           <button id="undoShuffleBtn" type="button" disabled>Undo Shuffle</button>
+          <button id="countdownAdminBtn" type="button">Countdown</button>
           <button id="adminCloseBtn" type="button" aria-label="Close admin modal">Close</button>
         </div>
       </div>
@@ -383,12 +405,58 @@
     </div>
   </div>
 
+  <!-- Human Centric Gallery Modal -->
+  <div id="humanCentricOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
+    <div class="countdown-info-card">
+      <button id="humanCentricCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
+      <h3>TLG &mdash; A Human Centric Gallery</h3>
+      <p>The Last Gallery exists to honor authorship, intent, and the creative risks that only humans take. We accept only works that qualify for U.S. copyright protection, which requires deliberate choice, revision, and personal expression &mdash; hallmarks of human-created art. Raw, AI-generated images do not possess such legal protection or conform to the spirit of our gallery.</p>
+      <p>Whether it's a painting, drawing, photograph, collage, digital or mixed media, we're excited to see what you've created!</p>
+    </div>
+  </div>
+
+  <!-- Countdown Control Modal (admin) -->
+  <div id="countdownModalOverlay" class="countdownModalOverlay hidden">
+    <div class="countdownModalCard">
+      <h3>Countdown Timer</h3>
+      <div id="cdStateDisplay" class="cd-state-display">Current state: loading...</div>
+
+      <div class="cd-radio-group">
+        <label><input type="radio" name="cdMode" value="active" checked> Active</label>
+        <label><input type="radio" name="cdMode" value="cleared"> Cleared (Hidden)</label>
+      </div>
+
+      <div id="cdDurationSection" class="cd-duration-section">
+        <label>Duration</label>
+        <div class="cd-duration-row">
+          <input type="number" id="cdDaysInput" min="0" max="365" value="7">
+          <span>days</span>
+          <input type="number" id="cdHoursInput" min="0" max="23" value="0">
+          <span>hours</span>
+        </div>
+      </div>
+
+      <div id="cdDelaySection" class="cd-delay-section">
+        <label class="cd-delay-check">
+          <input type="checkbox" id="cdDelayCheck"> Delayed start
+        </label>
+        <input type="datetime-local" id="cdDelayInput" disabled>
+      </div>
+
+      <div class="cd-actions">
+        <button type="button" class="cd-cancel-btn" id="cdCancelBtn">Cancel</button>
+        <button type="button" class="cd-save-btn" id="cdSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Admin Debug Footer (development only) -->
   <div id="adminDebugFooter" class="admin-debug-footer" style="display: none;"></div>
 
   <!-- JS -->
   <script src="{{ url_for('static', filename='js/main.js') | cachebust }}"></script>
   <script src="{{ url_for('static', filename='js/admin.js') | cachebust }}"></script>
+  <script src="{{ url_for('static', filename='js/countdown.js') | cachebust }}"></script>
   <script src="{{ url_for('static', filename='js/unlock_modal.js') | cachebust }}"></script>
   <script src="{{ url_for('static', filename='js/success_banner.js') | cachebust }}"></script>
   <script src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') | cachebust }}"></script>
