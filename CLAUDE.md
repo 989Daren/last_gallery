@@ -25,14 +25,16 @@ python app.py
 |------|---------|
 | `app.py` | Flask application, all API endpoints |
 | `db.py` | Database connection, schema initialization, versioned migrations |
-| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + schema_version tables) |
+| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + schema_version tables) |
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
 
 ### Frontend
 | File | Purpose |
 |------|---------|
 | `static/js/main.js` | Core gallery rendering, popup overlay, wall state management |
-| `static/js/admin.js` | Admin modal, action handlers (clear/move/undo/shuffle) |
+| `static/js/admin.js` | Admin modal, action handlers (clear/move/undo/shuffle), countdown admin controls |
+| `static/js/countdown.js` | Countdown timer bar module (fetch state, tick, show/hide) |
+| `static/js/unlock_modal.js` | Unlock artwork modal with back-button support |
 | `static/js/upload_modal.js` | Image upload flow with cropping and metadata entry |
 | `templates/index.html` | Main HTML template |
 | `static/css/styles.css` | All styling including popup animations |
@@ -84,9 +86,19 @@ CREATE TABLE edit_codes (
     code TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Countdown schedule: singleton row for shuffle countdown timer
+CREATE TABLE countdown_schedule (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    status TEXT NOT NULL DEFAULT 'cleared',    -- 'active' | 'scheduled' | 'cleared'
+    target_time TEXT,                           -- ISO 8601 UTC when countdown hits zero
+    start_time TEXT,                            -- ISO 8601 UTC when countdown begins (for delayed start)
+    duration_seconds INTEGER NOT NULL DEFAULT 604800,  -- cycle length (default 7 days)
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
-Current schema version: **4**
+Current schema version: **6**
 
 ## Tile Registration
 
@@ -122,6 +134,7 @@ Tiles are classified by size and numbered sequentially:
 | `/edit` | GET | Gallery page in edit mode — auto-opens edit banner, skips welcome |
 | `/creator-of-the-month` | GET | Gallery page with Creator of the Month coming-soon banner |
 | `/api/wall_state` | GET | Get all tile assignments from database |
+| `/api/countdown_state` | GET | Get countdown timer state (with server-side auto-transitions) |
 | `/uploads/<filename>` | GET | Serve uploaded images |
 
 ### Upload
@@ -142,6 +155,7 @@ Tiles are classified by size and numbered sequentially:
 | `/api/admin/move_tile_asset` | POST | Move artwork between tiles |
 | `/api/admin/undo` | POST | Undo last action (supports `action_type: shuffle/non_shuffle`) |
 | `/api/admin/history_status` | GET | Get undo availability counts |
+| `/api/admin/countdown` | POST | Control countdown timer (actions: set_active, set_scheduled, clear) |
 | `/shuffle` | POST | Randomly redistribute all images (body: `{pin: "8375"}`) |
 
 ## Metadata Fields
@@ -232,7 +246,7 @@ Focal-point zoom for touch devices — content under fingers stays anchored duri
 - **Gestures**:
   - Two-finger pinch: Zoom in/out (focal-point anchored)
   - Single-finger drag (when zoomed): Pan within clamped bounds
-  - Back button: Unwinds layers (ribbon → popup → zoom → leave page)
+  - Back button: Unwinds layers (ribbon → popup → unlock → zoom → leave page)
 - **Disabled during**: Welcome modal, upload modal, admin modal, artwork popup
 - **Auto-reset**: Zoom resets to 1.0x after wall refresh (shuffle, clear, move, undo)
 
@@ -268,14 +282,38 @@ window.initZoom()                 // Initialize pinch-to-zoom
 window.resetZoom()                // Reset zoom to 1.0x
 window.highlightNewTile(tileId)   // Scroll to tile + sheen animation
 window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (set by server via template)
+window.refreshCountdown()         // Re-fetch and apply countdown state (from countdown.js)
+window.openUnlockModal(assetId, tileId)  // Open unlock modal (from unlock_modal.js)
+window.closeUnlockModal()         // Close unlock modal (from unlock_modal.js)
+window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_modal.js)
 ```
 
 ### admin.js Module
 - IIFE pattern with initialization guards
 - PIN validated server-side via `/api/admin/history_status` before unlocking modal
 - PIN stored in closure-scoped `_adminPin` variable, exposed via `window.getAdminPin()` for cross-module admin requests, persists until page refresh
-- Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle
+- Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle, countdown admin controls, human centric gallery modal
 - Guards prevent duplicate event handler registration
+
+## Countdown Timer Bar
+- **Position**: Fixed below header, 40px tall (36px on mobile <375px), black background
+- **Font**: Bebas Neue (Google Fonts), gold numbers (#D4A843), soft white text (#E0E0E0)
+- **Format**: "Artwork Shuffle: 6 days, 12 hours, 34 minutes" — numbers gold, units soft white
+- **States**: Active (ticking), Scheduled ("Countdown begins soon"), Cleared (bar hidden)
+- **Info icon**: Circled italic "i" inline after countdown text, opens info popup explaining the weekly shuffle
+- **Info popup link**: "Unlock Your Artwork" link closes info popup and opens unlock modal
+- **Auto-reset**: When countdown expires, shows "Shuffling..." with gold pulse for 3s, then re-fetches state (server auto-resets cycle)
+- **Persistence**: State stored in `countdown_schedule` DB table, survives server restarts
+- **CSS variable**: `--total-fixed-height` = header + countdown bar height; used by gallery wrapper padding and zoom viewport metrics
+- **Admin controls**: "Countdown" button in admin panel opens modal to set Active (with duration), Scheduled (with delayed start), or Cleared
+- **Module**: `static/js/countdown.js` — IIFE, exposes `window.refreshCountdown()` for admin.js
+
+## Hamburger Menu
+Menu items in order:
+1. **Unlock to Upgrade Your Artwork!** — opens unlock modal
+2. **Edit Your Artwork Submission** — opens edit banner
+3. **A Human Centric Gallery** — opens info modal (human-only art policy statement)
+4. **Admin** — opens admin modal (PIN gated)
 
 ## Shuffle & Unlock Rules
 - **New uploads** always land in an XS tile (`pick_next_xs_tile_id()` in `app.py`).
@@ -360,7 +398,7 @@ systemctl --user status thelastgallery-tunnel.service
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
 - `CLAUDE_URL.txt` in project root contains a raw GitHub URL pinned to the latest commit hash that changed `CLAUDE.md` — auto-generated by the post-commit hook
-- Last reviewed: 2026-02-22
+- Last reviewed: 2026-02-25
 
 ---
 

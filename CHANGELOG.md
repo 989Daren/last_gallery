@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-02-25
+
+### Countdown Timer Bar
+- **Countdown bar**: Fixed bar below header showing time until next artwork shuffle. Bebas Neue font, gold numbers (#D4A843), soft white text (#E0E0E0), 40px tall (36px on mobile)
+- **Display format**: "Artwork Shuffle: 6 days, 12 hours, 34 minutes" — numbers gold, units soft white
+- **States**: Active (ticking every 10s), Scheduled ("Countdown begins soon"), Cleared (hidden)
+- **Auto-reset**: When countdown expires, shows "Shuffling..." with gold pulse animation for 3s, then server auto-resets the cycle
+- **Persistence**: Schema migration v6 adds `countdown_schedule` singleton table. State survives server restarts.
+- **API**: `GET /api/countdown_state` (public, with server-side auto-transitions), `POST /api/admin/countdown` (admin, PIN required)
+- **Admin controls**: "Countdown" button in admin panel opens modal to configure Active (duration in days/hours), Scheduled (delayed start via datetime picker), or Cleared
+- **CSS variable**: `--total-fixed-height` (header + countdown bar) replaces `--header-height` for gallery wrapper padding and zoom viewport metrics
+- **Info icon**: Circled italic "i" inline after countdown text, opens popup explaining the weekly shuffle with "Unlock Your Artwork" link that opens the unlock modal
+
+### "A Human Centric Gallery" Modal
+- **New hamburger menu item**: "A Human Centric Gallery" opens info modal with human-only art policy statement
+- **Content**: Gallery's position on authorship, U.S. copyright protection requirements, and AI-generated image exclusion
+- **Dismissable**: Via X button, backdrop click, or Escape key
+
+### Hamburger Menu Reorder
+- Unlock item moved to top of dropdown list
+- New order: Unlock → Edit → Human Centric Gallery → Admin
+
+### Unlock Modal Improvements
+- **Streamlined benefit copy**: Both benefit descriptions shortened (~50% less text) for better mobile fit
+- **Tighter mobile spacing**: Reduced padding and margins on screens ≤600px
+- **Tap-to-dismiss**: Tapping anywhere outside the CTA/close buttons dismisses the modal
+- **Back-button support**: Unlock modal integrates with ConicalNav hash system (`#unlock`), dismissable via mobile back button
+
+### New File
+- `static/js/countdown.js` — IIFE countdown timer module, exposes `window.refreshCountdown()`
+
+---
+
 ## 2026-02-15
 
 ### Edit Code Email Revamp
