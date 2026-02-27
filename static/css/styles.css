@@ -6,9 +6,6 @@
 
 /* ===== Global Layout / Theme ===== */
 :root {
-  --tileColor: #5a3b33;
-  --matColor: #111;
-
   /* Header offset (dynamically set by JS) */
   --header-height: 0px;
   --total-fixed-height: 0px;
@@ -244,26 +241,45 @@ label {
   outline-offset: -2px;
 }
 
-/* Ensure "Add Your Artwork" doesn’t crowd the title */
+/* "Add Your Artwork" header button — gold accent */
 #addArtworkBtn {
   flex: 0 0 auto;
+  padding: 6px 14px;
+  border: 1.5px solid #D4A843;
+  border-radius: 6px;
+  background: transparent;
+  color: #D4A843;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.2s, color 0.2s;
 }
 
-/* Mobile: stack controls gracefully */
+#addArtworkBtn:hover {
+  background: rgba(212, 168, 67, 0.15);
+}
+
+/* Mobile: keep controls on one line */
 @media (max-width: 600px) {
   .controls {
-    gap: 10px;
-    align-items: flex-start;
+    gap: 8px;
   }
 
   #siteTitle {
-    max-width: 100%;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  #addArtworkBtn {
+    padding: 5px 10px;
+    font-size: 0.75rem;
   }
 
   #gridControls {
-    max-width: 100%;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     gap: 10px;
   }
@@ -328,13 +344,13 @@ label {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 1.5px solid #666;
-  background: transparent;
-  color: #888;
+  border: 1.5px solid #D4A843;
+  background: #D4A843;
+  color: #111;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 12px;
+  font-size: 13px;
   font-style: italic;
-  font-weight: bold;
+  font-weight: 900;
   line-height: 1;
   padding: 0;
   margin-left: 0.5em;
@@ -348,8 +364,9 @@ label {
 
 .countdown-info-btn:hover,
 .countdown-info-btn:active {
-  color: #D4A843;
-  border-color: #D4A843;
+  background: #e6be5a;
+  border-color: #e6be5a;
+  color: #111;
 }
 
 /* ---- Countdown Info Modal ---- */
@@ -368,50 +385,61 @@ label {
 }
 
 .countdown-info-card {
-  background: #1a1a1a;
-  border: 1px solid #444;
-  border-radius: 10px;
-  padding: 28px 24px 24px;
-  max-width: 380px;
-  width: 88%;
+  width: min(420px, 90%);
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 12px;
   color: #ccc;
-  font-size: 0.92rem;
-  line-height: 1.55;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.countdown-info-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+}
+
+.countdown-info-body {
+  padding: 24px 28px;
   position: relative;
 }
 
 .countdown-info-card h3 {
   margin: 0 0 14px;
-  font-size: 1.05rem;
-  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.countdown-info-graphic {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.countdown-info-graphic img {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
 }
 
 .countdown-info-card p {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .countdown-info-card p:last-of-type {
   margin-bottom: 0;
 }
 
-.countdown-info-link {
-  display: inline-block;
-  margin-top: 14px;
-  color: #D4A843;
-  font-size: 0.9rem;
-  text-decoration: none;
-  border-bottom: 1px solid rgba(212, 168, 67, 0.4);
-  transition: border-color 0.2s;
-}
-
-.countdown-info-link:hover {
-  border-color: #D4A843;
-}
-
 .countdown-info-close {
   position: absolute;
-  top: 8px;
-  right: 12px;
+  top: 4px;
+  right: 8px;
   background: none;
   border: none;
   color: #888;
@@ -423,6 +451,15 @@ label {
 
 .countdown-info-close:hover {
   color: #fff;
+}
+
+@media (max-width: 600px) {
+  .countdown-info-body {
+    padding: 16px 18px;
+  }
+  .countdown-info-graphic {
+    margin-bottom: 14px;
+  }
 }
 
 @media (max-width: 375px) {
@@ -1093,6 +1130,99 @@ label {
 }
 
 /* ==========================================
+   Metadata Modal — Gold Accent Overrides
+   ========================================== */
+
+#metaModal {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #333;
+  border-radius: 12px;
+}
+
+.meta-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+}
+
+#metaModal .modal-header-tier2 {
+  padding: 20px 24px 0;
+  margin-bottom: 14px;
+}
+
+#metaModal .modal-header-tier2 h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+#metaModal .modal-body-tier2 {
+  padding: 0 24px;
+  margin-bottom: 14px;
+}
+
+#metaModal .modal-actions-tier2 {
+  padding: 0 24px 20px;
+}
+
+/* Primary button — gold gradient */
+#metaModal .primary-btn {
+  padding: 10px 28px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition: filter 0.2s;
+}
+
+#metaModal .primary-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+/* Secondary button — outlined, muted */
+#metaModal .secondary-btn {
+  padding: 10px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+#metaModal .secondary-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Input focus — gold tint */
+#metaModal .modal-body-tier2 input[type="text"]:focus,
+#metaModal .modal-body-tier2 input[type="email"]:focus {
+  border-color: rgba(212, 168, 67, 0.5);
+}
+
+/* Metadata modal — mobile */
+@media (max-width: 600px) {
+  #metaModal {
+    padding: 0;
+  }
+
+  #metaModal .modal-header-tier2 {
+    padding: 16px 20px 0;
+  }
+
+  #metaModal .modal-body-tier2 {
+    padding: 0 20px;
+  }
+
+  #metaModal .modal-actions-tier2 {
+    padding: 0 20px 16px;
+  }
+}
+
+/* ==========================================
    Tier-3 Submission Confirmation Banner
    ========================================== */
 
@@ -1112,28 +1242,53 @@ label {
 
 .confirm-banner {
   width: min(540px, 90%);
-  background: rgba(0, 0, 0, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  padding: 28px 32px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
   color: #fff;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8);
+}
+
+.confirm-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+}
+
+.confirm-banner-content {
+  padding: 24px 28px;
 }
 
 .confirm-banner-heading {
   margin: 0 0 16px 0;
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   font-weight: 700;
   text-align: left;
   color: rgba(255, 255, 255, 0.95);
 }
 
 .confirm-banner-text {
-  margin: 0 0 24px 0;
-  font-size: 0.92rem;
-  line-height: 1.6;
+  margin: 0 0 14px 0;
+  font-size: 0.88rem;
+  line-height: 1.65;
   text-align: left;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.confirm-banner-text:last-of-type {
+  margin-bottom: 22px;
+}
+
+.confirm-banner-link {
+  color: rgba(212, 168, 67, 0.85);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s;
+}
+
+.confirm-banner-link:hover {
+  color: rgba(212, 168, 67, 1);
 }
 
 .confirm-banner-actions {
@@ -1144,35 +1299,39 @@ label {
 
 .confirm-banner-actions button {
   padding: 10px 20px;
-  font-size: 1rem;
-  border-radius: 4px;
+  font-size: 0.9rem;
+  border-radius: 8px;
   border: none;
   cursor: pointer;
-  transition: background-color 0.2s, opacity 0.2s;
   font-weight: 500;
 }
 
 .confirm-banner-actions .secondary-btn {
-  background: #333;
-  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  transition: border-color 0.2s, color 0.2s;
 }
 
 .confirm-banner-actions .secondary-btn:hover {
-  background: #444;
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .confirm-banner-actions .primary-btn {
-  background: #007bff;
-  color: #fff;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  font-weight: 700;
+  transition: filter 0.2s;
 }
 
 .confirm-banner-actions .primary-btn:hover {
-  background: #0056b3;
+  filter: brightness(1.1);
 }
 
 @media (max-width: 600px) {
-  .confirm-banner {
-    padding: 22px 20px;
+  .confirm-banner-content {
+    padding: 20px 20px;
   }
 
   .confirm-banner-actions {
@@ -1396,6 +1555,69 @@ label {
    UPLOAD MODAL — specifics
    ===================================================== */
 
+/* Upload modal — gold accent & layout */
+#uploadModal .modalCard {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #333;
+  border-radius: 12px;
+}
+
+.upload-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+}
+
+#uploadModal .modalCard h2 {
+  padding: 20px 24px 0;
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.upload-help {
+  padding: 10px 24px 0;
+  text-align: center;
+}
+
+.upload-help p {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.5;
+}
+
+/* File input: hide native, style label as gold-accented button */
+.upload-controls {
+  position: relative;
+  text-align: center;
+  padding: 14px 24px 0;
+}
+
+.upload-controls input[type="file"] {
+  display: none;
+}
+
+.upload-choose-btn {
+  display: inline-block;
+  padding: 12px 32px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: 2px solid #D4A843;
+  border-radius: 8px;
+  color: #D4A843;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  letter-spacing: 0.02em;
+}
+
+.upload-choose-btn:hover {
+  background: rgba(212, 168, 67, 0.12);
+}
+
 /* The preview area — shows selected image */
 .previewBox {
   width: 100%;
@@ -1403,14 +1625,82 @@ label {
   height: 520px;
 
   background: rgba(255,255,255,0.03);
-  border: 1px dashed rgba(255,255,255,0.10);
+  border: 1px dashed rgba(212, 168, 67, 0.15);
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  margin: 14px 0;
+  margin: 14px auto;
   box-sizing: border-box;
+}
+
+/* Action buttons — styled for upload modal, aligned to cropper width */
+#uploadModal .upload-actions {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0 0 20px;
+  box-sizing: border-box;
+}
+
+.upload-guidelines-btn {
+  position: absolute;
+  left: 50%;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  text-align: center;
+  background: none;
+  border: none;
+  color: rgba(212, 168, 67, 0.6);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s;
+  padding: 0;
+}
+
+.upload-guidelines-btn:hover {
+  color: rgba(212, 168, 67, 0.9);
+}
+
+#uploadModal #cancelUploadBtn {
+  padding: 10px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+#uploadModal #cancelUploadBtn:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+#uploadModal #uploadContinue {
+  padding: 10px 28px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+#uploadModal #uploadContinue:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+#uploadModal #uploadContinue:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* The preview image */
@@ -1459,20 +1749,42 @@ label {
     padding: 14px;
   }
 
+  #uploadModal .modalCard {
+    padding: 0;
+  }
+
+  #uploadModal .modalCard h2 {
+    padding: 16px 18px 0;
+  }
+
+  .upload-help {
+    padding: 8px 18px 0;
+  }
+
+  .upload-help p {
+    font-size: 0.8rem;
+  }
+
+  .upload-controls {
+    padding: 12px 18px 0;
+  }
+
+  .upload-guidelines-btn {
+    position: static;
+    transform: none;
+    display: block;
+    margin: 10px auto 0;
+  }
+
+  #uploadModal .upload-actions {
+    max-width: 320px;
+    padding: 0 0 16px;
+  }
+
   .previewBox {
     max-width: 320px;
     height: 320px;
     margin: 10px auto;
-  }
-
-  .upload-instructions {
-    font-size: 12px;
-    line-height: 1.35;
-  }
-
-  .upload-help p,
-  .upload-help li {
-    font-size: 13px;
   }
 }
 
@@ -1480,6 +1792,10 @@ label {
   .previewBox {
     max-width: 260px;
     height: 260px;
+  }
+
+  #uploadModal .upload-actions {
+    max-width: 260px;
   }
 }
 

@@ -28,7 +28,7 @@
 
     <div id="gridControls" role="group" aria-label="Gallery controls">
       <!-- Primary action -->
-      <button id="addArtworkBtn" type="button">Add Your Artwork</button>
+      <button id="addArtworkBtn" type="button">Add Your Art</button>
 
       <!-- Hamburger menu wrapper (positioning context) -->
       <div class="hamburger-wrapper">
@@ -71,11 +71,17 @@
   <!-- Countdown Info Modal -->
   <div id="countdownInfoOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
     <div class="countdown-info-card">
-      <button id="countdownInfoCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
-      <h3>What is the Artwork Shuffle?</h3>
-      <p>The Last Gallery reshuffles all artwork weekly. When the countdown reaches zero, every piece is randomly reassigned to a new tile position.</p>
-      <p>Unlock your creative work for the chance to land in a larger, more prominent tile size... then lock it in!</p>
-      <a href="#" id="countdownInfoUnlockLink" class="countdown-info-link">Unlock Your Artwork</a>
+      <div class="countdown-info-accent"></div>
+      <div class="countdown-info-body">
+        <button id="countdownInfoCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
+        <h3>What is the Artwork Shuffle?</h3>
+        <div class="countdown-info-graphic">
+          <img src="{{ url_for('static', filename='images/shuffle_graphic.jpg') }}" alt="Artwork Shuffle">
+        </div>
+        <p>The Last Gallery shuffles all artwork weekly. When the countdown reaches zero, every piece is randomly reassigned to a new tile position. Some works remain the same size, while others rise into larger, more prominent placements.</p>
+        <p>But the shuffling won't last forever. When the gallery is completely full, it stops. No new art is accepted. Every existing piece is permanently frozen in place — a time capsule of creative work.</p>
+        <p>Add your artwork today and become an enduring part of The Last Gallery!</p>
+      </div>
     </div>
   </div>
 
@@ -105,28 +111,22 @@
   <!-- Add Artwork modal (hidden by default) -->
   <div id="uploadModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="uploadModalTitle">
     <div class="modalCard" role="document">
+      <div class="upload-accent"></div>
       <h2 id="uploadModalTitle">Add Your Artwork</h2>
 
       <div class="upload-help">
-        <p>Choose an image from your device. Supported formats: JPG, PNG.</p>
-        <ul>
-          <li><strong>Hint:</strong> You may upload images of any dimensions. For best results, images closer to square work best.</li>
-          <li><strong>Hint:</strong> Use the cropping tool in the preview window below to select the best square portion of your image to fit the square gallery tile.<br>(Note: When the tile is clicked, your image will pop up full-size with no cropping.)</li>
-        </ul>
+        <p>File formats accepted - JPG or PNG</p>
+        <p>Use the crop tool below to select a square portion for the gallery tile. Your full image displays when clicked.</p>
       </div>
 
       <div class="upload-controls">
-        <label for="uploadFile">Choose image</label>
+        <label for="uploadFile" class="upload-choose-btn">Choose Image</label>
         <input id="uploadFile" type="file" accept="image/png, image/jpeg">
+        <button id="uploadGuidelinesBtn" type="button" class="upload-guidelines-btn">Submission Guidelines</button>
       </div>
 
-      <!-- Preview area -->
       <div class="previewBox">
         <img id="previewImage" src="" alt="Preview" class="hidden">
-      </div>
-
-      <div class="upload-instructions">
-        We will optimize your image to load faster in the gallery.
       </div>
 
       <div class="upload-actions">
@@ -139,6 +139,7 @@
   <!-- Tier-2: Artwork Info Modal (overlays Tier-1 upload modal) -->
   <div id="metaModalOverlay" class="modal-overlay-tier2 hidden" aria-hidden="true">
     <div id="metaModal" class="modal-card-tier2" role="dialog" aria-modal="true">
+      <div class="meta-accent"></div>
       <div class="modal-header-tier2">
         <h2>Artwork Info</h2>
         <button id="metaCloseBtn" type="button" class="close-btn" aria-label="Close">×</button>
@@ -150,22 +151,25 @@
         </div>
 
         <label for="metaArtistInput">Artist Name <span class="required-mark">*</span></label>
-        <input id="metaArtistInput" type="text" maxlength="80" placeholder="Enter artist name" required />
+        <input id="metaArtistInput" type="text" maxlength="80" placeholder="Artist name" required />
 
         <label for="metaTitleInput">Artwork Title <span class="required-mark">*</span></label>
-        <input id="metaTitleInput" type="text" maxlength="120" placeholder="Enter artwork title" required />
+        <input id="metaTitleInput" type="text" maxlength="120" placeholder="Artwork title" required />
+        <div id="metaDuplicateError" class="required-error hidden" style="margin-top:8px; font-size:0.85rem;">
+          Artwork title already exists for this email.
+        </div>
 
         <label for="metaYearInput">Year of Creation</label>
-        <input id="metaYearInput" type="text" maxlength="10" placeholder="e.g., 2024" />
+        <input id="metaYearInput" type="text" maxlength="10" placeholder="e.g. 2024" />
 
         <label for="metaMediumInput">Medium</label>
-        <input id="metaMediumInput" type="text" maxlength="100" placeholder="e.g., oil on canvas, digital collage, acrylic on wood" />
+        <input id="metaMediumInput" type="text" maxlength="100" placeholder="e.g. Oil on canvas" />
 
         <label for="metaDimensionsInput">Dimensions</label>
-        <input id="metaDimensionsInput" type="text" maxlength="50" placeholder="e.g., 16&quot;x20&quot;, 40cm x 50cm" />
+        <input id="metaDimensionsInput" type="text" maxlength="50" placeholder="e.g. 16×20 in" />
 
         <label for="metaEditionInput">Edition Information</label>
-        <input id="metaEditionInput" type="text" maxlength="80" placeholder="e.g., 1/10, Artist Proof, Open Edition (optional)" />
+        <input id="metaEditionInput" type="text" maxlength="80" placeholder="e.g. 1/10, Artist Proof" />
 
         <label class="checkbox-group-label">Artwork available for sale?</label>
         <div class="checkbox-group">
@@ -180,7 +184,7 @@
         </div>
 
         <label class="contact-group-label">Email <span class="required-mark">*</span></label>
-        <input id="metaContact1Input" type="email" maxlength="120" placeholder="e.g., artist@example.com" />
+        <input id="metaContact1Input" type="email" maxlength="120" placeholder="Email address" />
         <div id="metaContactError" class="required-error hidden" style="margin-top:8px; font-size:0.85rem;">
           A valid email address is required.
         </div>
@@ -194,7 +198,7 @@
           <label><input type="radio" name="contact2Type" value="social"> Social Media</label>
           <label><input type="radio" name="contact2Type" value="website"> Website</label>
         </div>
-        <input id="metaContact2Input" type="text" maxlength="120" placeholder="Select a contact type above" />
+        <input id="metaContact2Input" type="text" maxlength="120" placeholder="Contact details" />
 
         <div id="metaUnlockSection" class="meta-unlock-section hidden">
           <label class="meta-unlock-label">
@@ -217,11 +221,16 @@
   <!-- Tier-3: Submission Confirmation Banner (overlays Tier-2 metadata modal) -->
   <div id="confirmBannerOverlay" class="confirm-banner-overlay hidden" aria-hidden="true">
     <div id="confirmBanner" class="confirm-banner" role="dialog" aria-modal="true">
-      <h2 class="confirm-banner-heading">Important...</h2>
-      <p class="confirm-banner-text">Know this: your creative work is about to become part of a finite collection—a living time capsule of creative expression that will endure for the life of the gallery. Once every tile is filled, submissions end forever. Because of this, edits are intentionally minimal: the artist and artwork text may be modified, but the image itself becomes preserved, not revisable. It's a rare opportunity to leave a definitive mark and take part in a closed constellation of art that can never be expanded, only experienced.</p>
-      <div class="confirm-banner-actions">
-        <button id="confirmCancelBtn" type="button" class="secondary-btn">Cancel</button>
-        <button id="confirmSaveBtn" type="button" class="primary-btn">Save</button>
+      <div class="confirm-accent"></div>
+      <div class="confirm-banner-content">
+        <h2 class="confirm-banner-heading">Important...</h2>
+        <p class="confirm-banner-text">Know this: Your creative work is about to become part of a finite collection—a living time capsule of creative works that will endure for the life of the gallery. Once every tile is filled, weekly artwork shuffling ceases and all submissions are frozen in place.</p>
+        <p class="confirm-banner-text">Because of this, edits are intentionally minimal: the artist and artwork text may be modified, but the image itself becomes preserved, not revisable. However, if your image does not display in the gallery as intended, send a message to <a href="mailto:admin@thelastgallery.com" class="confirm-banner-link">admin@thelastgallery.com</a> explaining the problem. We will then delete the entire submission and allow you to try again. One week after your last submission attempt, this option will no longer be available.</p>
+        <p class="confirm-banner-text">It's a rare opportunity to leave a definitive mark and take part in a closed time capsule of creative works that, once frozen, can never be expanded… only experienced.</p>
+        <div class="confirm-banner-actions">
+          <button id="confirmCancelBtn" type="button" class="secondary-btn">Cancel</button>
+          <button id="confirmSaveBtn" type="button" class="primary-btn">Save</button>
+        </div>
       </div>
     </div>
   </div>
@@ -410,8 +419,8 @@
     <div class="countdown-info-card">
       <button id="humanCentricCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
       <h3>TLG &mdash; A Human Centric Gallery</h3>
-      <p>The Last Gallery exists to honor authorship, intent, and the creative risks that only humans take. We accept only works that qualify for U.S. copyright protection, which requires deliberate choice, revision, and personal expression &mdash; hallmarks of human-created art. Raw, AI-generated images do not possess such legal protection or conform to the spirit of our gallery.</p>
-      <p>Whether it's a painting, drawing, photograph, collage, digital or mixed media, we're excited to see what you've created!</p>
+      <p>The Last Gallery honors human authorship, intention, and the creative risks only people take. We accept works shaped by deliberate choice, revision, and personal expression. Raw, AI-generated images do not meet these standards or reflect the spirit of our gallery. We reserve the right to remove submissions that do not align with the standards and spirit of the gallery.</p>
+      <p>Whether it's painting, drawing, photography, collage, digital, or mixed media, we look forward to what you've contributed to this enduring time-capsule gallery.</p>
     </div>
   </div>
 

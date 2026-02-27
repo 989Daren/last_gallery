@@ -465,7 +465,10 @@ def wall_state():
 @app.route("/uploads/<path:filename>")
 def uploads(filename):
     """Serve uploaded files from the uploads directory."""
-    return send_from_directory(UPLOAD_DIR, filename)
+    response = send_from_directory(UPLOAD_DIR, filename)
+    # Images use UUID filenames and are never overwritten — cache aggressively
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 @app.route("/api/upload_assets", methods=["POST"])
@@ -601,6 +604,23 @@ def save_tile_metadata(tile_id):
             return jsonify({"ok": False, "error": "tile has no assigned asset"}), 404
 
         asset_id = row["asset_id"]
+
+        # Duplicate check: reject if another asset has the same title + email
+        if artwork_title and contact1_value:
+            cursor.execute(
+                """SELECT asset_id FROM assets
+                   WHERE LOWER(TRIM(artwork_title)) = LOWER(?)
+                     AND LOWER(TRIM(contact1_value)) = LOWER(?)
+                     AND asset_id != ?""",
+                (artwork_title, contact1_value, asset_id)
+            )
+            dup = cursor.fetchone()
+            if dup:
+                conn.close()
+                return jsonify({
+                    "ok": False,
+                    "error": "Artwork title already exists for this email."
+                }), 409
 
         # Capture old email before update (for edit code cleanup)
         cursor.execute("SELECT contact1_value FROM assets WHERE asset_id = ?", (asset_id,))

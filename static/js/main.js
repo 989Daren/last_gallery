@@ -539,6 +539,10 @@ const ConicalNav = {
   isUnlockOpen() {
     return (typeof window.isUnlockModalOpen === "function") ? window.isUnlockModalOpen() : false;
   },
+  isCountdownInfoOpen() {
+    const el = document.getElementById("countdownInfoOverlay");
+    return !!el && !el.classList.contains("hidden");
+  },
   isZoomedOut() {
     return typeof zoomState !== "undefined" && zoomState.scale < 0.999;
   },
@@ -547,6 +551,7 @@ const ConicalNav = {
   // Builds compound hash for layered states: #zoom/art/ribbon
   desiredHash() {
     // Full-screen overlays don't layer with zoom
+    if (this.isCountdownInfoOpen()) return "#shuffleinfo";
     if (this.isUnlockOpen()) return "#unlock";
     if (this.isUploadOpen()) return "#upload";
 
@@ -599,6 +604,13 @@ const ConicalNav = {
     // Close art if hash no longer includes art
     if (!wantsArt && this.isArtOpen()) {
       try { closeArtworkPopup(true); } catch (e) {}
+    }
+
+    // Close countdown info if hash no longer includes shuffleinfo
+    const wantsShuffleInfo = stack.includes("shuffleinfo");
+    if (!wantsShuffleInfo && this.isCountdownInfoOpen()) {
+      const el = document.getElementById("countdownInfoOverlay");
+      if (el) el.classList.add("hidden");
     }
 
     // Close unlock if hash no longer includes unlock
