@@ -2,6 +2,38 @@
 
 ---
 
+## 2026-02-27
+
+### Gold Accent Redesign
+- **Unified modal theme**: All modals (upload, metadata, confirmation banner, countdown info) now share a gold gradient accent bar (`#b8860b → #ffd700`), gold gradient primary buttons, and outlined secondary buttons
+- **"Add Your Art" button**: Header button restyled as gold-bordered outline; text shortened from "Add Your Artwork"
+- **Countdown info button**: Now gold-filled instead of outlined
+- **Upload modal**: Native file input replaced with styled gold-bordered "Choose Image" button; simplified help text; added "Submission Guidelines" link that opens Human Centric Gallery overlay
+- **Metadata modal**: Gold accent bar, gold-tinted input focus states, gold gradient Save button
+- **Confirmation banner**: Restructured with accent bar; copy split into 3 paragraphs with admin email link for image issues
+
+### Duplicate Submission Guard
+- **Server-side check**: Metadata save rejects submissions when another asset already has the same artwork title + email (case-insensitive, trimmed), returning 409
+- **Client-side handling**: Dedicated inline error on the artwork title field; clears on title input change
+
+### Image Cache Headers
+- **Aggressive caching**: `/uploads/<filename>` responses now include `Cache-Control: public, max-age=31536000, immutable` — safe because images use UUID filenames and are never overwritten
+
+### Countdown Info Modal
+- **Redesigned**: Added shuffle graphic image (`static/images/shuffle_graphic.jpg`), gold accent bar, updated copy (3 paragraphs about shuffle mechanics and gallery permanence)
+- **Back-button navigation**: Integrated with ConicalNav hash system (`#shuffleinfo`)
+- **Removed**: "Unlock Your Artwork" link (simplified messaging)
+
+### Copy & Placeholder Polish
+- **Placeholders**: Simplified across metadata form (e.g. "Enter artist name" → "Artist name", "e.g., oil on canvas, digital collage, acrylic on wood" → "e.g. Oil on canvas")
+- **Human Centric Gallery**: Rewritten for conciseness; added "right to remove" clause
+- **Confirmation banner**: Rewritten into 3 focused paragraphs; added `admin@thelastgallery.com` contact for image issues
+
+### Code Cleanup
+- Removed unused CSS variables `--tileColor` and `--matColor` from `:root`
+
+---
+
 ## 2026-02-25
 
 ### Countdown Timer Bar

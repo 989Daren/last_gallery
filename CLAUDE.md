@@ -135,13 +135,13 @@ Tiles are classified by size and numbered sequentially:
 | `/creator-of-the-month` | GET | Gallery page with Creator of the Month coming-soon banner |
 | `/api/wall_state` | GET | Get all tile assignments from database |
 | `/api/countdown_state` | GET | Get countdown timer state (with server-side auto-transitions) |
-| `/uploads/<filename>` | GET | Serve uploaded images |
+| `/uploads/<filename>` | GET | Serve uploaded images (1-year immutable cache) |
 
 ### Upload
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/upload_assets` | POST | Upload tile + popup images (multipart form) |
-| `/api/tile/<tile_id>/metadata` | POST | Save all metadata fields (accepts `is_edit` flag to control email sending) |
+| `/api/tile/<tile_id>/metadata` | POST | Save all metadata fields (accepts `is_edit` flag; rejects duplicate title+email with 409) |
 | `/api/tile/<tile_id>/metadata` | GET | Get metadata for a tile |
 | `/api/verify_edit_code` | POST | Verify artwork title + edit code, returns matching tile_id |
 | `/api/resend_edit_code` | POST | Resend edit code to email (privacy-safe: same response regardless) |
@@ -187,7 +187,8 @@ Tiles are classified by size and numbered sequentially:
 2. Upload sends: `tile_image` (512x512 thumbnail) + `popup_image` (original)
 3. Server optimizes popup image (see below) and saves to `/uploads/`, creates DB records
 4. Metadata modal appears → user enters required + optional fields → saved to DB
-5. Wall refreshes → modals close → viewport scrolls to new tile → highlight sheen plays
+5. Server rejects duplicate title+email combinations (409) — UI shows inline error on artwork title field
+6. Wall refreshes → modals close → viewport scrolls to new tile → highlight sheen plays
 
 ### Image Optimization (server-side)
 - **Tile image**: Saved as-is (already 512x512 JPEG from client)
@@ -246,7 +247,7 @@ Focal-point zoom for touch devices — content under fingers stays anchored duri
 - **Gestures**:
   - Two-finger pinch: Zoom in/out (focal-point anchored)
   - Single-finger drag (when zoomed): Pan within clamped bounds
-  - Back button: Unwinds layers (ribbon → popup → unlock → zoom → leave page)
+  - Back button: Unwinds layers (ribbon → popup → shuffleinfo → unlock → zoom → leave page)
 - **Disabled during**: Welcome modal, upload modal, admin modal, artwork popup
 - **Auto-reset**: Zoom resets to 1.0x after wall refresh (shuffle, clear, move, undo)
 
@@ -300,8 +301,8 @@ window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_
 - **Font**: Bebas Neue (Google Fonts), gold numbers (#D4A843), soft white text (#E0E0E0)
 - **Format**: "Artwork Shuffle: 6 days, 12 hours, 34 minutes" — numbers gold, units soft white
 - **States**: Active (ticking), Scheduled ("Countdown begins soon"), Cleared (bar hidden)
-- **Info icon**: Circled italic "i" inline after countdown text, opens info popup explaining the weekly shuffle
-- **Info popup link**: "Unlock Your Artwork" link closes info popup and opens unlock modal
+- **Info icon**: Gold-filled circled italic "i" inline after countdown text, opens info popup with shuffle graphic and explanatory copy
+- **Info popup**: Integrates with ConicalNav back-button navigation (`#shuffleinfo`)
 - **Auto-reset**: When countdown expires, shows "Shuffling..." with gold pulse for 3s, then re-fetches state (server auto-resets cycle)
 - **Persistence**: State stored in `countdown_schedule` DB table, survives server restarts
 - **CSS variable**: `--total-fixed-height` = header + countdown bar height; used by gallery wrapper padding and zoom viewport metrics
@@ -321,9 +322,14 @@ Menu items in order:
 - **Unlocked** (`unlocked = 1`): Artwork shuffles into any tile size (XS through XL) with equal probability.
 - **Upgrade floor (future)**: When Stripe is wired up, a paid upgrade will set a `min_tile_size` column on the asset (e.g. `'m'`). That artwork can then only shuffle into tiles of that size or larger — it never falls back down. A committed tile is removed from the shuffle pool, but if the owner's art later shuffles into an even larger tile and they upgrade again, their previous size tile is released back into the pool. This requires a new DB column and shuffle logic update; not yet implemented.
 
+## Visual Theme
+- **Gold accent system**: All modals (upload, metadata, confirmation, countdown info) share a consistent gold gradient accent bar (`#b8860b → #ffd700`) at the top, gold gradient primary buttons, and outlined secondary buttons
+- **"Add Your Art" button**: Gold-bordered outline button in the header
+- **"Submission Guidelines" button**: Link in the upload modal that opens the Human Centric Gallery overlay
+
 ## Notes
 - Undo history is in-memory (resets on server restart)
-- Images stored in `/uploads/` directory with UUID filenames
+- Images stored in `/uploads/` directory with UUID filenames; served with 1-year immutable cache headers
 - No authentication beyond admin PIN for admin functions
 - Schema migrations run automatically on startup
 - Environment variables loaded from `.env` via `python-dotenv` (`.env` is gitignored)
@@ -398,7 +404,7 @@ systemctl --user status thelastgallery-tunnel.service
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
 - `CLAUDE_URL.txt` in project root contains a raw GitHub URL pinned to the latest commit hash that changed `CLAUDE.md` — auto-generated by the post-commit hook
-- Last reviewed: 2026-02-25
+- Last reviewed: 2026-02-27
 
 ---
 
