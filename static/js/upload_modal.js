@@ -301,7 +301,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selected && input) {
       input.placeholder = contactPlaceholders[selected.value] || "Enter contact info";
     } else if (input) {
-      input.placeholder = "Select a contact type above";
+      input.placeholder = "Contact details";
     }
   }
 
@@ -366,6 +366,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (metaError) metaError.classList.add("hidden");
     if (metaRequiredError) metaRequiredError.classList.add("hidden");
     if (metaContactError) metaContactError.classList.add("hidden");
+    if (metaDuplicateError) metaDuplicateError.classList.add("hidden");
     if (metaContinueBtn) metaContinueBtn.disabled = false;
 
     // Reset for-sale checkboxes
@@ -441,6 +442,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (metaError) metaError.classList.add("hidden");
       if (metaRequiredError) metaRequiredError.classList.add("hidden");
       if (metaContactError) metaContactError.classList.add("hidden");
+      if (metaDuplicateError) metaDuplicateError.classList.add("hidden");
       if (metaEmailChangeWarning) metaEmailChangeWarning.classList.add("hidden");
       if (metaContinueBtn) metaContinueBtn.disabled = false;
 
@@ -505,6 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Required fields validation
   const metaRequiredError = document.getElementById("metaRequiredError");
   const metaContactError = document.getElementById("metaContactError");
+  const metaDuplicateError = document.getElementById("metaDuplicateError");
 
   function validateRequiredFields() {
     const artistName = (metaArtistInput?.value || "").trim();
@@ -525,6 +528,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (metaTitleInput) {
     metaTitleInput.addEventListener("input", validateRequiredFields);
+    metaTitleInput.addEventListener("input", () => {
+      if (metaDuplicateError) metaDuplicateError.classList.add("hidden");
+    });
   }
 
   // Live validation for contact: hide error when both type + value are present
@@ -735,8 +741,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Close banner, go back to meta modal to show error
       closeConfirmBanner();
-      if (metaError) {
-        metaError.textContent = `Save failed: ${err.message}`;
+
+      const isDuplicate = (err.message || "").toLowerCase().includes("already exists");
+      if (isDuplicate && metaDuplicateError) {
+        metaDuplicateError.classList.remove("hidden");
+        if (metaTitleInput) metaTitleInput.focus();
+      } else if (metaError) {
+        metaError.textContent = err.message || "Save failed. Please try again.";
         metaError.classList.remove("hidden");
       }
       if (metaContinueBtn) metaContinueBtn.disabled = false;
@@ -774,6 +785,15 @@ document.addEventListener("DOMContentLoaded", () => {
       if (validateAllMetaFields()) {
         openConfirmBanner();
       }
+    });
+  }
+
+  // "Submission Guidelines" button — opens Human Centric Gallery overlay
+  const guidelinesBtn = document.getElementById("uploadGuidelinesBtn");
+  if (guidelinesBtn) {
+    guidelinesBtn.addEventListener("click", () => {
+      const hcOverlay = document.getElementById("humanCentricOverlay");
+      if (hcOverlay) hcOverlay.classList.remove("hidden");
     });
   }
 
