@@ -106,10 +106,17 @@
     return _overlay ? !_overlay.classList.contains("hidden") : false;
   }
 
-  // TODO: wire to Stripe checkout
+  // Stripe checkout integration stub
+  // Intended flow:
+  //   1. Client calls server endpoint to create a Stripe Checkout session
+  //      e.g. POST /api/create_checkout_session { asset_id, tile_id }
+  //   2. Server creates session via Stripe API, returns { checkout_url }
+  //   3. Client redirects to Stripe: window.location.href = checkout_url
+  //   4. On success, Stripe webhook calls POST /api/lock_tile { asset_id, payment_id }
+  //      which sets qualified_floor to the current tile size and unlocked=1
   function initiateUnlockCheckout(assetId, tileId) {
     console.log("[UNLOCK] initiateUnlockCheckout called", { assetId, tileId });
-    // TODO: wire to Stripe checkout — replace this stub with Stripe.redirectToCheckout() or payment link redirect
+    // TODO: implement Stripe Checkout session creation + redirect
   }
 
   window.openUnlockModal = openUnlockModal;

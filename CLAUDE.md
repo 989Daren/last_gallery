@@ -25,7 +25,7 @@ python app.py
 |------|---------|
 | `app.py` | Flask application, all API endpoints |
 | `db.py` | Database connection, schema initialization, versioned migrations |
-| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + schema_version tables) |
+| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + schema_version tables, schema v7) |
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
 
 ### Frontend
@@ -69,7 +69,10 @@ CREATE TABLE assets (
     contact1_type TEXT NOT NULL DEFAULT '',  -- 'email' | 'social' | 'website' | ''
     contact1_value TEXT NOT NULL DEFAULT '',
     contact2_type TEXT NOT NULL DEFAULT '',
-    contact2_value TEXT NOT NULL DEFAULT ''
+    contact2_value TEXT NOT NULL DEFAULT '',
+    -- Qualified floor model (migration v7)
+    qualified_floor TEXT NOT NULL DEFAULT 'xs',  -- 'xs' | 's' | 'm' | 'lg' — artwork never shuffles below this size
+    stripe_payment_id TEXT                        -- nullable, Stripe payment reference for tile upgrades
 );
 
 -- Tiles: links tile positions to assets
@@ -98,7 +101,7 @@ CREATE TABLE countdown_schedule (
 );
 ```
 
-Current schema version: **6**
+Current schema version: **7**
 
 ## Tile Registration
 
@@ -155,8 +158,15 @@ Tiles are classified by size and numbered sequentially:
 | `/api/admin/move_tile_asset` | POST | Move artwork between tiles |
 | `/api/admin/undo` | POST | Undo last action (supports `action_type: shuffle/non_shuffle`) |
 | `/api/admin/history_status` | GET | Get undo availability counts |
+| `/api/admin/force_unlock` | POST | Set unlocked to 0 or 1 explicitly (body: `{asset_id, unlocked: 0\|1}`) |
+| `/api/admin/set_qualified_floor` | POST | Set qualified floor for artwork (body: `{asset_id, qualified_floor: "xs"\|"s"\|"m"\|"lg"}`) |
 | `/api/admin/countdown` | POST | Control countdown timer (actions: set_active, set_scheduled, clear) |
 | `/shuffle` | POST | Randomly redistribute all images (body: `{pin: "REDACTED_PIN"}`) |
+
+### Public Lock (Stripe-ready)
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/lock_tile` | POST | Lock artwork at current tile size (body: `{asset_id, payment_id?}`) |
 
 ## Metadata Fields
 
@@ -316,11 +326,14 @@ Menu items in order:
 3. **A Human Centric Gallery** — opens info modal (human-only art policy statement)
 4. **Admin** — opens admin modal (PIN gated)
 
-## Shuffle & Unlock Rules
-- **New uploads** always land in an XS tile (`pick_next_xs_tile_id()` in `app.py`).
-- **Locked** (`unlocked = 0`): Artwork is restricted to XS tiles only during shuffle. Never overflows to larger tiles.
-- **Unlocked** (`unlocked = 1`): Artwork shuffles into any tile size (XS through XL) with equal probability.
-- **Upgrade floor (future)**: When Stripe is wired up, a paid upgrade will set a `min_tile_size` column on the asset (e.g. `'m'`). That artwork can then only shuffle into tiles of that size or larger — it never falls back down. A committed tile is removed from the shuffle pool, but if the owner's art later shuffles into an even larger tile and they upgrade again, their previous size tile is released back into the pool. This requires a new DB column and shuffle logic update; not yet implemented.
+## Shuffle & Unlock Rules (Qualified Floor Model)
+- **New uploads** always land in an XS tile (`pick_next_xs_tile_id()` in `app.py`). Available XS count accounts for floor-xs unlocked artwork in non-XS tiles needing a reserved XS slot.
+- **Unupgraded** (`unlocked = 0`): XS tiles only — most constrained, placed first during shuffle.
+- **Floor > xs** (`unlocked = 1`, `qualified_floor` in s/m/lg): Shuffles into tiles at floor size or larger. Higher floor = fewer eligible tiles = placed earlier.
+- **Unlocked** (`unlocked = 1`, `qualified_floor = 'xs'`): Any tile size — least constrained, placed last. Weighted random: more tiles in a size = higher probability.
+- **`qualified_floor`** column (values: xs, s, m, lg): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment (`/api/lock_tile`).
+- **Stripe integration** (stub): `/api/lock_tile` sets `qualified_floor` to the artwork's current tile size and `unlocked = 1`. Accepts optional `payment_id` for Stripe webhook. Rejects XS locks.
+- **Admin force_unlock**: `/api/admin/force_unlock` sets unlocked explicitly (0 or 1). Locking (unlocked=0) also resets `qualified_floor` to 'xs'.
 
 ## Visual Theme
 - **Gold accent system**: All modals (upload, metadata, confirmation, countdown info) share a consistent gold gradient accent bar (`#b8860b → #ffd700`) at the top, gold gradient primary buttons, and outlined secondary buttons

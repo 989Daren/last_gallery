@@ -2,6 +2,22 @@
 
 ---
 
+## 2026-02-27 (v7)
+
+### Qualified Floor Model (Shuffle Rewrite)
+- **Schema migration v7**: Added `qualified_floor` (TEXT, default 'xs') and `stripe_payment_id` (TEXT, nullable) columns to assets table
+- **New shuffle algorithm**: Single sorted loop replacing two-pass system. Artwork sorted by constraint level (most constrained first): unupgraded (XS only) > floor > xs (floor and above) > fully unlocked (any size). Weighted random tile assignment by remaining pool count.
+- **`pick_next_xs_tile_id` rewrite**: Now accounts for floor-xs unlocked artwork sitting in non-XS tiles, reserving XS slots for them during upload
+- **`POST /api/admin/force_unlock`**: Replaces `toggle_unlock` — sets unlocked to 0 or 1 explicitly. Locking also resets `qualified_floor` to 'xs'. Accepts `asset_id` + `unlocked`.
+- **`POST /api/admin/set_qualified_floor`**: Admin override to set floor level (xs/s/m/lg). Auto-unlocks if floor > xs. Requires admin PIN.
+- **`POST /api/lock_tile`**: Stripe-ready stub. Locks artwork at its current tile size by setting `qualified_floor` and `unlocked=1`. Accepts optional `payment_id`. Rejects XS locks.
+- **`wall_state` + `admin_tile_info`**: Now include `qualified_floor` in responses
+- **History system**: Snapshots now include `qualified_floor` and `stripe_payment_id` with backward-compatible defaults for pre-migration snapshots
+- **upload_modal.js**: Updated to call `force_unlock` with explicit `{asset_id, unlocked}` instead of `toggle_unlock` with `{tile_id}`
+- **unlock_modal.js**: Expanded `initiateUnlockCheckout` stub with Stripe integration flow comments
+
+---
+
 ## 2026-02-27
 
 ### Gold Accent Redesign

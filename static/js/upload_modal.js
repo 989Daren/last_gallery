@@ -670,28 +670,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
       console.log(`${LOG_PREFIX} Metadata saved successfully:`, result);
 
-      // If admin changed unlock status, toggle it via admin endpoint
+      // If admin changed unlock status, set it explicitly via force_unlock endpoint
       if (metaUnlockCheckbox && !metaUnlockSection.classList.contains("hidden")) {
         const currentUnlocked = metaUnlockCheckbox.checked;
         if (currentUnlocked !== _editOriginalUnlocked) {
           try {
             const pin = typeof window.getAdminPin === "function" ? window.getAdminPin() : "";
-            const unlockRes = await fetch("/api/admin/toggle_unlock", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Admin-Pin": pin
-              },
-              body: JSON.stringify({ tile_id: tileId })
+            // Look up asset_id from the current wall state
+            const wallRes = await fetch("/api/admin/tile_info?tile_id=" + encodeURIComponent(tileId), {
+              headers: { "X-Admin-Pin": pin }
             });
-            const unlockResult = await unlockRes.json();
-            if (unlockResult.ok) {
-              console.log(`${LOG_PREFIX} Unlock toggled:`, unlockResult);
-            } else {
-              console.warn(`${LOG_PREFIX} Unlock toggle failed:`, unlockResult);
+            const wallData = await wallRes.json();
+            if (wallData.ok && wallData.asset_id) {
+              const unlockRes = await fetch("/api/admin/force_unlock", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Admin-Pin": pin
+                },
+                body: JSON.stringify({ asset_id: wallData.asset_id, unlocked: currentUnlocked ? 1 : 0 })
+              });
+              const unlockResult = await unlockRes.json();
+              if (unlockResult.ok) {
+                console.log(`${LOG_PREFIX} Unlock set:`, unlockResult);
+              } else {
+                console.warn(`${LOG_PREFIX} Force unlock failed:`, unlockResult);
+              }
             }
           } catch (unlockErr) {
-            console.error(`${LOG_PREFIX} Unlock toggle error:`, unlockErr);
+            console.error(`${LOG_PREFIX} Force unlock error:`, unlockErr);
           }
         }
       }
