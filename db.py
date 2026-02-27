@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def get_db():
@@ -181,6 +181,20 @@ def init_db():
         """)
         _set_schema_version(cursor, 6)
         print("Migration 6 complete: Countdown schedule table created")
+
+    # Migration 7: Qualified floor + Stripe payment ID columns
+    if current_version < 7:
+        print("Applying migration 7: Qualified floor columns...")
+        cursor.execute("PRAGMA table_info(assets)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if 'qualified_floor' not in columns:
+            cursor.execute("ALTER TABLE assets ADD COLUMN qualified_floor TEXT NOT NULL DEFAULT 'xs'")
+        if 'stripe_payment_id' not in columns:
+            cursor.execute("ALTER TABLE assets ADD COLUMN stripe_payment_id TEXT")
+
+        _set_schema_version(cursor, 7)
+        print("Migration 7 complete: Qualified floor columns added")
 
     conn.commit()
     conn.close()

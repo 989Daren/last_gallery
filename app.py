@@ -63,6 +63,10 @@ BASE_URL = os.environ.get("TLG_BASE_URL", "https://thelastgallery.com")
 POPUP_MAX_DIMENSION = 2560  # Max pixels on longest side
 POPUP_JPEG_QUALITY = 90
 
+# Tile size ordering for qualified_floor model
+SIZE_ORDER = {'xs': 0, 's': 1, 'm': 2, 'lg': 3, 'xlg': 4}
+SIZE_NAMES = ['xs', 's', 'm', 'lg', 'xlg']
+
 
 def load_grid_color():
     """Read the current grid color from JSON file, or fall back to default."""
@@ -191,30 +195,53 @@ def get_tiles_from_svg():
     return tiles
 
 
+def get_tile_size_map():
+    """Return dict mapping tile_id -> size string from SVG cache."""
+    return {t['id']: t['size'] for t in get_tiles_from_svg()}
+
+
 def pick_next_xs_tile_id():
-    """Pick a random unoccupied XS tile ID (queries database)."""
+    """Pick a random unoccupied XS tile, accounting for floor-xs unlocked artwork reservations.
+
+    Floor-xs unlocked artwork currently sitting in a non-XS tile still needs
+    an XS slot reserved for it (so it has somewhere to go if shuffled back).
+    """
     import random
 
-    # Get used tile IDs from database
-    used = set()
+    tile_size_map = get_tile_size_map()
+    xs_tile_ids = {tid for tid, sz in tile_size_map.items() if sz == 'xs'}
+
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT tile_id FROM tiles WHERE asset_id IS NOT NULL")
-        for row in cursor.fetchall():
-            used.add(row["tile_id"])
+
+        # Get all occupied tiles with their asset info
+        cursor.execute("""
+            SELECT t.tile_id, a.unlocked, a.qualified_floor
+            FROM tiles t
+            JOIN assets a ON a.asset_id = t.asset_id
+            WHERE t.asset_id IS NOT NULL
+        """)
+        occupied = [dict(row) for row in cursor.fetchall()]
         conn.close()
     except Exception:
-        pass
+        occupied = []
 
-    tiles = get_tiles_from_svg()
-    xs_tiles = [t["id"] for t in tiles if t.get("size") == "xs"]
-    available = [tid for tid in xs_tiles if tid not in used]
+    occupied_tile_ids = {o['tile_id'] for o in occupied}
+    empty_xs = xs_tile_ids - occupied_tile_ids
 
-    if not available:
+    # Count floor-xs unlocked artwork sitting in non-XS tiles (needs XS reserved)
+    reservations = sum(
+        1 for o in occupied
+        if o['unlocked'] and o.get('qualified_floor', 'xs') == 'xs'
+        and o['tile_id'] not in xs_tile_ids
+    )
+
+    available_count = len(empty_xs) - reservations
+    if available_count <= 0:
         return None
 
-    return random.choice(available)
+    return random.choice(list(empty_xs))
 
 
 def _allowed_ext(filename: str):
@@ -430,7 +457,7 @@ def wall_state():
                    a.for_sale, a.sale_type, a.artist_contact,
                    a.contact1_type, a.contact1_value,
                    a.contact2_type, a.contact2_value,
-                   a.unlocked
+                   a.unlocked, a.qualified_floor
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
             ORDER BY t.tile_id
@@ -455,6 +482,7 @@ def wall_state():
                 "contact2_type": row["contact2_type"] or "",
                 "contact2_value": row["contact2_value"] or "",
                 "unlocked": row["unlocked"] or 0,
+                "qualified_floor": row["qualified_floor"] or "xs",
             })
         conn.close()
         return jsonify({"ok": True, "assignments": assignments})
@@ -885,7 +913,7 @@ def _get_db_snapshot():
                              for_sale, sale_type, artist_contact,
                              contact1_type, contact1_value,
                              contact2_type, contact2_value,
-                             unlocked FROM assets""")
+                             unlocked, qualified_floor, stripe_payment_id FROM assets""")
     assets = [dict(row) for row in cursor.fetchall()]
     cursor.execute("SELECT tile_id, asset_id FROM tiles")
     tiles = [dict(row) for row in cursor.fetchall()]
@@ -910,15 +938,16 @@ def _restore_db_snapshot(snapshot):
                                   for_sale, sale_type, artist_contact,
                                   contact1_type, contact1_value,
                                   contact2_type, contact2_value,
-                                  unlocked)
-               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                  unlocked, qualified_floor, stripe_payment_id)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (a["asset_id"], a["artist_name"], a["artwork_title"], a["tile_url"], a["popup_url"],
              a.get("year_created", ""), a.get("medium", ""), a.get("dimensions", ""),
              a.get("edition_info", ""), a.get("for_sale", ""), a.get("sale_type", ""),
              a.get("artist_contact", ""),
              a.get("contact1_type", ""), a.get("contact1_value", ""),
              a.get("contact2_type", ""), a.get("contact2_value", ""),
-             a.get("unlocked", 0))
+             a.get("unlocked", 0), a.get("qualified_floor", "xs"),
+             a.get("stripe_payment_id"))
         )
 
     # Restore tiles
@@ -975,7 +1004,7 @@ def admin_tile_info():
         cursor = conn.cursor()
         cursor.execute("""
             SELECT t.tile_id, a.asset_id, a.artist_name, a.artwork_title,
-                   a.tile_url, a.popup_url
+                   a.tile_url, a.popup_url, a.unlocked, a.qualified_floor
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
             WHERE t.tile_id = ?
@@ -992,7 +1021,9 @@ def admin_tile_info():
                 "artwork_name": row["artwork_title"] or "",
                 "artist_name": row["artist_name"] or "",
                 "tile_url": row["tile_url"] or "",
-                "popup_url": row["popup_url"] or ""
+                "popup_url": row["popup_url"] or "",
+                "unlocked": row["unlocked"] or 0,
+                "qualified_floor": row["qualified_floor"] or "xs"
             })
 
         return jsonify({
@@ -1175,7 +1206,13 @@ def admin_undo():
 
 @app.route("/shuffle", methods=["POST"])
 def shuffle_tiles():
-    """Randomly redistribute all images to different tiles (database)."""
+    """Randomly redistribute all images respecting qualified_floor constraints.
+
+    Single sorted loop: most constrained artwork placed first.
+    - Unupgraded (unlocked=0): XS only
+    - Floor > xs (unlocked=1, floor in s/m/lg): floor size and above
+    - Unlocked (unlocked=1, floor=xs): any size
+    """
     import random
 
     data = request.get_json() or {}
@@ -1191,9 +1228,9 @@ def shuffle_tiles():
         conn = get_db()
         cursor = conn.cursor()
 
-        # Get occupied tiles with unlocked flag
+        # Get occupied tiles with unlock + floor info
         cursor.execute("""
-            SELECT t.tile_id, t.asset_id, a.unlocked
+            SELECT t.tile_id, t.asset_id, a.unlocked, a.qualified_floor
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
             WHERE t.asset_id IS NOT NULL
@@ -1209,56 +1246,65 @@ def shuffle_tiles():
                 "non_shuffle_count": len(_undo_history)
             })
 
-        # Separate locked vs unlocked assets
-        locked_assets = [o["asset_id"] for o in occupied if not o["unlocked"]]
-        unlocked_assets = [o["asset_id"] for o in occupied if o["unlocked"]]
-        random.shuffle(locked_assets)
-        random.shuffle(unlocked_assets)
+        # Build tile pools grouped by size, shuffle each
+        tile_size_map = get_tile_size_map()
+        pools = {}  # size -> [tile_id, ...]
+        for tid, sz in tile_size_map.items():
+            pools.setdefault(sz, []).append(tid)
+        for sz in pools:
+            random.shuffle(pools[sz])
 
-        # Get XS vs non-XS tile IDs from SVG
-        svg_tiles = get_tiles_from_svg()
-        xs_tile_ids = [t["id"] for t in svg_tiles if t.get("size") == "xs"]
-        non_xs_tile_ids = [t["id"] for t in svg_tiles if t.get("size") != "xs"]
-        random.shuffle(xs_tile_ids)
-        random.shuffle(non_xs_tile_ids)
+        # Sort artwork by constraint level (most constrained first)
+        def constraint_key(o):
+            if not o['unlocked']:
+                return (0, 0)  # XS only — most constrained
+            floor = o.get('qualified_floor', 'xs') or 'xs'
+            floor_idx = SIZE_ORDER.get(floor, 0)
+            if floor_idx > 0:
+                return (1, -floor_idx)  # Higher floor = fewer options = earlier
+            return (2, 0)  # Unlocked floor=xs — least constrained
+
+        random.shuffle(occupied)  # Random within same constraint level
+        occupied.sort(key=constraint_key)
 
         # Clear all tile assignments
         cursor.execute("UPDATE tiles SET asset_id = NULL, updated_at = datetime('now')")
 
-        # Unlocked assets are assigned FIRST so their probability reflects the
-        # true tile-size distribution (e.g. 181 XS / 218 total = 83%).
-        # Locked assets swap among remaining XS tiles afterward.
+        # Assign tiles: single loop with weighted random by remaining pool count
+        for o in occupied:
+            asset_id = o['asset_id']
+            floor = o.get('qualified_floor', 'xs') or 'xs'
 
-        # Assign unlocked assets → equal chance across ALL tiles
-        # TODO: When Stripe upgrade flow is implemented, add a `min_tile_size`
-        # column (e.g. 'xs','s','m','lg','xlg') to assets. Once a user pays to
-        # keep a larger tile, their artwork's floor is set to that size and it
-        # can only shuffle into tiles of that size or larger — never falls back.
-        # A committed tile is removed from the pool, reducing probability of
-        # other unlocked art landing on that size. However, if the owner's art
-        # shuffles into an even larger tile and they pay to upgrade again, their
-        # previous size tile is released back into the pool for others.
-        available_all = list(xs_tile_ids) + list(non_xs_tile_ids)
-        random.shuffle(available_all)
-        for asset_id in unlocked_assets:
-            if available_all:
-                tid = available_all.pop(0)
+            if not o['unlocked']:
+                eligible_sizes = ['xs']
             else:
-                break
-            cursor.execute(
-                "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
-                (tid, asset_id)
-            )
+                floor_idx = SIZE_ORDER.get(floor, 0)
+                eligible_sizes = [s for s in SIZE_NAMES if SIZE_ORDER[s] >= floor_idx]
 
-        # Assign locked assets → XS tiles only (never overflow to larger tiles)
-        # Only XS tiles that weren't claimed by unlocked assets remain.
-        available_xs = [t for t in available_all if t in set(xs_tile_ids)]
-        random.shuffle(available_xs)
-        for asset_id in locked_assets:
-            if available_xs:
-                tid = available_xs.pop(0)
-            else:
-                break
+            # Collect available tiles across eligible sizes with weights
+            candidates = []
+            weights = []
+            for sz in eligible_sizes:
+                pool = pools.get(sz, [])
+                if pool:
+                    candidates.append(sz)
+                    weights.append(len(pool))
+
+            if not candidates:
+                continue  # No tiles available for this artwork
+
+            # Weighted random pick: more tiles in a size = higher probability
+            total = sum(weights)
+            roll = random.random() * total
+            cumulative = 0
+            chosen_size = candidates[0]
+            for sz, w in zip(candidates, weights):
+                cumulative += w
+                if roll < cumulative:
+                    chosen_size = sz
+                    break
+
+            tid = pools[chosen_size].pop()
             cursor.execute(
                 "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
                 (tid, asset_id)
@@ -1277,46 +1323,161 @@ def shuffle_tiles():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.route("/api/admin/toggle_unlock", methods=["POST"])
-def admin_toggle_unlock():
-    """Toggle the unlocked status of an artwork on a tile."""
+@app.route("/api/admin/force_unlock", methods=["POST"])
+def admin_force_unlock():
+    """Set unlocked to 0 or 1 explicitly (not toggle). Resets floor to xs when locking."""
     ok, err = check_admin_pin()
     if not ok:
         return err
 
     data = request.get_json() or {}
-    tile_id = (data.get("tile_id") or "").strip().upper()
-    if not tile_id:
-        return jsonify({"ok": False, "error": "missing tile_id"}), 400
+    asset_id = data.get("asset_id")
+    unlocked = data.get("unlocked")
+
+    if asset_id is None:
+        return jsonify({"ok": False, "error": "missing asset_id"}), 400
+    if unlocked not in (0, 1):
+        return jsonify({"ok": False, "error": "unlocked must be 0 or 1"}), 400
 
     try:
         conn = get_db()
         cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT t.asset_id, a.unlocked
-            FROM tiles t
-            JOIN assets a ON a.asset_id = t.asset_id
-            WHERE t.tile_id = ?
-        """, (tile_id,))
-        row = cursor.fetchone()
-
-        if not row:
+        cursor.execute("SELECT asset_id FROM assets WHERE asset_id = ?", (asset_id,))
+        if not cursor.fetchone():
             conn.close()
-            return jsonify({"ok": False, "error": "tile has no assigned asset"}), 404
+            return jsonify({"ok": False, "error": "asset not found"}), 404
 
-        asset_id = row["asset_id"]
-        new_value = 0 if row["unlocked"] else 1
+        if unlocked == 0:
+            # Locking: also reset qualified_floor to xs for consistency
+            cursor.execute(
+                "UPDATE assets SET unlocked = 0, qualified_floor = 'xs' WHERE asset_id = ?",
+                (asset_id,)
+            )
+        else:
+            cursor.execute(
+                "UPDATE assets SET unlocked = 1 WHERE asset_id = ?",
+                (asset_id,)
+            )
 
-        cursor.execute("UPDATE assets SET unlocked = ? WHERE asset_id = ?", (new_value, asset_id))
         conn.commit()
         conn.close()
 
         return jsonify({
             "ok": True,
-            "tile_id": tile_id,
             "asset_id": asset_id,
-            "unlocked": new_value
+            "unlocked": unlocked
+        })
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/set_qualified_floor", methods=["POST"])
+def admin_set_qualified_floor():
+    """Admin override: set the qualified floor for an artwork. Auto-unlocks if floor > xs."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    data = request.get_json() or {}
+    asset_id = data.get("asset_id")
+    floor = data.get("qualified_floor", "").strip().lower()
+
+    if asset_id is None:
+        return jsonify({"ok": False, "error": "missing asset_id"}), 400
+    if floor not in ('xs', 's', 'm', 'lg'):
+        return jsonify({"ok": False, "error": "qualified_floor must be xs, s, m, or lg"}), 400
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT asset_id FROM assets WHERE asset_id = ?", (asset_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({"ok": False, "error": "asset not found"}), 404
+
+        # If floor > xs, auto-set unlocked=1 (having a floor implies unlocked)
+        if floor != 'xs':
+            cursor.execute(
+                "UPDATE assets SET qualified_floor = ?, unlocked = 1 WHERE asset_id = ?",
+                (floor, asset_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE assets SET qualified_floor = 'xs' WHERE asset_id = ?",
+                (asset_id,)
+            )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "ok": True,
+            "asset_id": asset_id,
+            "qualified_floor": floor
+        })
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/lock_tile", methods=["POST"])
+def lock_tile():
+    """Lock artwork at its current tile size (Stripe-ready stub).
+
+    Sets qualified_floor to the current tile's size and unlocked=1.
+    Accepts optional payment_id for future Stripe webhook integration.
+    Rejects if artwork is in an XS tile (nothing to lock).
+    """
+    data = request.get_json() or {}
+    asset_id = data.get("asset_id")
+    payment_id = data.get("payment_id")
+
+    if asset_id is None:
+        return jsonify({"ok": False, "error": "missing asset_id"}), 400
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Look up the asset's current tile
+        cursor.execute("""
+            SELECT t.tile_id FROM tiles t WHERE t.asset_id = ?
+        """, (asset_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            conn.close()
+            return jsonify({"ok": False, "error": "asset not assigned to any tile"}), 404
+
+        tile_id = row["tile_id"]
+        tile_size_map = get_tile_size_map()
+        current_size = tile_size_map.get(tile_id, 'xs')
+
+        if current_size == 'xs':
+            conn.close()
+            return jsonify({"ok": False, "error": "cannot lock at XS size"}), 400
+
+        # Set the floor and unlock
+        cursor.execute(
+            "UPDATE assets SET qualified_floor = ?, unlocked = 1, stripe_payment_id = ? WHERE asset_id = ?",
+            (current_size, payment_id, asset_id)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "ok": True,
+            "asset_id": asset_id,
+            "qualified_floor": current_size,
+            "tile_id": tile_id
         })
     except Exception as e:
         if 'conn' in locals():
