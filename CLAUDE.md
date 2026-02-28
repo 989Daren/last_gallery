@@ -335,6 +335,9 @@ Menu items in order:
 - **Stripe integration** (stub): `/api/lock_tile` sets `qualified_floor` to the artwork's current tile size and `unlocked = 1`. Accepts optional `payment_id` for Stripe webhook. Rejects XS locks.
 - **Admin force_unlock**: `/api/admin/force_unlock` sets unlocked explicitly (0 or 1). Locking (unlocked=0) also resets `qualified_floor` to 'xs'.
 
+## Planned: Exhibit Tiles
+Top-tier artist feature. An exhibit tile is an easily identifiable tile that, when clicked, opens an introduction modal covering the artist. A "Continue" button leads to a horizontally scrolling presentation of all the artist's works — full (scaled) images with padding, layered on a transparent dark background, centered at roughly 1/4 to 1/3 screen height, auto-scrolling left to right with viewer scroll controls. This will require linking multiple artworks to a single artist and a new tile designation or size class.
+
 ## Visual Theme
 - **Gold accent system**: All modals (upload, metadata, confirmation, countdown info) share a consistent gold gradient accent bar (`#b8860b → #ffd700`) at the top, gold gradient primary buttons, and outlined secondary buttons
 - **"Add Your Art" button**: Gold-bordered outline button in the header
