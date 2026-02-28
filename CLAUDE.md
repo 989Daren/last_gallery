@@ -313,7 +313,7 @@ window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_
 - **States**: Active (ticking), Scheduled ("Countdown begins soon"), Cleared (bar hidden)
 - **Info icon**: Gold-filled circled italic "i" inline after countdown text, opens info popup with shuffle graphic and explanatory copy
 - **Info popup**: Integrates with ConicalNav back-button navigation (`#shuffleinfo`)
-- **Auto-reset**: When countdown expires, shows "Shuffling..." with gold pulse for 3s, then re-fetches state (server auto-resets cycle)
+- **Auto-shuffle**: When countdown expires, server calls `_run_shuffle()` (same weighted, floor-respecting algorithm as manual shuffle) before resetting the cycle. Pushes to `_shuffle_history` so auto-shuffles are undoable. Client shows "Shuffling..." with gold pulse for 3s, then re-fetches state.
 - **Persistence**: State stored in `countdown_schedule` DB table, survives server restarts
 - **CSS variable**: `--total-fixed-height` = header + countdown bar height; used by gallery wrapper padding and zoom viewport metrics
 - **Admin controls**: "Countdown" button in admin panel opens modal to set Active (with duration), Scheduled (with delayed start), or Cleared
