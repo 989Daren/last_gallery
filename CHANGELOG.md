@@ -15,6 +15,7 @@
 - **History system**: Snapshots now include `qualified_floor` and `stripe_payment_id` with backward-compatible defaults for pre-migration snapshots
 - **upload_modal.js**: Updated to call `force_unlock` with explicit `{asset_id, unlocked}` instead of `toggle_unlock` with `{tile_id}`
 - **unlock_modal.js**: Expanded `initiateUnlockCheckout` stub with Stripe integration flow comments
+- **Countdown auto-shuffle**: Timer expiry now triggers `_run_shuffle()` — same weighted, floor-respecting algorithm as manual shuffle. Shuffle logic extracted into shared helper called by both `POST /shuffle` and the countdown auto-reset transition. Auto-shuffles are undoable via undo history.
 
 ---
 
