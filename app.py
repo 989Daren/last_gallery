@@ -1204,118 +1204,115 @@ def admin_undo():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.route("/shuffle", methods=["POST"])
-def shuffle_tiles():
-    """Randomly redistribute all images respecting qualified_floor constraints.
+def _run_shuffle():
+    """Core shuffle logic: redistribute all images respecting qualified_floor constraints.
 
-    Single sorted loop: most constrained artwork placed first.
-    - Unupgraded (unlocked=0): XS only
-    - Floor > xs (unlocked=1, floor in s/m/lg): floor size and above
-    - Unlocked (unlocked=1, floor=xs): any size
+    Returns (ok, message) tuple. Saves history snapshot before shuffling.
     """
     import random
 
+    _save_history_snapshot(is_shuffle=True)
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get occupied tiles with unlock + floor info
+    cursor.execute("""
+        SELECT t.tile_id, t.asset_id, a.unlocked, a.qualified_floor
+        FROM tiles t
+        JOIN assets a ON a.asset_id = t.asset_id
+        WHERE t.asset_id IS NOT NULL
+    """)
+    occupied = [dict(row) for row in cursor.fetchall()]
+
+    if not occupied:
+        conn.close()
+        return (True, "No tiles to shuffle")
+
+    # Build tile pools grouped by size, shuffle each
+    tile_size_map = get_tile_size_map()
+    pools = {}  # size -> [tile_id, ...]
+    for tid, sz in tile_size_map.items():
+        pools.setdefault(sz, []).append(tid)
+    for sz in pools:
+        random.shuffle(pools[sz])
+
+    # Sort artwork by constraint level (most constrained first)
+    def constraint_key(o):
+        if not o['unlocked']:
+            return (0, 0)  # XS only — most constrained
+        floor = o.get('qualified_floor', 'xs') or 'xs'
+        floor_idx = SIZE_ORDER.get(floor, 0)
+        if floor_idx > 0:
+            return (1, -floor_idx)  # Higher floor = fewer options = earlier
+        return (2, 0)  # Unlocked floor=xs — least constrained
+
+    random.shuffle(occupied)  # Random within same constraint level
+    occupied.sort(key=constraint_key)
+
+    # Clear all tile assignments
+    cursor.execute("UPDATE tiles SET asset_id = NULL, updated_at = datetime('now')")
+
+    # Assign tiles: single loop with weighted random by remaining pool count
+    for o in occupied:
+        asset_id = o['asset_id']
+        floor = o.get('qualified_floor', 'xs') or 'xs'
+
+        if not o['unlocked']:
+            eligible_sizes = ['xs']
+        else:
+            floor_idx = SIZE_ORDER.get(floor, 0)
+            eligible_sizes = [s for s in SIZE_NAMES if SIZE_ORDER[s] >= floor_idx]
+
+        # Collect available tiles across eligible sizes with weights
+        candidates = []
+        weights = []
+        for sz in eligible_sizes:
+            pool = pools.get(sz, [])
+            if pool:
+                candidates.append(sz)
+                weights.append(len(pool))
+
+        if not candidates:
+            continue  # No tiles available for this artwork
+
+        # Weighted random pick: more tiles in a size = higher probability
+        total = sum(weights)
+        roll = random.random() * total
+        cumulative = 0
+        chosen_size = candidates[0]
+        for sz, w in zip(candidates, weights):
+            cumulative += w
+            if roll < cumulative:
+                chosen_size = sz
+                break
+
+        tid = pools[chosen_size].pop()
+        cursor.execute(
+            "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
+            (tid, asset_id)
+        )
+
+    conn.commit()
+    conn.close()
+
+    return (True, f"Shuffled {len(occupied)} tiles")
+
+
+@app.route("/shuffle", methods=["POST"])
+def shuffle_tiles():
+    """Randomly redistribute all images respecting qualified_floor constraints."""
     data = request.get_json() or {}
     pin = data.get("pin", "")
 
     if pin != ADMIN_PIN:
         return jsonify({"ok": False, "error": "Unauthorized"}), 403
 
-    # Save current state for undo
-    _save_history_snapshot(is_shuffle=True)
-
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-
-        # Get occupied tiles with unlock + floor info
-        cursor.execute("""
-            SELECT t.tile_id, t.asset_id, a.unlocked, a.qualified_floor
-            FROM tiles t
-            JOIN assets a ON a.asset_id = t.asset_id
-            WHERE t.asset_id IS NOT NULL
-        """)
-        occupied = [dict(row) for row in cursor.fetchall()]
-
-        if not occupied:
-            conn.close()
-            return jsonify({
-                "ok": True,
-                "message": "No tiles to shuffle",
-                "shuffle_count": len(_shuffle_history),
-                "non_shuffle_count": len(_undo_history)
-            })
-
-        # Build tile pools grouped by size, shuffle each
-        tile_size_map = get_tile_size_map()
-        pools = {}  # size -> [tile_id, ...]
-        for tid, sz in tile_size_map.items():
-            pools.setdefault(sz, []).append(tid)
-        for sz in pools:
-            random.shuffle(pools[sz])
-
-        # Sort artwork by constraint level (most constrained first)
-        def constraint_key(o):
-            if not o['unlocked']:
-                return (0, 0)  # XS only — most constrained
-            floor = o.get('qualified_floor', 'xs') or 'xs'
-            floor_idx = SIZE_ORDER.get(floor, 0)
-            if floor_idx > 0:
-                return (1, -floor_idx)  # Higher floor = fewer options = earlier
-            return (2, 0)  # Unlocked floor=xs — least constrained
-
-        random.shuffle(occupied)  # Random within same constraint level
-        occupied.sort(key=constraint_key)
-
-        # Clear all tile assignments
-        cursor.execute("UPDATE tiles SET asset_id = NULL, updated_at = datetime('now')")
-
-        # Assign tiles: single loop with weighted random by remaining pool count
-        for o in occupied:
-            asset_id = o['asset_id']
-            floor = o.get('qualified_floor', 'xs') or 'xs'
-
-            if not o['unlocked']:
-                eligible_sizes = ['xs']
-            else:
-                floor_idx = SIZE_ORDER.get(floor, 0)
-                eligible_sizes = [s for s in SIZE_NAMES if SIZE_ORDER[s] >= floor_idx]
-
-            # Collect available tiles across eligible sizes with weights
-            candidates = []
-            weights = []
-            for sz in eligible_sizes:
-                pool = pools.get(sz, [])
-                if pool:
-                    candidates.append(sz)
-                    weights.append(len(pool))
-
-            if not candidates:
-                continue  # No tiles available for this artwork
-
-            # Weighted random pick: more tiles in a size = higher probability
-            total = sum(weights)
-            roll = random.random() * total
-            cumulative = 0
-            chosen_size = candidates[0]
-            for sz, w in zip(candidates, weights):
-                cumulative += w
-                if roll < cumulative:
-                    chosen_size = sz
-                    break
-
-            tid = pools[chosen_size].pop()
-            cursor.execute(
-                "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
-                (tid, asset_id)
-            )
-
-        conn.commit()
-        conn.close()
-
+        ok, message = _run_shuffle()
         return jsonify({
-            "ok": True,
-            "message": f"Shuffled {len(occupied)} tiles",
+            "ok": ok,
+            "message": message,
             "shuffle_count": len(_shuffle_history),
             "non_shuffle_count": len(_undo_history)
         })
@@ -1519,10 +1516,17 @@ def get_countdown_state():
             )
             conn.commit()
 
-    # Auto-transition: active -> auto-reset (countdown expired)
+    # Auto-transition: active -> auto-reset (countdown expired) + trigger shuffle
     if status == "active" and target_time:
         target_dt = _parse_iso_utc(target_time)
         if now >= target_dt:
+            # Run shuffle before resetting the countdown cycle
+            try:
+                _run_shuffle()
+                app.logger.info("Countdown expired: auto-shuffle completed")
+            except Exception as e:
+                app.logger.error(f"Countdown expired: auto-shuffle failed: {e}")
+
             new_target = now + timedelta(seconds=duration_seconds)
             target_time = new_target.strftime("%Y-%m-%dT%H:%M:%SZ")
             cursor.execute(
