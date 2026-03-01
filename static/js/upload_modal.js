@@ -800,7 +800,10 @@ document.addEventListener("DOMContentLoaded", () => {
   if (guidelinesBtn) {
     guidelinesBtn.addEventListener("click", () => {
       const hcOverlay = document.getElementById("humanCentricOverlay");
-      if (hcOverlay) hcOverlay.classList.remove("hidden");
+      if (hcOverlay) {
+        hcOverlay.classList.remove("hidden");
+        window.ConicalNav && window.ConicalNav.pushToMatchUi();
+      }
     });
   }
 
