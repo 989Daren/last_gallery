@@ -375,16 +375,20 @@
     const humanCentricOverlay = $("humanCentricOverlay");
     const humanCentricCloseBtn = $("humanCentricCloseBtn");
 
-    function closeHumanCentricModal() {
+    function closeHumanCentricModal(silent) {
       if (humanCentricOverlay) humanCentricOverlay.classList.add("hidden");
+      if (!silent) window.ConicalNav && window.ConicalNav.popFromUiClose();
     }
 
     menuItemHumanCentric?.addEventListener("click", () => {
       closeHamburgerMenu();
-      if (humanCentricOverlay) humanCentricOverlay.classList.remove("hidden");
+      if (humanCentricOverlay) {
+        humanCentricOverlay.classList.remove("hidden");
+        window.ConicalNav && window.ConicalNav.pushToMatchUi();
+      }
     });
 
-    humanCentricCloseBtn?.addEventListener("click", closeHumanCentricModal);
+    humanCentricCloseBtn?.addEventListener("click", () => closeHumanCentricModal());
 
     humanCentricOverlay?.addEventListener("click", (e) => {
       if (e.target === humanCentricOverlay) closeHumanCentricModal();

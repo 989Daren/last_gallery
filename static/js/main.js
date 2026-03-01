@@ -60,8 +60,13 @@ function showPinchHint() {
   const dotR = document.createElement('div');
   dotR.className = 'pinch-hint-dot pinch-hint-dot--right';
 
+  const label = document.createElement('div');
+  label.className = 'pinch-hint-label';
+  label.textContent = 'PINCH TO ZOOM';
+
   hint.appendChild(dotL);
   hint.appendChild(dotR);
+  hint.appendChild(label);
   document.body.appendChild(hint);
 
   // Remove after the fade-out animation ends (2s)
@@ -543,6 +548,10 @@ const ConicalNav = {
     const el = document.getElementById("countdownInfoOverlay");
     return !!el && !el.classList.contains("hidden");
   },
+  isHumanCentricOpen() {
+    const el = document.getElementById("humanCentricOverlay");
+    return !!el && !el.classList.contains("hidden");
+  },
   isZoomedOut() {
     return typeof zoomState !== "undefined" && zoomState.scale < 0.999;
   },
@@ -551,6 +560,7 @@ const ConicalNav = {
   // Builds compound hash for layered states: #zoom/art/ribbon
   desiredHash() {
     // Full-screen overlays don't layer with zoom
+    if (this.isHumanCentricOpen()) return "#humancentric";
     if (this.isCountdownInfoOpen()) return "#shuffleinfo";
     if (this.isUnlockOpen()) return "#unlock";
     if (this.isUploadOpen()) return "#upload";
@@ -604,6 +614,13 @@ const ConicalNav = {
     // Close art if hash no longer includes art
     if (!wantsArt && this.isArtOpen()) {
       try { closeArtworkPopup(true); } catch (e) {}
+    }
+
+    // Close human centric if hash no longer includes humancentric
+    const wantsHumanCentric = stack.includes("humancentric");
+    if (!wantsHumanCentric && this.isHumanCentricOpen()) {
+      const el = document.getElementById("humanCentricOverlay");
+      if (el) el.classList.add("hidden");
     }
 
     // Close countdown info if hash no longer includes shuffleinfo
@@ -1449,8 +1466,10 @@ document.addEventListener("DOMContentLoaded", () => {
       // PHASE 3: Single render after state update (refreshAdminOverlays called inside)
       commitWallStateChange('refreshWallFromServer');
 
-      // Reset zoom to 1.0x so user sees refreshed content at normal scale
-      resetZoom();
+      // Reset zoom to 1.0x so user sees refreshed content — skip if admin is active
+      if (!(typeof window.isAdminActive === 'function' && window.isAdminActive())) {
+        resetZoom();
+      }
     } catch (err) {
       console.error('Failed to refresh wall from server:', err);
     }
