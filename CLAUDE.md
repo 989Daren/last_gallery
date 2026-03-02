@@ -323,8 +323,17 @@ window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_
 Menu items in order:
 1. **Unlock to Upgrade Your Artwork!** — opens unlock modal
 2. **Edit Your Artwork Submission** — opens edit banner
-3. **A Human Centric Gallery** — opens info modal (human-only art policy statement)
+3. **A Human Centric Gallery** — opens info modal (see below)
 4. **Admin** — opens admin modal (PIN gated)
+
+## Human Centric Gallery Modal
+- **Trigger**: Hamburger menu → "A Human Centric Gallery", or "Submission Guidelines" link in upload modal
+- **Structure**: Reuses `countdown-info-card` pattern (gold accent bar, body wrapper, absolute-positioned close button)
+- **Image**: `static/images/artist_group.png` (656x500) at top, full-width with rounded corners
+- **Content**: Emphasizes human touch in creative process; allows AI as a tool (collage, reference); rejects raw, unedited AI-generated images; warns non-conforming submissions may be removed
+- **Dismiss**: Close button (X), backdrop tap, Escape key, or back button
+- **ConicalNav**: Pushes `#humancentric` hash for back-button navigation on mobile
+- **Also opened from**: "Submission Guidelines" link in upload modal (also pushes hash)
 
 ## Shuffle & Unlock Rules (Qualified Floor Model)
 - **New uploads** always land in an XS tile (`pick_next_xs_tile_id()` in `app.py`). Available XS count accounts for floor-xs unlocked artwork in non-XS tiles needing a reserved XS slot.
