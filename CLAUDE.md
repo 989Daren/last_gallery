@@ -333,6 +333,7 @@ Menu items in order:
 - **Unlocked** (`unlocked = 1`, `qualified_floor = 'xs'`): Any tile size — least constrained, placed last. Weighted random: more tiles in a size = higher probability.
 - **`qualified_floor`** column (values: xs, s, m, lg): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment (`/api/lock_tile`).
 - **Stripe integration** (stub): `/api/lock_tile` sets `qualified_floor` to the artwork's current tile size and `unlocked = 1`. Accepts optional `payment_id` for Stripe webhook. Rejects XS locks.
+- **Derangement rule**: Every artwork must change position during a shuffle — no artwork may remain in its previous tile. The algorithm excludes each artwork's original tile from candidates; if the original tile is the last remaining in its pool, a swap with a previously-assigned artwork resolves it.
 - **Admin force_unlock**: `/api/admin/force_unlock` sets unlocked explicitly (0 or 1). Locking (unlocked=0) also resets `qualified_floor` to 'xs'.
 
 ## Planned: Exhibit Tiles
