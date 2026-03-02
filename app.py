@@ -1253,9 +1253,16 @@ def _run_shuffle():
     # Clear all tile assignments
     cursor.execute("UPDATE tiles SET asset_id = NULL, updated_at = datetime('now')")
 
+    # Record original tile for each artwork so no artwork stays in its previous tile
+    original_tile = {o['asset_id']: o['tile_id'] for o in occupied}
+
+    # Track assignments for swap fallback: asset_id -> assigned tile_id
+    assignments = {}
+
     # Assign tiles: single loop with weighted random by remaining pool count
     for o in occupied:
         asset_id = o['asset_id']
+        orig_tid = original_tile[asset_id]
         floor = o.get('qualified_floor', 'xs') or 'xs'
 
         if not o['unlocked']:
@@ -1265,16 +1272,34 @@ def _run_shuffle():
             eligible_sizes = [s for s in SIZE_NAMES if SIZE_ORDER[s] >= floor_idx]
 
         # Collect available tiles across eligible sizes with weights
+        # Exclude the artwork's original tile from candidate counts
         candidates = []
         weights = []
         for sz in eligible_sizes:
             pool = pools.get(sz, [])
-            if pool:
+            available = [t for t in pool if t != orig_tid]
+            if available:
                 candidates.append(sz)
-                weights.append(len(pool))
+                weights.append(len(available))
 
         if not candidates:
-            continue  # No tiles available for this artwork
+            # Fallback: original tile is the only one left in its pool.
+            # Swap with a previously-assigned artwork in the same size class.
+            orig_size = tile_size_map.get(orig_tid)
+            swapped = False
+            for prev_asset, prev_tid in assignments.items():
+                if tile_size_map.get(prev_tid) in eligible_sizes and \
+                   prev_tid != orig_tid and \
+                   original_tile[prev_asset] != orig_tid:
+                    # Swap: give this artwork the other's tile, put other on orig_tid
+                    assignments[asset_id] = prev_tid
+                    assignments[prev_asset] = orig_tid
+                    swapped = True
+                    break
+            if not swapped:
+                # Truly impossible (single artwork, single tile) — keep in place
+                assignments[asset_id] = orig_tid
+            continue
 
         # Weighted random pick: more tiles in a size = higher probability
         total = sum(weights)
@@ -1287,7 +1312,22 @@ def _run_shuffle():
                 chosen_size = sz
                 break
 
-        tid = pools[chosen_size].pop()
+        # Pick a tile from the chosen pool, skipping original tile
+        pool = pools[chosen_size]
+        tid = None
+        for i in range(len(pool) - 1, -1, -1):
+            if pool[i] != orig_tid:
+                tid = pool.pop(i)
+                break
+
+        if tid is None:
+            # Should not happen given candidate filtering above, but be safe
+            tid = pool.pop()
+
+        assignments[asset_id] = tid
+
+    # Write all assignments to database
+    for asset_id, tid in assignments.items():
         cursor.execute(
             "INSERT OR REPLACE INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
             (tid, asset_id)
