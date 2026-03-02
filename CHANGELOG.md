@@ -2,6 +2,30 @@
 
 ---
 
+## 2026-03-02
+
+### Shuffle Derangement Rule
+- **Every artwork must move**: Shuffle algorithm now guarantees no artwork remains in its previous tile. Original tile excluded from candidates; swap fallback resolves edge cases.
+
+### Human Centric Gallery Modal
+- **New copy**: Rewritten to emphasize human touch in creative process, clarify AI-as-tool stance, and reject raw AI-generated images
+- **Image**: Added `artist_group.png` graphic at top of modal
+- **Structure**: Added gold accent bar and body wrapper (matching countdown info modal pattern)
+- **Back-button support**: Integrated with ConicalNav (`#humancentric` hash) for mobile back-button dismissal
+- **Backdrop dismiss**: Tap outside modal or press Escape to close
+
+### Admin Zoom Persistence
+- **Zoom level preserved**: Gallery zoom no longer resets after admin actions (shuffle, clear, move, undo)
+
+### Pinch-to-Zoom Hint
+- **"PINCH TO ZOOM" label**: Added below the pinch animation on touch devices, fades in/out in sync with the gesture dots
+
+### sqlite-web Database Browser
+- **Browser-based DB editor**: `sqlite-web` service added for live viewing/editing of `gallery.db` from any Tailscale device at `http://100.113.92.21:8081`
+- **Systemd service**: Auto-starts on boot (`sqlite-web.service`)
+
+---
+
 ## 2026-02-27 (v7)
 
 ### Qualified Floor Model (Shuffle Rewrite)
