@@ -806,7 +806,6 @@ label {
 .tile[data-size="s"]  .art-frame { padding: 6px; }
 .tile[data-size="m"]  .art-frame { padding: 8px; }
 .tile[data-size="lg"] .art-frame { padding: 10px; }
-.tile[data-size="xlg"] .art-frame { padding: 14px; }
 
 /* Defensive: hide any empty art-frame (no img) so empty tiles don't show mat/shadow */
 .art-frame:empty {
@@ -1464,6 +1463,13 @@ label {
 
 .email-change-warning.hidden {
   display: none;
+}
+
+.meta-email-hint {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.4;
 }
 
 .modal-actions-tier2 .secondary-btn.edit-mode-disabled {
@@ -2927,50 +2933,58 @@ label {
   color: rgba(255, 255, 255, 0.55);
 }
 
-.unlock-modal-graphic {
-  text-align: center;
-  margin-bottom: 20px;
-}
+/* Step show/hide */
+.unlock-modal-step { }
+.unlock-modal-step.hidden { display: none; }
 
-.unlock-modal-graphic img {
-  width: 100%;
-  border-radius: 8px;
+/* Form inputs */
+.unlock-modal-label {
   display: block;
-}
-
-.unlock-modal-benefits {
-  margin-bottom: 24px;
-}
-
-.unlock-modal-benefits-label {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #ffd700;
-  margin-bottom: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 6px;
 }
 
-.unlock-modal-benefit {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.8);
+.unlock-modal-input-group {
+  margin-bottom: 16px;
 }
 
-.unlock-modal-benefit:last-child {
-  margin-bottom: 0;
+.unlock-modal-input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  color: #fff;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
-.unlock-modal-check {
-  color: #ffd700;
-  font-weight: bold;
-  flex-shrink: 0;
-  margin-top: 1px;
+.unlock-modal-input:focus {
+  border-color: #D4A843;
 }
 
+.unlock-modal-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.unlock-modal-inline-error {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: #ff6b6b;
+}
+
+.unlock-modal-inline-error.hidden {
+  display: none;
+}
+
+/* CTA button */
 .unlock-modal-cta {
   display: block;
   width: 100%;
@@ -2982,7 +2996,7 @@ label {
   cursor: pointer;
   background: linear-gradient(135deg, #b8860b, #ffd700);
   color: #111;
-  transition: filter 0.2s;
+  transition: filter 0.2s, opacity 0.2s;
   margin-bottom: 12px;
 }
 
@@ -2990,6 +3004,13 @@ label {
   filter: brightness(1.1);
 }
 
+.unlock-modal-cta:disabled {
+  opacity: 0.5;
+  cursor: default;
+  filter: none;
+}
+
+/* Close / Cancel link */
 .unlock-modal-close-link {
   display: block;
   width: 100%;
@@ -3007,6 +3028,354 @@ label {
   color: rgba(255, 255, 255, 0.65);
 }
 
+/* Forgot / Resend section */
+.unlock-modal-forgot {
+  text-align: center;
+  font-size: 0.82rem;
+  color: #D4A843;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: color 0.2s;
+}
+
+.unlock-modal-forgot:hover {
+  color: #ffd700;
+}
+
+.unlock-modal-resend-section {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.unlock-modal-resend-section.hidden {
+  display: none;
+}
+
+.unlock-modal-resend-section .unlock-modal-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.unlock-modal-resend-btn {
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid #D4A843;
+  border-radius: 8px;
+  color: #D4A843;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+
+.unlock-modal-resend-btn:hover {
+  background: rgba(212, 168, 67, 0.1);
+}
+
+.unlock-modal-resend-msg {
+  width: 100%;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.unlock-modal-resend-msg.hidden {
+  display: none;
+}
+
+.unlock-modal-resend-msg.success {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.unlock-modal-resend-msg.error {
+  color: #ff6b6b;
+}
+
+/* Back link */
+.unlock-modal-back-link {
+  text-align: center;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 6px;
+  margin-top: 4px;
+  transition: color 0.2s;
+}
+
+.unlock-modal-back-link:hover {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Step 2: Artwork list */
+.unlock-artwork-list {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.unlock-artwork-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #1a1a1a;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.unlock-artwork-card:hover {
+  background: #222;
+}
+
+.unlock-artwork-card.selected {
+  border-color: #D4A843;
+  background: rgba(212, 168, 67, 0.06);
+}
+
+.unlock-artwork-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #222;
+}
+
+.unlock-artwork-thumb-empty {
+  background: #333;
+}
+
+.unlock-artwork-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.unlock-artwork-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.unlock-artwork-artist {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unlock-artwork-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-locked {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.status-unlocked {
+  background: rgba(212, 168, 67, 0.15);
+  color: #D4A843;
+}
+
+/* Step 3: Selected artwork summary (reuse card styling) */
+.unlock-selected-artwork {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+/* Step 3: Tier list */
+.unlock-tier-current-size {
+  text-align: center;
+  color: #D4A843;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  letter-spacing: 0.5px;
+}
+
+.unlock-tier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.unlock-tier-loading {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 20px 0;
+  font-size: 0.9rem;
+}
+
+.unlock-tier-card {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid #333;
+  background: #1a1a1a;
+  transition: border-color 0.2s;
+}
+
+.unlock-tier-card.available {
+  border-color: #444;
+}
+
+.unlock-tier-card.available:hover {
+  border-color: #D4A843;
+}
+
+.unlock-tier-card.disabled {
+  opacity: 0.45;
+}
+
+.unlock-tier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.unlock-tier-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.unlock-tier-price-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unlock-tier-price {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #D4A843;
+}
+
+.unlock-tier-price-original {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.35);
+  text-decoration: line-through;
+}
+
+.unlock-tier-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #D4A843;
+  color: #111;
+}
+
+.unlock-tier-desc {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 8px;
+}
+
+.unlock-tier-reason {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.35);
+  font-style: italic;
+  margin-bottom: 4px;
+}
+
+.unlock-tier-cta {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  transition: filter 0.2s, opacity 0.2s;
+  margin-top: 4px;
+}
+
+.unlock-tier-cta:hover {
+  filter: brightness(1.1);
+}
+
+.unlock-tier-cta:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Coming soon teaser */
+.unlock-tier-coming-soon {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.unlock-tier-coming-soon-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+  margin-bottom: 4px;
+}
+
+.unlock-tier-coming-soon-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.unlock-tier-coming-soon-price {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.3);
+  margin-bottom: 4px;
+}
+
+.unlock-tier-coming-soon-desc {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.25);
+  font-style: italic;
+}
+
+/* Email identity note */
+.unlock-tier-note {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
 @media (max-width: 600px) {
   .unlock-modal-body {
     padding: 16px 18px;
@@ -3017,12 +3386,89 @@ label {
   .unlock-modal-subtitle {
     margin-bottom: 14px;
   }
-  .unlock-modal-graphic {
-    margin-bottom: 14px;
+  .unlock-artwork-list {
+    max-height: 240px;
   }
-  .unlock-modal-benefits {
-    margin-bottom: 18px;
+  .unlock-artwork-thumb {
+    width: 44px;
+    height: 44px;
   }
+}
+
+/* =====================================================
+   PURCHASE SUCCESS BANNER
+   ===================================================== */
+
+.purchase-success-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.purchase-success-banner {
+  width: min(380px, 88%);
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+}
+
+.purchase-success-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+}
+
+.purchase-success-body {
+  padding: 28px 28px 24px;
+  text-align: center;
+}
+
+.purchase-success-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 48px;
+}
+
+.purchase-success-headline {
+  margin: 0 0 8px 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.purchase-success-msg {
+  margin: 0 0 20px 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.purchase-success-btn {
+  display: inline-block;
+  padding: 12px 28px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  transition: filter 0.2s;
+}
+
+.purchase-success-btn:hover {
+  filter: brightness(1.1);
 }
 
 /* =====================================================

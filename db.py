@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def get_db():
@@ -195,6 +195,35 @@ def init_db():
 
         _set_schema_version(cursor, 7)
         print("Migration 7 complete: Qualified floor columns added")
+
+    # Migration 8: Purchase history table for Stripe audit trail
+    if current_version < 8:
+        print("Applying migration 8: Purchase history table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS purchase_history (
+                purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id INTEGER NOT NULL,
+                email TEXT NOT NULL DEFAULT '',
+                tier TEXT NOT NULL DEFAULT '',
+                amount_cents INTEGER NOT NULL DEFAULT 0,
+                stripe_session_id TEXT,
+                stripe_payment_intent TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                fulfilled_at TEXT,
+                FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_purchase_history_asset_id
+            ON purchase_history(asset_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_purchase_history_session_id
+            ON purchase_history(stripe_session_id)
+        """)
+        _set_schema_version(cursor, 8)
+        print("Migration 8 complete: Purchase history table created")
 
     conn.commit()
     conn.close()

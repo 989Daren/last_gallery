@@ -2,6 +2,29 @@
 
 ---
 
+## 2026-03-03
+
+### "Lock What You Landed On" Upgrade Model
+- **Tile-based purchasing**: Artists can only lock in the tile size their artwork currently occupies — no more buying any floor tier at any time. Creates natural urgency around the weekly shuffle cycle.
+- **Upgrade options rewrite**: `/api/upgrade_options` now queries artwork's current tile, only shows matching tier as available. Other floor tiers show "Your artwork must be in a [Size] tile".
+- **Checkout validation**: `/api/stripe/checkout` verifies artwork is in the tier's tile size before allowing purchase, preventing race conditions with shuffle.
+- **Post-shuffle notification emails**: After each shuffle, artists whose unlocked artwork lands above their current floor receive an email with artwork title, new tile size, price to lock in, and a CTA link.
+- **Upgrade deep link**: `/?upgrade=1&asset_id=X` skips welcome modal and opens upgrade modal with artwork pre-selected (linked from notification emails).
+- **Current tile size display**: Upgrade modal step 3 shows "Currently in a [Size] tile" subtitle above tier options.
+- **XLG cleanup**: Removed unused `xlg` size class from SIZE_ORDER, SIZE_NAMES, classify(), and tile ID generation (zero XLG tiles exist in SVG).
+
+### Stripe Payment Integration
+- **Stripe Checkout**: Full payment flow for artwork upgrades — 4 tiers: Unlock XS ($9.99, 50% intro), Small Floor ($24.99), Medium Floor ($39.99), Large Floor ($59.99)
+- **Upgrade modal rewrite**: 3-step purchase flow in `unlock_modal.js` — identify via edit code, select artwork, choose tier with live availability from server
+- **New API endpoints**: `POST /api/my_artworks`, `GET /api/upgrade_options/<id>`, `POST /api/stripe/checkout`, `POST /api/stripe/webhook`
+- **Database migration v8**: New `purchase_history` table for audit trail (indexed on asset_id and stripe_session_id)
+- **Webhook-only fulfillment**: Upgrades applied only on verified `checkout.session.completed` event; idempotent via purchase status check
+- **Purchase success banner**: Stripe return URL detected by `handleStripeReturn()` in main.js — skips welcome modal, shows "Upgrade Complete!" banner, scrolls to artwork
+- **Email identity hint**: New hint below email input in upload metadata modal encouraging consistent email use across uploads
+- **Exhibit Tile teaser**: "Coming Soon" placeholder in upgrade options at $99.99
+
+---
+
 ## 2026-03-02
 
 ### Shuffle Derangement Rule
