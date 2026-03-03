@@ -81,7 +81,6 @@ def parse_svg_tiles(svg_path):
         if w >= 128 and w < 213: return 's'
         if w >= 213 and w < 298: return 'm'
         if w >= 298 and w < 425: return 'lg'
-        if w >= 425 and w < 600: return 'xlg'
         return 'unknown'
 
     # Normalize and classify
@@ -91,8 +90,8 @@ def parse_svg_tiles(svg_path):
         r['size'] = classify(r['design_width'])
 
     # Assign IDs
-    counters = {'xs': 0, 's': 0, 'm': 0, 'lg': 0, 'xlg': 0, 'unknown': 0}
-    prefix = {'xs': 'X', 's': 'S', 'm': 'M', 'lg': 'L', 'xlg': 'XL', 'unknown': 'U'}
+    counters = {'xs': 0, 's': 0, 'm': 0, 'lg': 0, 'unknown': 0}
+    prefix = {'xs': 'X', 's': 'S', 'm': 'M', 'lg': 'L', 'unknown': 'U'}
     tile_ids = []
     for r in rects:
         if r['size'] == 'unknown':

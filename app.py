@@ -8,6 +8,7 @@ import html as html_mod
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 import xml.etree.ElementTree as ET
+import stripe
 import resend
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -59,13 +60,27 @@ ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "REDACTED_PIN")
 # Base URL for links in emails (override via env for production)
 BASE_URL = os.environ.get("TLG_BASE_URL", "https://thelastgallery.com")
 
+# Stripe configuration
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+
+# Upgrade tier configuration: tier_name -> (price_cents, floor_value, label)
+TIER_CONFIG = {
+    'unlock_xs': {'price_cents': 999, 'floor': 'xs', 'label': 'Unlock (XS)'},
+    'floor_s':   {'price_cents': 2499, 'floor': 's', 'label': 'Small Floor'},
+    'floor_m':   {'price_cents': 3999, 'floor': 'm', 'label': 'Medium Floor'},
+    'floor_lg':  {'price_cents': 5999, 'floor': 'lg', 'label': 'Large Floor'},
+}
+
 # Popup image optimization settings
 POPUP_MAX_DIMENSION = 2560  # Max pixels on longest side
 POPUP_JPEG_QUALITY = 90
 
 # Tile size ordering for qualified_floor model
-SIZE_ORDER = {'xs': 0, 's': 1, 'm': 2, 'lg': 3, 'xlg': 4}
-SIZE_NAMES = ['xs', 's', 'm', 'lg', 'xlg']
+SIZE_ORDER = {'xs': 0, 's': 1, 'm': 2, 'lg': 3}
+SIZE_NAMES = ['xs', 's', 'm', 'lg']
 
 
 def load_grid_color():
@@ -100,7 +115,7 @@ def _parse_svg_tiles(svg_path):
     """Parse the SVG and return an array of tile descriptors similar to the client.
 
     Each tile is a dict with keys including `width` and `height` (SVG units)
-    and an inferred `size` string (xs, s, m, lg, xlg) used to generate tile IDs.
+    and an inferred `size` string (xs, s, m, lg) used to generate tile IDs.
     If parsing fails, returns an empty list.
     """
     try:
@@ -159,7 +174,6 @@ def _parse_svg_tiles(svg_path):
         if w >= 128 and w < 213: return 's'
         if w >= 213 and w < 298: return 'm'
         if w >= 298 and w < 425: return 'lg'
-        if w >= 425 and w < 600: return 'xlg'
         return 'unknown'
 
     # Normalize and classify
@@ -169,8 +183,8 @@ def _parse_svg_tiles(svg_path):
         r['size'] = classify(r['design_width'])
 
     # Assign IDs
-    counters = {'xs': 0, 's': 0, 'm': 0, 'lg': 0, 'xlg': 0, 'unknown': 0}
-    prefix = {'xs': 'X', 's': 'S', 'm': 'M', 'lg': 'L', 'xlg': 'XL', 'unknown': 'U'}
+    counters = {'xs': 0, 's': 0, 'm': 0, 'lg': 0, 'unknown': 0}
+    prefix = {'xs': 'X', 's': 'S', 'm': 'M', 'lg': 'L', 'unknown': 'U'}
     tiles = []
     for r in rects:
         if r['size'] == 'unknown':
@@ -396,6 +410,55 @@ def send_edit_code(email, code, artwork_title=""):
         app.logger.info("[EDIT CODE] Email sent to %s", email)
     except Exception:
         app.logger.exception("[EDIT CODE] Failed to send email to %s", email)
+
+
+def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, asset_id):
+    """Send upgrade notification email when artwork lands in a bigger tile after shuffle."""
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        app.logger.warning("[UPGRADE NOTIFY] RESEND_API_KEY not set — notification not emailed. To: %s | Asset: %s", email, asset_id)
+        return
+
+    size_display = {'s': 'Small', 'm': 'Medium', 'lg': 'Large'}
+    display_name = size_display.get(new_size, new_size.upper())
+    price_str = f"${tier_price_cents / 100:.2f}"
+    safe_title = html_mod.escape(artwork_title) if artwork_title else "your artwork"
+    upgrade_link = f"{BASE_URL}/?upgrade=1&asset_id={asset_id}"
+
+    html_body = (
+        '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
+        f'<h2 style="color:#D4A843;">Your artwork landed in a {display_name} tile!</h2>'
+        f'<p style="font-size:18px;"><strong>{safe_title}</strong> has been shuffled into a <strong>{display_name}</strong> tile.</p>'
+        f'<p>You can lock it in at this size for <strong>{price_str}</strong> — '
+        'your artwork will never drop below this tile size during future shuffles.</p>'
+        '<p style="font-size:16px; color:#D4A843;"><strong>Lock it in before the next shuffle!</strong></p>'
+        f'<p><a href="{html_mod.escape(upgrade_link)}" style="display:inline-block; padding:12px 24px; '
+        'background:linear-gradient(135deg,#b8860b,#ffd700); color:#000; text-decoration:none; '
+        'border-radius:6px; font-weight:bold;">Lock In Your Tile</a></p>'
+        '</div>'
+    )
+
+    plain_body = (
+        f"Your artwork landed in a {display_name} tile!\n\n"
+        f"{artwork_title or 'Your artwork'} has been shuffled into a {display_name} tile.\n\n"
+        f"You can lock it in at this size for {price_str} — "
+        "your artwork will never drop below this tile size during future shuffles.\n\n"
+        "Lock it in before the next shuffle!\n\n"
+        f"{upgrade_link}\n"
+    )
+
+    resend.api_key = api_key
+    try:
+        resend.Emails.send({
+            "from": "The Last Gallery <noreply@thelastgallery.com>",
+            "to": [email],
+            "subject": f"Your artwork landed in a {display_name} tile!",
+            "html": html_body,
+            "text": plain_body,
+        })
+        app.logger.info("[UPGRADE NOTIFY] Email sent to %s for asset %s (size: %s)", email, asset_id, new_size)
+    except Exception:
+        app.logger.exception("[UPGRADE NOTIFY] Failed to send email to %s for asset %s", email, asset_id)
 
 
 # ---- Routes ----
@@ -1334,6 +1397,48 @@ def _run_shuffle():
         )
 
     conn.commit()
+
+    # Post-shuffle upgrade notifications: email artists whose artwork landed above their floor
+    try:
+        tile_size_map = get_tile_size_map()
+        tier_for_size = {'s': 'floor_s', 'm': 'floor_m', 'lg': 'floor_lg'}
+        notification_candidates = []
+
+        for o in occupied:
+            if not o['unlocked']:
+                continue
+            aid = o['asset_id']
+            if aid not in assignments:
+                continue
+            new_size = tile_size_map.get(assignments[aid])
+            if not new_size or new_size == 'xs':
+                continue
+            current_floor = o.get('qualified_floor') or 'xs'
+            if SIZE_ORDER.get(new_size, 0) > SIZE_ORDER.get(current_floor, 0):
+                notification_candidates.append((aid, new_size))
+
+        if notification_candidates:
+            candidate_ids = [c[0] for c in notification_candidates]
+            placeholders = ','.join('?' * len(candidate_ids))
+            cursor.execute(
+                f"SELECT asset_id, artwork_title, contact1_value FROM assets WHERE asset_id IN ({placeholders})",
+                candidate_ids
+            )
+            asset_info = {row['asset_id']: row for row in cursor.fetchall()}
+
+            for aid, new_size in notification_candidates:
+                info = asset_info.get(aid)
+                if not info:
+                    continue
+                email = (info['contact1_value'] or '').strip()
+                if not email:
+                    continue
+                tier_name = tier_for_size.get(new_size)
+                price_cents = TIER_CONFIG[tier_name]['price_cents'] if tier_name else 0
+                send_upgrade_notification(email, info['artwork_title'] or '', new_size, price_cents, aid)
+    except Exception:
+        app.logger.exception("[SHUFFLE] Upgrade notification error (shuffle succeeded)")
+
     conn.close()
 
     return (True, f"Shuffled {len(occupied)} tiles")
@@ -1466,11 +1571,13 @@ def admin_set_qualified_floor():
 
 @app.route("/api/lock_tile", methods=["POST"])
 def lock_tile():
-    """Lock artwork at its current tile size (Stripe-ready stub).
+    """Lock artwork at its current tile size (admin/direct use).
 
     Sets qualified_floor to the current tile's size and unlocked=1.
     Accepts optional payment_id for future Stripe webhook integration.
     Rejects if artwork is in an XS tile (nothing to lock).
+
+    Note: The public Stripe payment flow uses /api/stripe/checkout + webhook instead.
     """
     data = request.get_json() or {}
     asset_id = data.get("asset_id")
@@ -1639,6 +1746,374 @@ def admin_countdown():
     else:
         conn.close()
         return jsonify({"ok": False, "error": "Unknown action"}), 400
+
+
+# ---- Stripe / Upgrade Endpoints ----
+
+@app.route("/api/my_artworks", methods=["POST"])
+def my_artworks():
+    """Return all artworks owned by the email associated with an edit code."""
+    try:
+        data = request.get_json() or {}
+        code = (data.get("code") or "").strip()
+
+        if not code:
+            return jsonify({"ok": False, "error": "Please enter your edit code."}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Look up code → email
+        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+
+        email = code_row["email"].lower()
+
+        # Build tile size map for current size lookup
+        tile_size_map = get_tile_size_map()
+
+        # Find all assets where contact1_value matches this email
+        cursor.execute("""
+            SELECT a.asset_id, a.artwork_title, a.artist_name, a.tile_url,
+                   a.unlocked, a.qualified_floor, t.tile_id
+            FROM assets a
+            LEFT JOIN tiles t ON t.asset_id = a.asset_id
+            WHERE LOWER(a.contact1_value) = ?
+        """, (email,))
+        rows = cursor.fetchall()
+        conn.close()
+
+        artworks = []
+        for row in rows:
+            tile_id = row["tile_id"]
+            current_size = tile_size_map.get(tile_id, 'xs') if tile_id else 'xs'
+            artworks.append({
+                "asset_id": row["asset_id"],
+                "artwork_title": row["artwork_title"],
+                "artist_name": row["artist_name"],
+                "tile_url": row["tile_url"],
+                "tile_id": tile_id,
+                "current_size": current_size,
+                "unlocked": row["unlocked"],
+                "qualified_floor": row["qualified_floor"],
+            })
+
+        return jsonify({"ok": True, "email": email, "artworks": artworks})
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/upgrade_options/<int:asset_id>", methods=["GET"])
+def upgrade_options(asset_id):
+    """Return available upgrade tiers for an artwork, based on current state."""
+    try:
+        code = (request.args.get("code") or "").strip()
+        if not code:
+            return jsonify({"ok": False, "error": "Missing edit code."}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Verify code → email
+        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+
+        email = code_row["email"].lower()
+
+        # Verify this email owns the asset
+        cursor.execute("""
+            SELECT a.asset_id, a.unlocked, a.qualified_floor
+            FROM assets a
+            WHERE a.asset_id = ? AND LOWER(a.contact1_value) = ?
+        """, (asset_id, email))
+        asset_row = cursor.fetchone()
+
+        if not asset_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Artwork not found or not owned by this account."}), 404
+
+        unlocked = asset_row["unlocked"]
+        current_floor = asset_row["qualified_floor"] or 'xs'
+        current_floor_order = SIZE_ORDER.get(current_floor, 0)
+
+        # Determine artwork's current tile size
+        cursor.execute("SELECT tile_id FROM tiles WHERE asset_id = ?", (asset_id,))
+        tile_row = cursor.fetchone()
+        conn.close()
+
+        current_tile_size = None
+        if tile_row:
+            tile_size_map = get_tile_size_map()
+            current_tile_size = tile_size_map.get(tile_row["tile_id"])
+
+        size_display = {'s': 'Small', 'm': 'Medium', 'lg': 'Large'}
+
+        tiers = []
+        for tier_name, cfg in TIER_CONFIG.items():
+            tier_floor = cfg['floor']
+            tier_floor_order = SIZE_ORDER.get(tier_floor, 0)
+
+            tier_info = {
+                'tier': tier_name,
+                'label': cfg['label'],
+                'price_cents': cfg['price_cents'],
+                'floor': tier_floor,
+            }
+
+            if tier_name == 'unlock_xs':
+                if not unlocked:
+                    tier_info['status'] = 'available'
+                else:
+                    tier_info['status'] = 'completed'
+                    tier_info['reason'] = 'Already unlocked'
+            else:
+                # Floor upgrade tier — "lock what you landed on" model
+                if not unlocked:
+                    tier_info['status'] = 'locked'
+                    tier_info['reason'] = 'Requires Unlock first'
+                elif tier_floor_order <= current_floor_order:
+                    tier_info['status'] = 'completed'
+                    tier_info['reason'] = 'Already at or above this floor'
+                elif current_tile_size and tier_floor == current_tile_size:
+                    tier_info['status'] = 'available'
+                else:
+                    # Artwork is not in this tier's tile size
+                    display_name = size_display.get(tier_floor, tier_floor.upper())
+                    tier_info['status'] = 'locked'
+                    tier_info['reason'] = f'Your artwork must be in a {display_name} tile'
+
+            tiers.append(tier_info)
+
+        # Exhibit tier placeholder
+        tiers.append({
+            'tier': 'exhibit',
+            'label': 'Exhibit Tile',
+            'price_cents': 9999,
+            'floor': None,
+            'status': 'coming_soon',
+            'reason': 'Coming Soon',
+        })
+
+        return jsonify({
+            "ok": True,
+            "asset_id": asset_id,
+            "unlocked": unlocked,
+            "qualified_floor": current_floor,
+            "current_tile_size": current_tile_size,
+            "tiers": tiers,
+        })
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/stripe/checkout", methods=["POST"])
+def stripe_checkout():
+    """Create a Stripe Checkout session for an upgrade tier."""
+    if not STRIPE_SECRET_KEY:
+        return jsonify({"ok": False, "error": "Stripe is not configured."}), 503
+
+    try:
+        data = request.get_json() or {}
+        asset_id = data.get("asset_id")
+        tier = data.get("tier", "").strip()
+        code = (data.get("code") or "").strip()
+
+        if not asset_id or not tier or not code:
+            return jsonify({"ok": False, "error": "Missing required fields."}), 400
+
+        if tier not in TIER_CONFIG:
+            return jsonify({"ok": False, "error": "Invalid tier."}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Verify code → email
+        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+
+        email = code_row["email"].lower()
+
+        # Verify ownership and check prerequisites
+        cursor.execute("""
+            SELECT a.asset_id, a.unlocked, a.qualified_floor, a.artwork_title, a.artist_name
+            FROM assets a
+            WHERE a.asset_id = ? AND LOWER(a.contact1_value) = ?
+        """, (asset_id, email))
+        asset_row = cursor.fetchone()
+
+        if not asset_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Artwork not found or not owned by this account."}), 404
+
+        unlocked = asset_row["unlocked"]
+        current_floor = asset_row["qualified_floor"] or 'xs'
+        current_floor_order = SIZE_ORDER.get(current_floor, 0)
+        cfg = TIER_CONFIG[tier]
+        tier_floor_order = SIZE_ORDER.get(cfg['floor'], 0)
+
+        # Prerequisite checks
+        if tier == 'unlock_xs':
+            if unlocked:
+                conn.close()
+                return jsonify({"ok": False, "error": "Artwork is already unlocked."}), 400
+        else:
+            if not unlocked:
+                conn.close()
+                return jsonify({"ok": False, "error": "Artwork must be unlocked first."}), 400
+            if tier_floor_order <= current_floor_order:
+                conn.close()
+                return jsonify({"ok": False, "error": "Artwork is already at or above this floor."}), 400
+
+            # "Lock what you landed on" — verify artwork is currently in the tier's tile size
+            cursor.execute("SELECT tile_id FROM tiles WHERE asset_id = ?", (asset_id,))
+            tile_row = cursor.fetchone()
+            if tile_row:
+                tile_size_map = get_tile_size_map()
+                current_tile_size = tile_size_map.get(tile_row["tile_id"])
+                if current_tile_size != cfg['floor']:
+                    size_display = {'s': 'Small', 'm': 'Medium', 'lg': 'Large'}
+                    display_name = size_display.get(cfg['floor'], cfg['floor'].upper())
+                    conn.close()
+                    return jsonify({"ok": False, "error": f"Your artwork must be in a {display_name} tile to purchase this upgrade."}), 400
+
+        # Insert pending purchase record
+        cursor.execute("""
+            INSERT INTO purchase_history (asset_id, email, tier, amount_cents, status)
+            VALUES (?, ?, ?, ?, 'pending')
+        """, (asset_id, email, tier, cfg['price_cents']))
+        purchase_id = cursor.lastrowid
+        conn.commit()
+
+        # Create Stripe Checkout Session
+        artwork_title = asset_row["artwork_title"] or "Artwork"
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            customer_email=email,
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "unit_amount": cfg['price_cents'],
+                    "product_data": {
+                        "name": f"The Last Gallery — {cfg['label']}",
+                        "description": f"Upgrade for \"{artwork_title}\"",
+                    },
+                },
+                "quantity": 1,
+            }],
+            metadata={
+                "asset_id": str(asset_id),
+                "tier": tier,
+                "purchase_id": str(purchase_id),
+                "email": email,
+            },
+            success_url=f"{BASE_URL}/?purchase_success=1&type={tier}&asset_id={asset_id}",
+            cancel_url=f"{BASE_URL}/?purchase_cancel=1",
+        )
+
+        # Store session ID on purchase record
+        cursor.execute(
+            "UPDATE purchase_history SET stripe_session_id = ? WHERE purchase_id = ?",
+            (session.id, purchase_id)
+        )
+        conn.commit()
+        conn.close()
+
+        return jsonify({"ok": True, "checkout_url": session.url})
+
+    except Exception as e:
+        if 'conn' in locals():
+            try:
+                conn.rollback()
+                conn.close()
+            except Exception:
+                pass
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/stripe/webhook", methods=["POST"])
+def stripe_webhook():
+    """Handle Stripe webhook events (checkout.session.completed)."""
+    if not STRIPE_WEBHOOK_SECRET:
+        return jsonify({"error": "Webhook not configured"}), 503
+
+    payload = request.get_data()
+    sig_header = request.headers.get("Stripe-Signature")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except ValueError:
+        return jsonify({"error": "Invalid payload"}), 400
+    except stripe.error.SignatureVerificationError:
+        return jsonify({"error": "Invalid signature"}), 400
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        metadata = session.get("metadata", {})
+        asset_id = metadata.get("asset_id")
+        tier = metadata.get("tier")
+        purchase_id = metadata.get("purchase_id")
+        payment_intent = session.get("payment_intent")
+
+        if not asset_id or not tier or not purchase_id:
+            return jsonify({"ok": True}), 200
+
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+
+            # Idempotency: skip if already fulfilled
+            cursor.execute(
+                "SELECT status FROM purchase_history WHERE purchase_id = ?",
+                (purchase_id,)
+            )
+            purchase_row = cursor.fetchone()
+            if purchase_row and purchase_row["status"] == "fulfilled":
+                conn.close()
+                return jsonify({"ok": True}), 200
+
+            # Apply the upgrade
+            cfg = TIER_CONFIG.get(tier)
+            if cfg:
+                floor_value = cfg['floor']
+                cursor.execute(
+                    "UPDATE assets SET unlocked = 1, qualified_floor = ?, stripe_payment_id = ? WHERE asset_id = ?",
+                    (floor_value, payment_intent, int(asset_id))
+                )
+
+            # Mark purchase as fulfilled
+            cursor.execute(
+                "UPDATE purchase_history SET status = 'fulfilled', fulfilled_at = datetime('now'), stripe_payment_intent = ? WHERE purchase_id = ?",
+                (payment_intent, int(purchase_id))
+            )
+
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            if 'conn' in locals():
+                try:
+                    conn.rollback()
+                    conn.close()
+                except Exception:
+                    pass
+            print(f"[STRIPE WEBHOOK ERROR] {e}")
+
+    # Always return 200 to Stripe
+    return jsonify({"ok": True}), 200
 
 
 if __name__ == "__main__":

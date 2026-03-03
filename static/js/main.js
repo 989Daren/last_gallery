@@ -1016,7 +1016,6 @@ function sizeToUnits(size) {
     case "s":   return 2;
     case "m":   return 3;
     case "lg":  return 4;
-    case "xlg": return 6;
     default:    return 1;
   }
 }
@@ -1027,7 +1026,6 @@ function classifySizeDesign(widthDesign) {
   if (widthDesign >= 128 && widthDesign < 213) return "s";    // ~170
   if (widthDesign >= 213 && widthDesign < 298) return "m";    // ~255
   if (widthDesign >= 298 && widthDesign < 425) return "lg";   // ~340
-  if (widthDesign >= 425 && widthDesign < 600) return "xlg";  // ~510
   return "unknown";
 }
 
@@ -1112,8 +1110,8 @@ function parseSvgToTiles(svgText) {
   });
 
   // 7) Assign IDs per size bucket (X1, X2… S1, S2… etc.)
-  const counters = { xs: 0, s: 0, m: 0, lg: 0, xlg: 0, unknown: 0 };
-  const prefix   = { xs: "X", s: "S", m: "M", lg: "L", xlg: "XL", unknown: "U" };
+  const counters = { xs: 0, s: 0, m: 0, lg: 0, unknown: 0 };
+  const prefix   = { xs: "X", s: "S", m: "M", lg: "L", unknown: "U" };
 
   return rects
     .filter(r => r.size !== "unknown")
@@ -1537,6 +1535,18 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         window.__simpleWelcomeInit = true;
 
+        // Purchase success banner handler
+        if (window.PAGE_MODE === "purchase_success") {
+          requestAnimationFrame(() => showPurchaseSuccessBanner());
+        }
+
+        // Upgrade deep link handler (from post-shuffle emails)
+        if (window.PAGE_MODE === "upgrade") {
+          const upgradeAssetId = window._upgradeDeepLinkAssetId;
+          delete window._upgradeDeepLinkAssetId;
+          requestAnimationFrame(() => openUnlockModal(upgradeAssetId));
+        }
+
         // Creator of the Month banner handler
         if (window.PAGE_MODE === "creator-of-the-month") {
           const creatorOverlay = document.getElementById("creatorBannerOverlay");
@@ -1646,6 +1656,103 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }
   }
+
+  // ========================================
+  // Stripe Purchase Return Handler
+  // ========================================
+  function handleStripeReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const purchaseSuccess = params.get("purchase_success");
+    const purchaseCancel = params.get("purchase_cancel");
+
+    // Clean URL params regardless
+    if (purchaseSuccess || purchaseCancel) {
+      const cleanUrl = window.location.pathname + window.location.hash;
+      history.replaceState(null, "", cleanUrl);
+    }
+
+    if (purchaseSuccess === "1") {
+      const tierType = params.get("type") || "";
+      const assetId = params.get("asset_id") || "";
+
+      // Skip welcome modal
+      window.PAGE_MODE = "purchase_success";
+      window._purchaseSuccessData = { tier: tierType, assetId: assetId };
+    }
+  }
+
+  function showPurchaseSuccessBanner() {
+    const data = window._purchaseSuccessData;
+    if (!data) return;
+    delete window._purchaseSuccessData;
+
+    const tierMessages = {
+      'unlock_xs': 'Your artwork is now unlocked! It can appear in larger tiles during the weekly shuffle.',
+      'floor_s': 'Your artwork floor has been set to Small. It will never drop below a Small tile.',
+      'floor_m': 'Your artwork floor has been set to Medium. It will never drop below a Medium tile.',
+      'floor_lg': 'Your artwork floor has been set to Large. It will never drop below a Large tile.',
+    };
+    const msg = tierMessages[data.tier] || 'Your upgrade has been applied!';
+
+    // Create overlay
+    const overlay = document.createElement("div");
+    overlay.className = "purchase-success-overlay";
+    overlay.innerHTML =
+      '<div class="purchase-success-banner">' +
+        '<div class="purchase-success-accent"></div>' +
+        '<div class="purchase-success-body">' +
+          '<div class="purchase-success-icon">\u2713</div>' +
+          '<h2 class="purchase-success-headline">Upgrade Complete!</h2>' +
+          '<p class="purchase-success-msg">' + msg + '</p>' +
+          '<button class="purchase-success-btn" type="button">View My Artwork</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    const btn = overlay.querySelector(".purchase-success-btn");
+    const dismiss = () => {
+      overlay.remove();
+      window.PAGE_MODE = "";
+      // Find and highlight the tile
+      if (data.assetId) {
+        const aid = parseInt(data.assetId);
+        for (const [tileId, tileData] of Object.entries(wallState.tiles)) {
+          if (tileData.assetId === aid) {
+            highlightNewTile(tileId);
+            break;
+          }
+        }
+      }
+    };
+    btn.addEventListener("click", dismiss);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) dismiss();
+    });
+  }
+
+  // ========================================
+  // Upgrade Deep Link Handler (from post-shuffle emails)
+  // ========================================
+  function handleUpgradeDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    const upgrade = params.get("upgrade");
+    const assetId = params.get("asset_id");
+
+    if (upgrade !== "1" || !assetId) return;
+
+    // Clean URL params
+    const cleanUrl = window.location.pathname + window.location.hash;
+    history.replaceState(null, "", cleanUrl);
+
+    // Skip welcome modal and open upgrade modal
+    window.PAGE_MODE = "upgrade";
+    window._upgradeDeepLinkAssetId = parseInt(assetId);
+  }
+
+  // Run stripe return check before boot (sets PAGE_MODE to skip welcome)
+  handleStripeReturn();
+  handleUpgradeDeepLink();
 
   boot();
 });

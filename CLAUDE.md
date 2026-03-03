@@ -8,6 +8,7 @@ A Flask-based web gallery application where users can upload artwork images that
 - **Database**: SQLite (single source of truth) with versioned migrations
 - **Frontend**: Vanilla JavaScript (modular), CSS
 - **Image Processing**: Cropper.js (client-side cropping), Pillow (server-side optimization)
+- **Payments**: Stripe Checkout (tile upgrades), webhook-only fulfillment
 - **Email**: Resend API (edit code delivery), `python-dotenv` for env config
 
 ## How to Run
@@ -25,7 +26,7 @@ python app.py
 |------|---------|
 | `app.py` | Flask application, all API endpoints |
 | `db.py` | Database connection, schema initialization, versioned migrations |
-| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + schema_version tables, schema v7) |
+| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + purchase_history + schema_version tables, schema v8) |
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
 
 ### Frontend
@@ -34,7 +35,7 @@ python app.py
 | `static/js/main.js` | Core gallery rendering, popup overlay, wall state management |
 | `static/js/admin.js` | Admin modal, action handlers (clear/move/undo/shuffle), countdown admin controls |
 | `static/js/countdown.js` | Countdown timer bar module (fetch state, tick, show/hide) |
-| `static/js/unlock_modal.js` | Unlock artwork modal with back-button support |
+| `static/js/unlock_modal.js` | Upgrade modal: 3-step purchase flow (identify → select artwork → choose tier) |
 | `static/js/upload_modal.js` | Image upload flow with cropping and metadata entry |
 | `templates/index.html` | Main HTML template |
 | `static/css/styles.css` | All styling including popup animations |
@@ -99,9 +100,24 @@ CREATE TABLE countdown_schedule (
     duration_seconds INTEGER NOT NULL DEFAULT 604800,  -- cycle length (default 7 days)
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Purchase history: audit trail for Stripe payments (migration v8)
+CREATE TABLE purchase_history (
+    purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id INTEGER NOT NULL,
+    email TEXT NOT NULL DEFAULT '',
+    tier TEXT NOT NULL DEFAULT '',              -- 'unlock_xs' | 'floor_s' | 'floor_m' | 'floor_lg'
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    stripe_session_id TEXT,
+    stripe_payment_intent TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',     -- 'pending' | 'fulfilled' | 'cancelled'
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    fulfilled_at TEXT,
+    FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+);
 ```
 
-Current schema version: **7**
+Current schema version: **8**
 
 ## Tile Registration
 
@@ -126,7 +142,6 @@ Tiles are classified by size and numbered sequentially:
 | S | 128-213 | S | S1, S2... |
 | M | 213-298 | M | M1, M2... |
 | LG | 298-425 | L | L1, L2... |
-| XLG | 425-600 | XL | XL1, XL2... |
 
 ## API Endpoints
 
@@ -163,10 +178,14 @@ Tiles are classified by size and numbered sequentially:
 | `/api/admin/countdown` | POST | Control countdown timer (actions: set_active, set_scheduled, clear) |
 | `/shuffle` | POST | Randomly redistribute all images (body: `{pin: "REDACTED_PIN"}`) |
 
-### Public Lock (Stripe-ready)
+### Stripe / Upgrade
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/lock_tile` | POST | Lock artwork at current tile size (body: `{asset_id, payment_id?}`) |
+| `/api/my_artworks` | POST | Get all artworks for an edit code (body: `{code}`) |
+| `/api/upgrade_options/<asset_id>` | GET | Get available tiers for artwork (query: `?code=...`) |
+| `/api/stripe/checkout` | POST | Create Stripe Checkout session (body: `{asset_id, tier, code}`) |
+| `/api/stripe/webhook` | POST | Handle Stripe webhook events (signature-verified) |
+| `/api/lock_tile` | POST | Lock artwork at current tile size — admin/direct use (body: `{asset_id, payment_id?}`) |
 
 ## Metadata Fields
 
@@ -275,6 +294,8 @@ Focal-point zoom for touch devices — content under fingers stays anchored duri
 | `TLG_ADMIN_PIN` | `REDACTED_PIN` | Admin PIN for admin endpoints |
 | `TLG_BASE_URL` | `https://thelastgallery.com` | Base URL used in email links (`/edit`, `/creator-of-the-month`) |
 | `RESEND_API_KEY` | *(none)* | Resend API key for sending edit code emails |
+| `STRIPE_SECRET_KEY` | *(none)* | Stripe secret key for payment processing |
+| `STRIPE_WEBHOOK_SECRET` | *(none)* | Stripe webhook signing secret for event verification |
 
 ## JavaScript Architecture
 
@@ -292,7 +313,7 @@ window.getAdminPin()              // Get admin PIN for cross-module requests (fr
 window.initZoom()                 // Initialize pinch-to-zoom
 window.resetZoom()                // Reset zoom to 1.0x
 window.highlightNewTile(tileId)   // Scroll to tile + sheen animation
-window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "" (set by server via template)
+window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "purchase_success" | "upgrade" | "" (set by server via template or Stripe/email return)
 window.refreshCountdown()         // Re-fetch and apply countdown state (from countdown.js)
 window.openUnlockModal(assetId, tileId)  // Open unlock modal (from unlock_modal.js)
 window.closeUnlockModal()         // Close unlock modal (from unlock_modal.js)
@@ -321,10 +342,20 @@ window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_
 
 ## Hamburger Menu
 Menu items in order:
-1. **Unlock to Upgrade Your Artwork!** — opens unlock modal
+1. **Unlock to Upgrade Your Artwork!** — opens upgrade modal (3-step flow)
 2. **Edit Your Artwork Submission** — opens edit banner
 3. **A Human Centric Gallery** — opens info modal (see below)
 4. **Admin** — opens admin modal (PIN gated)
+
+## Upgrade Modal (unlock_modal.js)
+Three-step purchase flow using edit codes for identity ("lock what you landed on" model):
+- **Step 1: Identification** — Enter edit code → calls `POST /api/my_artworks` to get artworks. "Forgot your code?" inline resend form.
+- **Step 2: Artwork Selection** — Shows all artworks for that email with status badges (Locked/Unlocked/Floor: S/M/LG). Auto-skipped if only 1 artwork.
+- **Step 3: Upgrade Options** — Shows "Currently in a [Size] tile" subtitle. Fetches `GET /api/upgrade_options/<asset_id>` for tiers. Only the tier matching the artwork's current tile size is available (gold CTA → Stripe). Other floor tiers show "Your artwork must be in a [Size] tile". "Coming Soon: Exhibit Tile" teaser at bottom.
+- **Tile-size validation**: `/api/stripe/checkout` re-verifies tile size before creating session, preventing race conditions with shuffle.
+- **Navigation**: Same `#unlock` ConicalNav hash for all steps. `openUnlockModal(assetId)` auto-selects artwork after identification.
+- **Purchase success**: Stripe redirects back with `?purchase_success=1&type={tier}&asset_id={id}`. `handleStripeReturn()` in main.js cleans URL, skips welcome, shows success banner.
+- **Upgrade deep link**: `/?upgrade=1&asset_id=X` (from post-shuffle notification emails). `handleUpgradeDeepLink()` cleans URL, sets `PAGE_MODE = "upgrade"`, skips welcome, opens unlock modal with artwork pre-selected.
 
 ## Human Centric Gallery Modal
 - **Trigger**: Hamburger menu → "A Human Centric Gallery", or "Submission Guidelines" link in upload modal
@@ -340,8 +371,11 @@ Menu items in order:
 - **Unupgraded** (`unlocked = 0`): XS tiles only — most constrained, placed first during shuffle.
 - **Floor > xs** (`unlocked = 1`, `qualified_floor` in s/m/lg): Shuffles into tiles at floor size or larger. Higher floor = fewer eligible tiles = placed earlier.
 - **Unlocked** (`unlocked = 1`, `qualified_floor = 'xs'`): Any tile size — least constrained, placed last. Weighted random: more tiles in a size = higher probability.
-- **`qualified_floor`** column (values: xs, s, m, lg): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment (`/api/lock_tile`).
-- **Stripe integration** (stub): `/api/lock_tile` sets `qualified_floor` to the artwork's current tile size and `unlocked = 1`. Accepts optional `payment_id` for Stripe webhook. Rejects XS locks.
+- **`qualified_floor`** column (values: xs, s, m, lg): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment.
+- **"Lock what you landed on"**: Artists can only purchase the floor tier matching their artwork's current tile size. Creates urgency around the weekly shuffle cycle — land in a bigger tile, lock it in before the next shuffle.
+- **Stripe integration**: `/api/stripe/checkout` creates a Stripe Checkout Session for a tier purchase. Webhook (`/api/stripe/webhook`) applies the upgrade on `checkout.session.completed`. Tiers: `unlock_xs` ($9.99), `floor_s` ($24.99), `floor_m` ($39.99), `floor_lg` ($59.99). Defined in `TIER_CONFIG` dict in `app.py`. Uses inline `price_data` (no pre-created Stripe Price IDs). Fulfillment is idempotent via `purchase_history` table.
+- **Post-shuffle notifications**: After each shuffle, `_run_shuffle()` emails artists whose unlocked artwork landed in a tile above their current floor. Email includes artwork title, new tile size, price to lock in, and CTA link (`/?upgrade=1&asset_id=X`). Uses `send_upgrade_notification()`. Wrapped in try/except — failures never break the shuffle.
+- **`/api/lock_tile`**: Admin/direct-use endpoint, sets `qualified_floor` to artwork's current tile size + `unlocked=1`. Rejects XS locks.
 - **Derangement rule**: Every artwork must change position during a shuffle — no artwork may remain in its previous tile. The algorithm excludes each artwork's original tile from candidates; if the original tile is the last remaining in its pool, a swap with a previously-assigned artwork resolves it.
 - **Admin force_unlock**: `/api/admin/force_unlock` sets unlocked explicitly (0 or 1). Locking (unlocked=0) also resets `qualified_floor` to 'xs'.
 
@@ -442,7 +476,7 @@ systemctl --user status thelastgallery-tunnel.service
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
 - `CLAUDE_URL.txt` in project root contains a raw GitHub URL pinned to the latest commit hash that changed `CLAUDE.md` — auto-generated by the post-commit hook
-- Last reviewed: 2026-03-01
+- Last reviewed: 2026-03-04
 
 ---
 
