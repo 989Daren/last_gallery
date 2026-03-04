@@ -916,9 +916,8 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       iconDiv.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
       iconDiv.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (typeof window.openUnlockModal === "function") {
-          window.openUnlockModal(assetId || null, tileId || null);
-        }
+        const infoOverlay = document.getElementById("unlockInfoOverlay");
+        if (infoOverlay) infoOverlay.classList.remove("hidden");
       });
       popupInfo.appendChild(iconDiv);
     }
@@ -1018,6 +1017,25 @@ function wirePopupEventsOnce() {
     closeArtworkPopup();
   });
 }
+
+// Unlock info banner (from ribbon icon click)
+(function() {
+  const overlay = document.getElementById("unlockInfoOverlay");
+  if (!overlay) return;
+  const closeBtn = document.getElementById("unlockInfoCloseBtn");
+
+  function closeUnlockInfo() {
+    overlay.classList.add("hidden");
+  }
+
+  if (closeBtn) closeBtn.addEventListener("click", closeUnlockInfo);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeUnlockInfo();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeUnlockInfo();
+  });
+})();
 
 // Map size string → units (square tiles, N × N)
 function sizeToUnits(size) {

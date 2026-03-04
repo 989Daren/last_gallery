@@ -3513,3 +3513,15 @@ label {
   transform: scale(1.15);
   opacity: 1;
 }
+
+/* Unlock info banner (from ribbon icon click) */
+.unlock-info-card {
+  width: min(340px, 85%);
+}
+
+.unlock-info-icon {
+  text-align: center;
+  margin-bottom: 14px;
+  color: #D4A843;
+  filter: drop-shadow(0 0 6px rgba(212, 168, 67, 0.4));
+}
