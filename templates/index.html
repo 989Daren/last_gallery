@@ -98,6 +98,7 @@
           <li>Scroll to explore</li>
           <li class="touch-only">Pinch to zoom out</li>
           <li>Click images for full size</li>
+          <li>Add your artwork. It's free!</li>
         </ul>
       </div>
       <button id="simpleWelcomeEnterBtn" class="simpleWelcomeBtn" type="button">Enter</button>
@@ -452,6 +453,20 @@
         <p><strong>3. Every week, the gallery shuffles</strong> — All artwork is randomly reassigned to new tiles. Your unlocked artwork may find itself in a Small, Medium, or even a Large tile!</p>
         <p><strong>4. Lock in your size</strong> — If you land in a larger tile, you can choose to upgrade to that tile level, ensuring your artwork will never fall below that size during future shuffles.</p>
         <p><strong>Important:</strong> When the gallery is completely full, no new art will be accepted and every existing piece will be permanently frozen in place. At that point, the Gallery has become a time capsule of creative work. On the day of the final random shuffle, the tile size you've upgraded to is where it stays for the life of The Last Gallery.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unlock Info Banner (from ribbon unlock icon) -->
+  <div id="unlockInfoOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
+    <div class="countdown-info-card unlock-info-card">
+      <div class="countdown-info-accent"></div>
+      <div class="countdown-info-body">
+        <button id="unlockInfoCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
+        <div class="unlock-info-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+        </div>
+        <p>The owner of this artwork has unlocked it, allowing the piece to freely move to larger available tile sizes.</p>
       </div>
     </div>
   </div>
