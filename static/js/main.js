@@ -1734,7 +1734,7 @@ document.addEventListener("DOMContentLoaded", () => {
     delete window._purchaseSuccessData;
 
     const tierMessages = {
-      'unlock_xs': 'Your artwork is now unlocked! It can appear in larger tiles during the weekly shuffle.',
+      'unlock_xs': 'Your artwork is now unlocked! It can appear in larger tiles during the weekly shuffle.<br><br><strong>Note:</strong> Because the weekly shuffle is random, there is no guarantee your artwork will land in a larger tile size.',
       'floor_s': 'Your artwork floor has been set to Small. It will never drop below a Small tile.',
       'floor_m': 'Your artwork floor has been set to Medium. It will never drop below a Medium tile.',
       'floor_lg': 'Your artwork floor has been set to Large. It will never drop below a Large tile.',
