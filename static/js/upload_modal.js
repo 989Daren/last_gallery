@@ -16,6 +16,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Track current upload tile ID for Tier-2 metadata modal
   let currentUploadTileId = null;
 
+  // Track current upload asset ID and save state for orphan cleanup
+  let currentUploadAssetId = null;
+  let metaSavedSuccessfully = false;
+
   // Edit mode state
   let isEditMode = false;
   let editOriginalEmail = "";
@@ -111,11 +115,36 @@ document.addEventListener("DOMContentLoaded", () => {
     window.ConicalNav && window.ConicalNav.pushToMatchUi();
   }
 
+  function abandonCurrentUpload() {
+    if (!currentUploadTileId || !currentUploadAssetId) return;
+    const tileId = currentUploadTileId;
+    const assetId = currentUploadAssetId;
+    // Clear immediately to prevent double-cleanup
+    currentUploadTileId = null;
+    currentUploadAssetId = null;
+    metaSavedSuccessfully = false;
+
+    fetch("/api/abandon_upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tile_id: tileId, asset_id: assetId })
+    })
+      .then(() => { console.log(`${LOG_PREFIX} Abandoned upload cleaned up`); refreshWall(); })
+      .catch(err => console.error(`${LOG_PREFIX} Abandon cleanup error:`, err));
+  }
+
   function closeModal(silent) {
+    // Clean up orphaned upload if metadata was never saved
+    if (!metaSavedSuccessfully && currentUploadTileId && currentUploadAssetId) {
+      abandonCurrentUpload();
+    }
+
     modal.classList.add("hidden");
     destroyCropper();
     resetModalState();
     disableCropperContextMenuBlocker();
+    currentUploadAssetId = null;
+    metaSavedSuccessfully = false;
     if (!silent) {
       window.ConicalNav && window.ConicalNav.popFromUiClose();
     }
@@ -219,6 +248,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await postUpload(formData);
       console.log(`${LOG_PREFIX} Upload success:`, result);
+
+      // Track asset for orphan cleanup
+      currentUploadAssetId = (result.asset && result.asset.asset_id) || null;
+      metaSavedSuccessfully = false;
 
       // Refresh wall immediately so new image appears before metadata modal
       await refreshWall();
@@ -367,6 +400,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (metaRequiredError) metaRequiredError.classList.add("hidden");
     if (metaContactError) metaContactError.classList.add("hidden");
     if (metaDuplicateError) metaDuplicateError.classList.add("hidden");
+    if (metaUploadLimitError) metaUploadLimitError.classList.add("hidden");
     if (metaContinueBtn) metaContinueBtn.disabled = false;
 
     // Reset for-sale checkboxes
@@ -398,6 +432,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     isEditMode = true;
     currentUploadTileId = tileId;
+    metaSavedSuccessfully = true; // Guard: never cleanup existing artwork
 
     // Fetch current metadata
     try {
@@ -508,6 +543,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const metaRequiredError = document.getElementById("metaRequiredError");
   const metaContactError = document.getElementById("metaContactError");
   const metaDuplicateError = document.getElementById("metaDuplicateError");
+  const metaUploadLimitError = document.getElementById("metaUploadLimitError");
 
   function validateRequiredFields() {
     const artistName = (metaArtistInput?.value || "").trim();
@@ -545,12 +581,52 @@ document.addEventListener("DOMContentLoaded", () => {
   if (metaContact1Input) {
     metaContact1Input.addEventListener("input", validateContactField);
     metaContact1Input.addEventListener("input", () => {
+      // Hide upload limit error on typing (user may be changing email)
+      if (metaUploadLimitError) metaUploadLimitError.classList.add("hidden");
+      if (metaContinueBtn && metaContinueBtn.dataset.limitBlocked) {
+        delete metaContinueBtn.dataset.limitBlocked;
+        metaContinueBtn.disabled = false;
+      }
+
       if (!isEditMode || !metaEmailChangeWarning) return;
       const current = (metaContact1Input.value || "").trim().toLowerCase();
       if (current !== editOriginalEmail && current.length > 0) {
         metaEmailChangeWarning.classList.remove("hidden");
       } else {
         metaEmailChangeWarning.classList.add("hidden");
+      }
+    });
+
+    // Upload limit check on email blur (new uploads only)
+    metaContact1Input.addEventListener("blur", async () => {
+      if (isEditMode) return;
+      // Admin bypasses the upload limit
+      if (typeof window.isAdminActive === "function" && window.isAdminActive()) return;
+      const email = (metaContact1Input.value || "").trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+
+      try {
+        const res = await fetch("/api/check_upload_limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (data.ok && !data.allowed) {
+          if (metaUploadLimitError) metaUploadLimitError.classList.remove("hidden");
+          if (metaContinueBtn) {
+            metaContinueBtn.disabled = true;
+            metaContinueBtn.dataset.limitBlocked = "1";
+          }
+        } else {
+          if (metaUploadLimitError) metaUploadLimitError.classList.add("hidden");
+          if (metaContinueBtn && metaContinueBtn.dataset.limitBlocked) {
+            delete metaContinueBtn.dataset.limitBlocked;
+            metaContinueBtn.disabled = false;
+          }
+        }
+      } catch (err) {
+        console.error(`${LOG_PREFIX} Upload limit check error:`, err);
       }
     });
   }
@@ -640,11 +716,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (metaError) metaError.classList.add("hidden");
 
     try {
+      const metaHeaders = { "Content-Type": "application/json" };
+      // Include admin PIN if admin is active (for upload limit bypass)
+      const adminActive = typeof window.isAdminActive === "function" && window.isAdminActive();
+      if (adminActive) {
+        const pin = typeof window.getAdminPin === "function" ? window.getAdminPin() : "";
+        if (pin) metaHeaders["X-Admin-Pin"] = pin;
+      }
+
       const response = await fetch(`/api/tile/${tileId}/metadata`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: metaHeaders,
         body: JSON.stringify({
           artist_name: artistName,
           artwork_title: artworkTitle,
@@ -669,6 +751,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       console.log(`${LOG_PREFIX} Metadata saved successfully:`, result);
+      metaSavedSuccessfully = true;
 
       // If admin changed unlock status, set it explicitly via force_unlock endpoint
       if (metaUnlockCheckbox && !metaUnlockSection.classList.contains("hidden")) {

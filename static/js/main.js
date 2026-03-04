@@ -548,6 +548,10 @@ const ConicalNav = {
     const el = document.getElementById("countdownInfoOverlay");
     return !!el && !el.classList.contains("hidden");
   },
+  isHowItWorksOpen() {
+    const el = document.getElementById("howItWorksOverlay");
+    return !!el && !el.classList.contains("hidden");
+  },
   isHumanCentricOpen() {
     const el = document.getElementById("humanCentricOverlay");
     return !!el && !el.classList.contains("hidden");
@@ -560,6 +564,7 @@ const ConicalNav = {
   // Builds compound hash for layered states: #zoom/art/ribbon
   desiredHash() {
     // Full-screen overlays don't layer with zoom
+    if (this.isHowItWorksOpen()) return "#howitworks";
     if (this.isHumanCentricOpen()) return "#humancentric";
     if (this.isCountdownInfoOpen()) return "#shuffleinfo";
     if (this.isUnlockOpen()) return "#unlock";
@@ -614,6 +619,13 @@ const ConicalNav = {
     // Close art if hash no longer includes art
     if (!wantsArt && this.isArtOpen()) {
       try { closeArtworkPopup(true); } catch (e) {}
+    }
+
+    // Close how it works if hash no longer includes howitworks
+    const wantsHowItWorks = stack.includes("howitworks");
+    if (!wantsHowItWorks && this.isHowItWorksOpen()) {
+      const el = document.getElementById("howItWorksOverlay");
+      if (el) el.classList.add("hidden");
     }
 
     // Close human centric if hash no longer includes humancentric
@@ -1177,7 +1189,8 @@ function hydrateWallStateFromExistingData(layoutTiles, assignments = []) {
         contact1_value: assignment.contact1_value || "",
         contact2_type: assignment.contact2_type || "",
         contact2_value: assignment.contact2_value || "",
-        unlocked: assignment.unlocked || 0
+        unlocked: assignment.unlocked || 0,
+        asset_type: assignment.asset_type || "artwork"
       };
     }
   });
@@ -1339,21 +1352,28 @@ function renderWallFromState() {
       }
 
       // 5. Set metadata
-      el.dataset.popupUrl = tileData.asset.popup_url || tileData.asset.tile_url;
-      el.dataset.artworkName = tileData.asset.artwork_name || '';
-      el.dataset.artistName = tileData.asset.artist_name || '';
-      el.dataset.yearCreated = tileData.asset.year_created || '';
-      el.dataset.medium = tileData.asset.medium || '';
-      el.dataset.dimensions = tileData.asset.dimensions || '';
-      el.dataset.editionInfo = tileData.asset.edition_info || '';
-      el.dataset.forSale = tileData.asset.for_sale || '';
-      el.dataset.saleType = tileData.asset.sale_type || '';
-      el.dataset.contact1Type = tileData.asset.contact1_type || '';
-      el.dataset.contact1Value = tileData.asset.contact1_value || '';
-      el.dataset.contact2Type = tileData.asset.contact2_type || '';
-      el.dataset.contact2Value = tileData.asset.contact2_value || '';
       if (tileData.assetId) el.dataset.assetId = tileData.assetId;
       el.dataset.unlocked = tileData.asset.unlocked || 0;
+
+      if (tileData.asset.asset_type === 'info') {
+        // Info tiles: set asset-type marker, skip artwork metadata
+        el.dataset.assetType = 'info';
+      } else {
+        // Artwork tiles: set popup URL and all metadata
+        el.dataset.popupUrl = tileData.asset.popup_url || tileData.asset.tile_url;
+        el.dataset.artworkName = tileData.asset.artwork_name || '';
+        el.dataset.artistName = tileData.asset.artist_name || '';
+        el.dataset.yearCreated = tileData.asset.year_created || '';
+        el.dataset.medium = tileData.asset.medium || '';
+        el.dataset.dimensions = tileData.asset.dimensions || '';
+        el.dataset.editionInfo = tileData.asset.edition_info || '';
+        el.dataset.forSale = tileData.asset.for_sale || '';
+        el.dataset.saleType = tileData.asset.sale_type || '';
+        el.dataset.contact1Type = tileData.asset.contact1_type || '';
+        el.dataset.contact1Value = tileData.asset.contact1_value || '';
+        el.dataset.contact2Type = tileData.asset.contact2_type || '';
+        el.dataset.contact2Value = tileData.asset.contact2_value || '';
+      }
 
       // 6. Apply occupied class
       el.classList.add('occupied');
@@ -1456,7 +1476,8 @@ document.addEventListener("DOMContentLoaded", () => {
             contact1_value: assignment.contact1_value || "",
             contact2_type: assignment.contact2_type || "",
             contact2_value: assignment.contact2_value || "",
-            unlocked: assignment.unlocked || 0
+            unlocked: assignment.unlocked || 0,
+            asset_type: assignment.asset_type || "artwork"
           };
         }
       });
@@ -1574,6 +1595,14 @@ document.addEventListener("DOMContentLoaded", () => {
       wall.addEventListener("click", (e) => {
         const tileEl = e.target.closest(".tile");
         if (!tileEl) return;
+
+        // Info tiles → open How It Works modal instead of artwork popup
+        if (tileEl.dataset.assetType === 'info') {
+          if (typeof window.openHowItWorksModal === 'function') {
+            window.openHowItWorksModal();
+          }
+          return;
+        }
 
         // Check for uploaded asset with metadata (from database hydration)
         const popupUrl = tileEl.dataset.popupUrl;

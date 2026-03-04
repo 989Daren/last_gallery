@@ -42,6 +42,9 @@
         <!-- Dropdown menu (hidden by default) -->
         <ul id="hamburger-menu" role="menu" aria-hidden="true">
           <li role="none">
+            <button id="menu-item-howitworks" role="menuitem">How it All Works</button>
+          </li>
+          <li role="none">
             <button id="menu-item-unlock" role="menuitem">
               <svg class="menu-unlock-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
               Unlock to Upgrade Your Artwork!
@@ -117,6 +120,7 @@
       <div class="upload-help">
         <p>File formats accepted - JPG or PNG</p>
         <p>Use the crop tool below to select a square portion for the gallery tile. Your full image displays when clicked.</p>
+        <p class="upload-limit-note">An artist's work may occupy no more than 4 tiles in the gallery.</p>
       </div>
 
       <div class="upload-controls">
@@ -187,6 +191,9 @@
         <input id="metaContact1Input" type="email" maxlength="120" placeholder="Email address" />
         <div id="metaContactError" class="required-error hidden" style="margin-top:8px; font-size:0.85rem;">
           A valid email address is required.
+        </div>
+        <div id="metaUploadLimitError" class="required-error hidden" style="margin-top:8px; font-size:0.85rem;">
+          Upload limit reached — an artist's work may occupy no more than 4 tiles in the gallery.
         </div>
         <div class="meta-email-hint">Use the same email for all uploads to qualify for future upgrade tiers.</div>
         <div id="metaEmailChangeWarning" class="email-change-warning hidden">
@@ -426,6 +433,25 @@
         <p>Whether it's painting, drawing, photography, collage, digital (Procreate, Krita, etc.), or mixed media, The Last Gallery honors human touch in the creative process. A brushstroke, a blended pixel, a carefully framed photograph&mdash;these are the marks of an artist at work.</p>
         <p>We believe AI can be used as a tool. You might use it in a collage, or as a reference&mdash;just as artists have long used photographs. That's fine. What matters is that a human is physically involved in shaping the final image.</p>
         <p>The Last Gallery reserves the right to remove raw, unedited AI-generated images, or any other content deemed inappropriate from the gallery wall.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- How it All Works Modal -->
+  <div id="howItWorksOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
+    <div class="countdown-info-card">
+      <div class="countdown-info-accent"></div>
+      <div class="countdown-info-body">
+        <button id="howItWorksCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
+        <h3>How it All Works</h3>
+        <div class="countdown-info-graphic">
+          <img src="{{ url_for('static', filename='images/unlock_graphic.jpg') }}" alt="How it All Works">
+        </div>
+        <p><strong>1. Upload your artwork (It's Free!)</strong> — Your art will be added at the "locked" XS (extra small) tile level. It is free to shuffle, but needs to be unlocked by you to move to the next size level.</p>
+        <p><strong>2. Unlock your artwork</strong> — This is the next step so your artwork can shuffle into larger tile sizes. The bigger the tile, the more your artwork stands out on the gallery wall.</p>
+        <p><strong>3. Every week, the gallery shuffles</strong> — All artwork is randomly reassigned to new tiles. Your unlocked artwork may find itself in a Small, Medium, or even a Large tile!</p>
+        <p><strong>4. Lock in your size</strong> — If you land in a larger tile, you can choose to upgrade to that tile level, ensuring your artwork will never fall below that size during future shuffles.</p>
+        <p><strong>Important:</strong> When the gallery is completely full, no new art will be accepted and every existing piece will be permanently frozen in place. At that point, the Gallery has become a time capsule of creative work. On the day of the final random shuffle, the tile size you've upgraded to is where it stays for the life of The Last Gallery.</p>
       </div>
     </div>
   </div>

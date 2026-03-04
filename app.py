@@ -12,7 +12,7 @@ import stripe
 import resend
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from db import init_db, get_db
 
 load_dotenv()
@@ -54,8 +54,91 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# ---- Generate info tile image if missing ----
+def _generate_info_tile_image():
+    """Create a 512x512 info tile image: black bg, gold circle, dark 'i'."""
+    img_path = os.path.join(BASE_DIR, "static", "images", "info_tile.jpg")
+    if os.path.exists(img_path):
+        return
+    size = 512
+    img = Image.new("RGB", (size, size), "#000000")
+    draw = ImageDraw.Draw(img)
+    # Gold circle centered with padding
+    pad = 50
+    draw.ellipse([pad, pad, size - pad, size - pad], fill="#D4A843")
+    # Draw "i" in center — try serif bold italic, fall back gracefully
+    font_size = 280
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf", font_size)
+    except (OSError, IOError):
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", font_size)
+        except (OSError, IOError):
+            font = ImageFont.load_default()
+    bbox = draw.textbbox((0, 0), "i", font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = (size - tw) // 2 - bbox[0]
+    ty = (size - th) // 2 - bbox[1]
+    draw.text((tx, ty), "i", fill="#1a1a1a", font=font)
+    os.makedirs(os.path.dirname(img_path), exist_ok=True)
+    img.save(img_path, "JPEG", quality=95)
+    print("Generated info_tile.jpg")
+
+_generate_info_tile_image()
+
+
+# ---- Seed info tiles ----
+def _seed_info_tiles():
+    """Ensure 3 info-type assets exist and are assigned to XS tiles."""
+    import random
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM assets WHERE asset_type = 'info'")
+    count = cursor.fetchone()[0]
+
+    if count >= 3:
+        conn.close()
+        return
+
+    needed = 3 - count
+    tile_size_map = get_tile_size_map()
+    xs_tile_ids = {tid for tid, sz in tile_size_map.items() if sz == 'xs'}
+
+    # Get occupied tiles
+    cursor.execute("SELECT tile_id FROM tiles WHERE asset_id IS NOT NULL")
+    occupied = {row["tile_id"] for row in cursor.fetchall()}
+    empty_xs = list(xs_tile_ids - occupied)
+    random.shuffle(empty_xs)
+
+    for i in range(needed):
+        if not empty_xs:
+            print(f"Warning: no empty XS tiles for info asset {i+1}")
+            break
+        tile_id = empty_xs.pop()
+        cursor.execute("""
+            INSERT INTO assets (artist_name, artwork_title, tile_url, popup_url,
+                                unlocked, qualified_floor, asset_type)
+            VALUES ('', '', '/static/images/info_tile.jpg', '', 0, 'xs', 'info')
+        """)
+        asset_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT OR REPLACE INTO tiles (tile_id, asset_id, updated_at) VALUES (?, ?, datetime('now'))",
+            (tile_id, asset_id)
+        )
+        print(f"Seeded info tile: asset {asset_id} → {tile_id}")
+
+    conn.commit()
+    conn.close()
+
+# _seed_info_tiles() called after get_tile_size_map() is defined (see below)
+
+
 # Minimal admin pin (only used if you later re-enable admin routes)
 ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "8375")
+
+# Upload limit: max artworks per email address
+UPLOAD_LIMIT = 4
 
 # Base URL for links in emails (override via env for production)
 BASE_URL = os.environ.get("TLG_BASE_URL", "https://thelastgallery.com")
@@ -70,8 +153,8 @@ if STRIPE_SECRET_KEY:
 TIER_CONFIG = {
     'unlock_xs': {'price_cents': 999, 'floor': 'xs', 'label': 'Unlock (XS)'},
     'floor_s':   {'price_cents': 2499, 'floor': 's', 'label': 'Small Floor'},
-    'floor_m':   {'price_cents': 3999, 'floor': 'm', 'label': 'Medium Floor'},
-    'floor_lg':  {'price_cents': 5999, 'floor': 'lg', 'label': 'Large Floor'},
+    'floor_m':   {'price_cents': 5999, 'floor': 'm', 'label': 'Medium Floor'},
+    'floor_lg':  {'price_cents': 9999, 'floor': 'lg', 'label': 'Large Floor'},
 }
 
 # Popup image optimization settings
@@ -212,6 +295,9 @@ def get_tiles_from_svg():
 def get_tile_size_map():
     """Return dict mapping tile_id -> size string from SVG cache."""
     return {t['id']: t['size'] for t in get_tiles_from_svg()}
+
+# Seed info tiles now that get_tile_size_map is available
+_seed_info_tiles()
 
 
 def pick_next_xs_tile_id():
@@ -520,7 +606,7 @@ def wall_state():
                    a.for_sale, a.sale_type, a.artist_contact,
                    a.contact1_type, a.contact1_value,
                    a.contact2_type, a.contact2_value,
-                   a.unlocked, a.qualified_floor
+                   a.unlocked, a.qualified_floor, a.asset_type
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
             ORDER BY t.tile_id
@@ -546,6 +632,7 @@ def wall_state():
                 "contact2_value": row["contact2_value"] or "",
                 "unlocked": row["unlocked"] or 0,
                 "qualified_floor": row["qualified_floor"] or "xs",
+                "asset_type": row["asset_type"] or "artwork",
             })
         conn.close()
         return jsonify({"ok": True, "assignments": assignments})
@@ -713,6 +800,22 @@ def save_tile_metadata(tile_id):
                     "error": "Artwork title already exists for this email."
                 }), 409
 
+        # Upload limit: max 4 artworks per email (new uploads only, admin bypass)
+        if not is_edit and contact1_value:
+            admin_pin = request.headers.get("X-Admin-Pin")
+            if admin_pin != ADMIN_PIN:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM assets WHERE LOWER(TRIM(contact1_value)) = LOWER(?) AND artist_name != '' AND asset_id != ?",
+                    (contact1_value, asset_id)
+                )
+                existing_count = cursor.fetchone()[0]
+                if existing_count >= UPLOAD_LIMIT:
+                    conn.close()
+                    return jsonify({
+                        "ok": False,
+                        "error": "Upload limit reached. An artist's work may occupy no more than 4 tiles in the gallery."
+                    }), 409
+
         # Capture old email before update (for edit code cleanup)
         cursor.execute("SELECT contact1_value FROM assets WHERE asset_id = ?", (asset_id,))
         old_asset = cursor.fetchone()
@@ -793,6 +896,97 @@ def save_tile_metadata(tile_id):
             "ok": False,
             "error": str(e)
         }), 500
+
+
+@app.route("/api/check_upload_limit", methods=["POST"])
+def check_upload_limit():
+    """Check if an email has reached the upload limit (4 artworks)."""
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"ok": False, "error": "email required"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT COUNT(*) FROM assets WHERE LOWER(TRIM(contact1_value)) = ? AND artist_name != ''",
+        (email,)
+    )
+    count = cursor.fetchone()[0]
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "count": count,
+        "limit": UPLOAD_LIMIT,
+        "allowed": count < UPLOAD_LIMIT
+    })
+
+
+@app.route("/api/abandon_upload", methods=["POST"])
+def abandon_upload():
+    """Clean up an abandoned upload (image uploaded but metadata never saved).
+
+    Safety guard: only deletes if asset has empty artist_name.
+    """
+    data = request.get_json() or {}
+    tile_id = (data.get("tile_id") or "").strip()
+    asset_id = data.get("asset_id")
+
+    if not tile_id or not asset_id:
+        return jsonify({"ok": False, "error": "tile_id and asset_id required"}), 400
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Safety: only delete if artist_name is empty (never completed) and not an info tile
+        cursor.execute(
+            "SELECT tile_url, popup_url, artist_name, asset_type FROM assets WHERE asset_id = ?",
+            (asset_id,)
+        )
+        asset = cursor.fetchone()
+
+        if not asset:
+            conn.close()
+            return jsonify({"ok": True, "message": "asset not found, nothing to clean"})
+
+        if (asset["asset_type"] or "artwork") == "info":
+            conn.close()
+            return jsonify({"ok": False, "error": "cannot abandon an info tile"}), 400
+
+        if (asset["artist_name"] or "").strip():
+            conn.close()
+            return jsonify({"ok": False, "error": "cannot abandon a completed upload"}), 400
+
+        # Delete uploaded files
+        for url_field in ("tile_url", "popup_url"):
+            url = asset[url_field] or ""
+            if url.startswith("/uploads/"):
+                filepath = os.path.join(UPLOAD_DIR, url[len("/uploads/"):])
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    pass
+
+        # Clear tile assignment
+        cursor.execute(
+            "UPDATE tiles SET asset_id = NULL, updated_at = datetime('now') WHERE tile_id = ?",
+            (tile_id,)
+        )
+
+        # Delete asset row
+        cursor.execute("DELETE FROM assets WHERE asset_id = ?", (asset_id,))
+
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/tile/<tile_id>/metadata", methods=["GET"])
@@ -1405,8 +1599,6 @@ def _run_shuffle():
         notification_candidates = []
 
         for o in occupied:
-            if not o['unlocked']:
-                continue
             aid = o['asset_id']
             if aid not in assignments:
                 continue
