@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def get_db():
@@ -224,6 +224,18 @@ def init_db():
         """)
         _set_schema_version(cursor, 8)
         print("Migration 8 complete: Purchase history table created")
+
+    # Migration 9: Asset type column (artwork vs info)
+    if current_version < 9:
+        print("Applying migration 9: Asset type column...")
+        cursor.execute("PRAGMA table_info(assets)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if 'asset_type' not in columns:
+            cursor.execute("ALTER TABLE assets ADD COLUMN asset_type TEXT NOT NULL DEFAULT 'artwork'")
+
+        _set_schema_version(cursor, 9)
+        print("Migration 9 complete: Asset type column added")
 
     conn.commit()
     conn.close()

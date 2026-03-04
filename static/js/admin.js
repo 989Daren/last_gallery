@@ -370,6 +370,43 @@
       }
     });
 
+    // "How it All Works" menu item opens the info modal
+    const menuItemHowItWorks = $("menu-item-howitworks");
+    const howItWorksOverlay = $("howItWorksOverlay");
+    const howItWorksCloseBtn = $("howItWorksCloseBtn");
+
+    function closeHowItWorksModal(silent) {
+      if (howItWorksOverlay) howItWorksOverlay.classList.add("hidden");
+      if (!silent) window.ConicalNav && window.ConicalNav.popFromUiClose();
+    }
+
+    function openHowItWorksModal() {
+      if (howItWorksOverlay) {
+        howItWorksOverlay.classList.remove("hidden");
+        window.ConicalNav && window.ConicalNav.pushToMatchUi();
+      }
+    }
+
+    menuItemHowItWorks?.addEventListener("click", () => {
+      closeHamburgerMenu();
+      openHowItWorksModal();
+    });
+
+    howItWorksCloseBtn?.addEventListener("click", () => closeHowItWorksModal());
+
+    howItWorksOverlay?.addEventListener("click", (e) => {
+      if (e.target === howItWorksOverlay) closeHowItWorksModal();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && howItWorksOverlay && !howItWorksOverlay.classList.contains("hidden")) {
+        closeHowItWorksModal();
+      }
+    });
+
+    // Expose for future info tile usage
+    window.openHowItWorksModal = openHowItWorksModal;
+
     // "A Human Centric Gallery" menu item opens the info modal
     const menuItemHumanCentric = $("menu-item-human-centric");
     const humanCentricOverlay = $("humanCentricOverlay");

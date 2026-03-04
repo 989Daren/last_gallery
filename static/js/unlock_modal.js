@@ -68,7 +68,7 @@
           '<div class="unlock-modal-step" data-step="1">' +
             '<div class="unlock-modal-icon">' + LOCK_OPEN_SVG + '</div>' +
             '<h2 class="unlock-modal-headline">Upgrade Your Artwork</h2>' +
-            '<p class="unlock-modal-subtitle">Enter your edit code to get started.</p>' +
+            '<p class="unlock-modal-subtitle">Enter the edit code that was sent to<br>your email when you uploaded your artwork.</p>' +
             '<div class="unlock-modal-input-group">' +
               '<label class="unlock-modal-label">Edit Code</label>' +
               '<input type="text" class="unlock-modal-input" id="unlockCodeInput" maxlength="8" placeholder="8-character code" autocomplete="off" />' +
@@ -96,12 +96,14 @@
           // Step 3: Upgrade Options
           '<div class="unlock-modal-step hidden" data-step="3">' +
             '<div class="unlock-selected-artwork" id="unlockSelectedArtwork"></div>' +
-            '<h2 class="unlock-modal-headline">Choose an Upgrade</h2>' +
+            '<h2 class="unlock-modal-headline">Eligible Upgrade:</h2>' +
+            '<div class="unlock-tier-current-size" id="unlockCurrentSize"></div>' +
             '<div class="unlock-tier-list" id="unlockTierList"></div>' +
             '<div class="unlock-tier-coming-soon">' +
               '<div class="unlock-tier-coming-soon-label">Coming Soon</div>' +
               '<div class="unlock-tier-coming-soon-title">Exhibit Tile</div>' +
-              '<div class="unlock-tier-coming-soon-price">$99.99</div>' +
+              '<div class="unlock-tier-coming-soon-price">$199.99</div>' +
+              '<div class="unlock-tier-onetime" style="text-align:left;margin-top:2px;">One-time payment</div>' +
               '<div class="unlock-tier-coming-soon-desc">A dedicated exhibit space to showcase your portfolio.</div>' +
             '</div>' +
             '<div class="unlock-tier-note">Use the same email for all uploads to qualify for future upgrade tiers.</div>' +
@@ -418,18 +420,13 @@
 
       tierList.innerHTML = '';
 
-      // Remove any previous tile size subtitle
-      var prevSubtitle = tierList.parentNode.querySelector(".unlock-tier-current-size");
-      if (prevSubtitle) prevSubtitle.remove();
-
-      // Show current tile size subtitle
-      if (data.current_tile_size) {
+      // Update current tile size display
+      var sizeEl = _overlay.querySelector("#unlockCurrentSize");
+      if (sizeEl && data.current_tile_size) {
         var sizeNames = {'xs': 'Extra Small', 's': 'Small', 'm': 'Medium', 'lg': 'Large'};
-        var displaySize = sizeNames[data.current_tile_size] || data.current_tile_size.toUpperCase();
-        var subtitle = document.createElement("div");
-        subtitle.className = "unlock-tier-current-size";
-        subtitle.textContent = "Currently in a " + displaySize + " tile";
-        tierList.parentNode.insertBefore(subtitle, tierList);
+        sizeEl.textContent = sizeNames[data.current_tile_size] || data.current_tile_size.toUpperCase();
+      } else if (sizeEl) {
+        sizeEl.textContent = '';
       }
 
       data.tiers.forEach(function(tier) {
@@ -469,6 +466,7 @@
           '<div class="unlock-tier-header">' +
             '<div class="unlock-tier-label">' + escapeHtml(tier.label) + '</div>' +
             '<div class="unlock-tier-price-wrap">' + priceHtml + '</div>' +
+            '<div class="unlock-tier-onetime">One-time payment</div>' +
           '</div>' +
           '<div class="unlock-tier-desc">' + escapeHtml(descText) + '</div>' +
           reasonHtml +
