@@ -934,6 +934,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ========================================
 
   const editBannerOverlay = document.getElementById("editBannerOverlay");
+  const editBannerCloseBtn = document.getElementById("editBannerCloseBtn");
   const editBannerCancelBtn = document.getElementById("editBannerCancelBtn");
   const editBannerContinueBtn = document.getElementById("editBannerContinueBtn");
   const menuItemEdit = document.getElementById("menu-item-edit");
@@ -1015,9 +1016,27 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  if (editBannerCloseBtn) {
+    editBannerCloseBtn.addEventListener("click", closeEditBanner);
+  }
   if (editBannerCancelBtn) {
     editBannerCancelBtn.addEventListener("click", closeEditBanner);
   }
+
+  // Tap anywhere to dismiss — except interactive elements
+  if (editBannerOverlay) {
+    editBannerOverlay.addEventListener("click", (e) => {
+      if (e.target.closest("a, button, input, textarea, select")) return;
+      closeEditBanner();
+    });
+  }
+
+  // Escape key dismiss
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && editBannerOverlay && !editBannerOverlay.classList.contains("hidden")) {
+      closeEditBanner();
+    }
+  });
 
   if (editBannerContinueBtn) {
     editBannerContinueBtn.addEventListener("click", async () => {
