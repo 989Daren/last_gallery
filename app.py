@@ -518,7 +518,8 @@ def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, 
         access_code_html = (
             '<p style="margin-top:16px; padding:12px; background:#1a1a1a; border:1px solid #D4A843; '
             'border-radius:6px; text-align:center;">'
-            'Your access code: <strong style="color:#D4A843; font-size:20px; letter-spacing:2px;">'
+            '<span style="color:#ffffff; font-size:15px;">Your access code:</span> '
+            '<strong style="color:#D4A843; font-size:17px; letter-spacing:2px;">'
             f'{safe_code}</strong></p>'
         )
         access_code_plain = f"\nYour access code: {access_code}\n"
