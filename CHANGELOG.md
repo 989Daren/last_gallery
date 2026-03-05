@@ -2,6 +2,29 @@
 
 ---
 
+## 2026-03-05
+
+### Dismissible Overlay Registry
+- **Tap-anywhere dismiss**: All info overlays (shuffle info, human centric, how it works, pricing, unlock info) now close on tap anywhere — backdrop or card content — except interactive elements (links, buttons, inputs)
+- **`registerDismissible()` hash tracking**: New `_pushedHash` flag tracks whether `open()` pushed a ConicalNav hash. On close, only pops history if a hash was actually pushed. Prevents sub-overlays from closing parent modals.
+- **Submission Guidelines fix**: Opening Human Centric overlay from upload modal no longer closes the upload modal underneath — skips ConicalNav hash push so `#upload` hash is preserved
+
+### Upgrade Notification Email Improvements
+- **Access code included**: Post-shuffle upgrade notification emails now include the artist's edit code (called "access code" in this context) in a styled gold-bordered box, so artists don't have to hunt for it
+- **Language cleanup**: Replaced "lock" terminology with "upgrade" throughout the email — "Upgrade Your Tile" CTA, "You can upgrade to this size", "Hurry and upgrade before the next weekly shuffle!"
+
+### Pricing Modal & Menu Updates
+- **Upgrade Pricing modal**: New hamburger menu item with tier comparison columns (XS Locked → Exhibit), discount badges, footnotes, and "Upgrade Now" CTA that opens the unlock modal
+- **How it All Works modal**: New hamburger menu item explaining the upload → unlock → shuffle → upgrade cycle
+- **Small tier discount badge**: 37% OFF badge added to Small floor tier in upgrade modal
+- **Hamburger menu reorder**: Now 6 items — Unlock, Edit, How it All Works, Upgrade Pricing, Human Centric, Admin
+
+### Code Cleanup
+- **Dismissible refactor**: Replaced per-overlay boilerplate (close button, backdrop click, Escape handler) in countdown.js, admin.js, and main.js with unified `registerDismissible()` calls
+- **ConicalNav simplification**: Removed individual `isCountdownInfoOpen`, `isHowItWorksOpen`, `isHumanCentricOpen` checks; replaced with registry loop in `desiredHash()` and `syncUiToHash()`
+
+---
+
 ## 2026-03-03
 
 ### "Lock What You Landed On" Upgrade Model

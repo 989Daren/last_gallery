@@ -318,13 +318,21 @@ window.refreshCountdown()         // Re-fetch and apply countdown state (from co
 window.openUnlockModal(assetId, tileId)  // Open unlock modal (from unlock_modal.js)
 window.closeUnlockModal()         // Close unlock modal (from unlock_modal.js)
 window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_modal.js)
+window.registerDismissible(overlayId, closeBtnId, hashName)  // Register overlay for unified dismiss behavior
 ```
+
+### Dismissible Overlay Registry (main.js)
+- **`registerDismissible()`** registers an overlay for unified close behavior: close button, tap anywhere (except interactive elements), Escape key, and back button
+- **Tap-anywhere dismiss**: Clicks on the overlay backdrop or card content close the overlay; clicks on `<a>`, `<button>`, `<input>`, `<textarea>`, `<select>` elements are ignored
+- **Hash tracking**: `_pushedHash` flag tracks whether `open()` pushed a ConicalNav hash. On `close()`, only pops hash if one was pushed. This allows sub-overlays (e.g., Human Centric opened from upload modal) to close without popping the parent's hash.
+- **Registered overlays**: countdownInfo, humanCentric, howItWorks, pricing, unlockInfo
 
 ### admin.js Module
 - IIFE pattern with initialization guards
 - PIN validated server-side via `/api/admin/history_status` before unlocking modal
 - PIN stored in closure-scoped `_adminPin` variable, exposed via `window.getAdminPin()` for cross-module admin requests, persists until page refresh
-- Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle, countdown admin controls, human centric gallery modal
+- Handles: modal PIN gate, clear/move/undo actions, shuffle, tile labels toggle, countdown admin controls
+- Registers dismissible overlays (pricing, howItWorks, humanCentric) and wires hamburger menu triggers
 - Guards prevent duplicate event handler registration
 
 ## Countdown Timer Bar
@@ -344,8 +352,10 @@ window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_
 Menu items in order:
 1. **Unlock to Upgrade Your Artwork!** — opens upgrade modal (3-step flow)
 2. **Edit Your Artwork Submission** — opens edit banner
-3. **A Human Centric Gallery** — opens info modal (see below)
-4. **Admin** — opens admin modal (PIN gated)
+3. **How it All Works** — opens info modal explaining the upload → unlock → shuffle → upgrade cycle
+4. **Upgrade Pricing** — opens pricing modal with tier comparison columns and "Upgrade Now" CTA
+5. **A Human Centric Gallery** — opens info modal (see below)
+6. **Admin** — opens admin modal (PIN gated)
 
 ## Upgrade Modal (unlock_modal.js)
 Three-step purchase flow using edit codes for identity ("lock what you landed on" model):
@@ -362,9 +372,9 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **Structure**: Reuses `countdown-info-card` pattern (gold accent bar, body wrapper, absolute-positioned close button)
 - **Image**: `static/images/artist_group.png` (656x500) at top, full-width with rounded corners
 - **Content**: Emphasizes human touch in creative process; allows AI as a tool (collage, reference); rejects raw, unedited AI-generated images; warns non-conforming submissions may be removed
-- **Dismiss**: Close button (X), backdrop tap, Escape key, or back button
+- **Dismiss**: Close button (X), tap anywhere on popup or backdrop (except interactive elements), Escape key, or back button
 - **ConicalNav**: Pushes `#humancentric` hash for back-button navigation on mobile
-- **Also opened from**: "Submission Guidelines" link in upload modal (also pushes hash)
+- **Also opened from**: "Submission Guidelines" link in upload modal (opens without hash push so upload modal stays open underneath)
 
 ## Shuffle & Unlock Rules (Qualified Floor Model)
 - **New uploads** always land in an XS tile (`pick_next_xs_tile_id()` in `app.py`). Available XS count accounts for floor-xs unlocked artwork in non-XS tiles needing a reserved XS slot.
@@ -374,7 +384,7 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **`qualified_floor`** column (values: xs, s, m, lg): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment.
 - **"Lock what you landed on"**: Artists can only purchase the floor tier matching their artwork's current tile size. Creates urgency around the weekly shuffle cycle — land in a bigger tile, lock it in before the next shuffle.
 - **Stripe integration**: `/api/stripe/checkout` creates a Stripe Checkout Session for a tier purchase. Webhook (`/api/stripe/webhook`) applies the upgrade on `checkout.session.completed`. Tiers: `unlock_xs` ($9.99), `floor_s` ($24.99), `floor_m` ($39.99), `floor_lg` ($59.99). Defined in `TIER_CONFIG` dict in `app.py`. Uses inline `price_data` (no pre-created Stripe Price IDs). Fulfillment is idempotent via `purchase_history` table.
-- **Post-shuffle notifications**: After each shuffle, `_run_shuffle()` emails artists whose unlocked artwork landed in a tile above their current floor. Email includes artwork title, new tile size, price to lock in, and CTA link (`/?upgrade=1&asset_id=X`). Uses `send_upgrade_notification()`. Wrapped in try/except — failures never break the shuffle.
+- **Post-shuffle notifications**: After each shuffle, `_run_shuffle()` emails artists whose unlocked artwork landed in a tile above their current floor. Email includes artwork title, new tile size, price to upgrade, access code (edit code, called "access code" in this context), and CTA link (`/?upgrade=1&asset_id=X`). Uses `send_upgrade_notification()`. Wrapped in try/except — failures never break the shuffle.
 - **`/api/lock_tile`**: Admin/direct-use endpoint, sets `qualified_floor` to artwork's current tile size + `unlocked=1`. Rejects XS locks.
 - **Derangement rule**: Every artwork must change position during a shuffle — no artwork may remain in its previous tile. The algorithm excludes each artwork's original tile from candidates; if the original tile is the last remaining in its pool, a swap with a previously-assigned artwork resolves it.
 - **Admin force_unlock**: `/api/admin/force_unlock` sets unlocked explicitly (0 or 1). Locking (unlocked=0) also resets `qualified_floor` to 'xs'.
@@ -476,7 +486,7 @@ systemctl --user status thelastgallery-tunnel.service
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
 - `CLAUDE_URL.txt` in project root contains a raw GitHub URL pinned to the latest commit hash that changed `CLAUDE.md` — auto-generated by the post-commit hook
-- Last reviewed: 2026-03-04
+- Last reviewed: 2026-03-05
 
 ---
 
