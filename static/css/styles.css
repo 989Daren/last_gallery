@@ -1387,7 +1387,7 @@ label {
 
 .edit-code-section input[type="text"]:focus {
   outline: none;
-  border-color: #888;
+  border-color: rgba(212, 168, 67, 0.5);
 }
 
 .edit-code-error {
@@ -1433,10 +1433,19 @@ label {
 .resend-code-section input {
   flex: 1;
   min-width: 180px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  background: #0a0a0a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #fff;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
 }
 
-.resend-code-section button {
-  white-space: nowrap;
+.resend-code-section input:focus {
+  outline: none;
+  border-color: rgba(212, 168, 67, 0.5);
 }
 
 .resend-code-msg {
@@ -1448,6 +1457,99 @@ label {
 
 .resend-code-msg.hidden {
   display: none;
+}
+
+/* ==========================================
+   Edit Banner Card (countdown-info-card variant)
+   ========================================== */
+
+.edit-banner-card {
+  width: min(480px, 92%);
+}
+
+.edit-banner-body {
+  padding: 24px 28px 20px;
+}
+
+.edit-banner-body h3 {
+  margin: 0 0 10px;
+}
+
+.edit-banner-intro {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0 0 4px;
+}
+
+.edit-banner-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.edit-banner-cancel {
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.edit-banner-cancel:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.edit-banner-continue {
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  transition: filter 0.2s;
+}
+
+.edit-banner-continue:hover {
+  filter: brightness(1.1);
+}
+
+.resend-btn {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.resend-btn:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+@media (max-width: 600px) {
+  .edit-banner-body {
+    padding: 18px 20px 16px;
+  }
+  .edit-banner-actions {
+    flex-direction: column;
+  }
+  .edit-banner-actions button {
+    width: 100%;
+  }
 }
 
 .email-change-warning {

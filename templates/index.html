@@ -248,26 +248,30 @@
   </div>
 
   <!-- Edit Submission Banner (shown when user clicks "Edit Your Artwork Submission") -->
-  <div id="editBannerOverlay" class="confirm-banner-overlay hidden" aria-hidden="true">
-    <div id="editBanner" class="confirm-banner" role="dialog" aria-modal="true">
-      <h2 class="confirm-banner-heading">A note about editing</h2>
-      <p class="confirm-banner-text">Once submitted, artwork becomes a permanent part of The Last Gallery time capsule. However, if you need to correct artist or artwork related information, you're welcome to do that here.</p>
-      <div class="edit-code-section">
-        <label for="editTitleInput" class="edit-code-label">Artwork title</label>
-        <input id="editTitleInput" type="text" maxlength="120" placeholder="Enter the title of your artwork" autocomplete="off" spellcheck="false" />
-        <label for="editCodeInput" class="edit-code-label">Edit code sent to your email</label>
-        <input id="editCodeInput" type="text" maxlength="8" placeholder="enter/paste your edit code here" autocomplete="off" spellcheck="false" />
-        <div id="editCodeError" class="edit-code-error hidden">Invalid edit code. Please try again.</div>
-        <a href="#" id="forgotCodeLink" class="forgot-code-link">Forgot your edit code?</a>
-        <div id="resendCodeSection" class="resend-code-section hidden">
-          <input id="resendEmailInput" type="email" maxlength="120" placeholder="enter your email address" autocomplete="off" />
-          <button id="resendCodeBtn" type="button" class="secondary-btn">Resend</button>
-          <div id="resendCodeMsg" class="resend-code-msg hidden"></div>
+  <div id="editBannerOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
+    <div class="countdown-info-card edit-banner-card">
+      <div class="countdown-info-accent"></div>
+      <div class="countdown-info-body edit-banner-body">
+        <button id="editBannerCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
+        <h3>Edit Your Submission</h3>
+        <p class="edit-banner-intro">Once submitted, artwork becomes a permanent part of The Last Gallery time capsule. However, if you need to correct artist or artwork related information, you're welcome to do that here.</p>
+        <div class="edit-code-section">
+          <label for="editTitleInput" class="edit-code-label">Artwork title</label>
+          <input id="editTitleInput" type="text" maxlength="120" placeholder="Enter the title of your artwork" autocomplete="off" spellcheck="false" />
+          <label for="editCodeInput" class="edit-code-label">Edit code sent to your email</label>
+          <input id="editCodeInput" type="text" maxlength="8" placeholder="enter/paste your edit code here" autocomplete="off" spellcheck="false" />
+          <div id="editCodeError" class="edit-code-error hidden">Invalid edit code. Please try again.</div>
+          <a href="#" id="forgotCodeLink" class="forgot-code-link">Forgot your edit code?</a>
+          <div id="resendCodeSection" class="resend-code-section hidden">
+            <input id="resendEmailInput" type="email" maxlength="120" placeholder="enter your email address" autocomplete="off" />
+            <button id="resendCodeBtn" type="button" class="resend-btn">Resend</button>
+            <div id="resendCodeMsg" class="resend-code-msg hidden"></div>
+          </div>
         </div>
-      </div>
-      <div class="confirm-banner-actions">
-        <button id="editBannerCancelBtn" type="button" class="secondary-btn">Cancel</button>
-        <button id="editBannerContinueBtn" type="button" class="primary-btn">Continue</button>
+        <div class="edit-banner-actions">
+          <button id="editBannerCancelBtn" type="button" class="edit-banner-cancel">Cancel</button>
+          <button id="editBannerContinueBtn" type="button" class="edit-banner-continue">Continue</button>
+        </div>
       </div>
     </div>
   </div>
