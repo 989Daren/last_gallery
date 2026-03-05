@@ -498,7 +498,7 @@ def send_edit_code(email, code, artwork_title=""):
         app.logger.exception("[EDIT CODE] Failed to send email to %s", email)
 
 
-def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, asset_id):
+def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, asset_id, access_code=''):
     """Send upgrade notification email when artwork lands in a bigger tile after shuffle."""
     api_key = os.environ.get("RESEND_API_KEY")
     if not api_key:
@@ -511,25 +511,39 @@ def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, 
     safe_title = html_mod.escape(artwork_title) if artwork_title else "your artwork"
     upgrade_link = f"{BASE_URL}/?upgrade=1&asset_id={asset_id}"
 
+    access_code_html = ''
+    access_code_plain = ''
+    if access_code:
+        safe_code = html_mod.escape(access_code)
+        access_code_html = (
+            '<p style="margin-top:16px; padding:12px; background:#1a1a1a; border:1px solid #D4A843; '
+            'border-radius:6px; text-align:center;">'
+            'Your access code: <strong style="color:#D4A843; font-size:20px; letter-spacing:2px;">'
+            f'{safe_code}</strong></p>'
+        )
+        access_code_plain = f"\nYour access code: {access_code}\n"
+
     html_body = (
         '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
         f'<h2 style="color:#D4A843;">Your artwork landed in a {display_name} tile!</h2>'
         f'<p style="font-size:18px;"><strong>{safe_title}</strong> has been shuffled into a <strong>{display_name}</strong> tile.</p>'
-        f'<p>You can lock it in at this size for <strong>{price_str}</strong> — '
+        f'<p>You can upgrade to this size for <strong>{price_str}</strong> — '
         'your artwork will never drop below this tile size during future shuffles.</p>'
-        '<p style="font-size:16px; color:#D4A843;"><strong>Lock it in before the next shuffle!</strong></p>'
+        '<p style="font-size:16px; color:#D4A843;"><strong>Hurry and upgrade before the next weekly shuffle!</strong></p>'
+        f'{access_code_html}'
         f'<p><a href="{html_mod.escape(upgrade_link)}" style="display:inline-block; padding:12px 24px; '
         'background:linear-gradient(135deg,#b8860b,#ffd700); color:#000; text-decoration:none; '
-        'border-radius:6px; font-weight:bold;">Lock In Your Tile</a></p>'
+        'border-radius:6px; font-weight:bold;">Upgrade Your Tile</a></p>'
         '</div>'
     )
 
     plain_body = (
         f"Your artwork landed in a {display_name} tile!\n\n"
         f"{artwork_title or 'Your artwork'} has been shuffled into a {display_name} tile.\n\n"
-        f"You can lock it in at this size for {price_str} — "
+        f"You can upgrade to this size for {price_str} — "
         "your artwork will never drop below this tile size during future shuffles.\n\n"
-        "Lock it in before the next shuffle!\n\n"
+        "Hurry and upgrade before the next weekly shuffle!\n"
+        f"{access_code_plain}\n"
         f"{upgrade_link}\n"
     )
 
@@ -1618,6 +1632,21 @@ def _run_shuffle():
             )
             asset_info = {row['asset_id']: row for row in cursor.fetchall()}
 
+            # Batch-fetch edit codes for notification emails
+            notify_emails = set()
+            for aid, _ in notification_candidates:
+                info = asset_info.get(aid)
+                if info:
+                    em = (info['contact1_value'] or '').strip()
+                    if em:
+                        notify_emails.add(em)
+            edit_code_map = {}
+            if notify_emails:
+                email_list = list(notify_emails)
+                ep = ','.join('?' * len(email_list))
+                cursor.execute(f"SELECT email, code FROM edit_codes WHERE email IN ({ep})", email_list)
+                edit_code_map = {row['email']: row['code'] for row in cursor.fetchall()}
+
             for aid, new_size in notification_candidates:
                 info = asset_info.get(aid)
                 if not info:
@@ -1627,7 +1656,8 @@ def _run_shuffle():
                     continue
                 tier_name = tier_for_size.get(new_size)
                 price_cents = TIER_CONFIG[tier_name]['price_cents'] if tier_name else 0
-                send_upgrade_notification(email, info['artwork_title'] or '', new_size, price_cents, aid)
+                access_code = edit_code_map.get(email, '')
+                send_upgrade_notification(email, info['artwork_title'] or '', new_size, price_cents, asset_id=aid, access_code=access_code)
     except Exception:
         app.logger.exception("[SHUFFLE] Upgrade notification error (shuffle succeeded)")
 

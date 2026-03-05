@@ -370,70 +370,28 @@
       }
     });
 
-    // "How it All Works" menu item opens the info modal
-    const menuItemHowItWorks = $("menu-item-howitworks");
-    const howItWorksOverlay = $("howItWorksOverlay");
-    const howItWorksCloseBtn = $("howItWorksCloseBtn");
+    // Register dismissible overlays (close btn, backdrop, escape, back button — all handled)
+    const pricing = window.registerDismissible("pricingOverlay", "pricingCloseBtn", "pricing");
+    const howItWorks = window.registerDismissible("howItWorksOverlay", "howItWorksCloseBtn", "howitworks");
+    const humanCentric = window.registerDismissible("humanCentricOverlay", "humanCentricCloseBtn", "humancentric");
 
-    function closeHowItWorksModal(silent) {
-      if (howItWorksOverlay) howItWorksOverlay.classList.add("hidden");
-      if (!silent) window.ConicalNav && window.ConicalNav.popFromUiClose();
-    }
+    // Menu item → open triggers
+    $("menu-item-pricing")?.addEventListener("click", () => { closeHamburgerMenu(); pricing.open(); });
+    $("menu-item-howitworks")?.addEventListener("click", () => { closeHamburgerMenu(); howItWorks.open(); });
+    $("menu-item-human-centric")?.addEventListener("click", () => { closeHamburgerMenu(); humanCentric.open(); });
 
-    function openHowItWorksModal() {
-      if (howItWorksOverlay) {
-        howItWorksOverlay.classList.remove("hidden");
-        window.ConicalNav && window.ConicalNav.pushToMatchUi();
-      }
-    }
+    // Expose for info tile usage + upload modal guidelines link
+    window.openHowItWorksModal = howItWorks.open;
 
-    menuItemHowItWorks?.addEventListener("click", () => {
-      closeHamburgerMenu();
-      openHowItWorksModal();
-    });
-
-    howItWorksCloseBtn?.addEventListener("click", () => closeHowItWorksModal());
-
-    howItWorksOverlay?.addEventListener("click", (e) => {
-      if (e.target === howItWorksOverlay) closeHowItWorksModal();
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && howItWorksOverlay && !howItWorksOverlay.classList.contains("hidden")) {
-        closeHowItWorksModal();
-      }
-    });
-
-    // Expose for future info tile usage
-    window.openHowItWorksModal = openHowItWorksModal;
-
-    // "A Human Centric Gallery" menu item opens the info modal
-    const menuItemHumanCentric = $("menu-item-human-centric");
-    const humanCentricOverlay = $("humanCentricOverlay");
-    const humanCentricCloseBtn = $("humanCentricCloseBtn");
-
-    function closeHumanCentricModal(silent) {
-      if (humanCentricOverlay) humanCentricOverlay.classList.add("hidden");
-      if (!silent) window.ConicalNav && window.ConicalNav.popFromUiClose();
-    }
-
-    menuItemHumanCentric?.addEventListener("click", () => {
-      closeHamburgerMenu();
-      if (humanCentricOverlay) {
-        humanCentricOverlay.classList.remove("hidden");
-        window.ConicalNav && window.ConicalNav.pushToMatchUi();
-      }
-    });
-
-    humanCentricCloseBtn?.addEventListener("click", () => closeHumanCentricModal());
-
-    humanCentricOverlay?.addEventListener("click", (e) => {
-      if (e.target === humanCentricOverlay) closeHumanCentricModal();
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && humanCentricOverlay && !humanCentricOverlay.classList.contains("hidden")) {
-        closeHumanCentricModal();
+    // "Upgrade Now" CTA in pricing modal → close pricing, open unlock modal
+    // Note: Can't use pricing.close() here — its async history.back() would
+    // clobber the unlock modal. Instead, hide DOM + replace hash directly.
+    $("pricingUpgradeBtn")?.addEventListener("click", () => {
+      const overlay = $("pricingOverlay");
+      if (overlay) overlay.classList.add("hidden");
+      history.replaceState(null, '', location.pathname);
+      if (typeof window.openUnlockModal === "function") {
+        window.openUnlockModal(null, null);
       }
     });
 

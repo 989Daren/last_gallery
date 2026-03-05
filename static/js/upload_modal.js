@@ -885,7 +885,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const hcOverlay = document.getElementById("humanCentricOverlay");
       if (hcOverlay) {
         hcOverlay.classList.remove("hidden");
-        window.ConicalNav && window.ConicalNav.pushToMatchUi();
+        // No ConicalNav push — this is a sub-overlay on top of upload modal.
+        // Hash push would change from #upload to #humancentric, causing
+        // syncUiToHash to close the upload modal underneath.
       }
     });
   }

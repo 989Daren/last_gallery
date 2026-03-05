@@ -45,6 +45,9 @@
             <button id="menu-item-howitworks" role="menuitem">How it All Works</button>
           </li>
           <li role="none">
+            <button id="menu-item-pricing" role="menuitem">Upgrade Pricing</button>
+          </li>
+          <li role="none">
             <button id="menu-item-unlock" role="menuitem">
               <svg class="menu-unlock-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
               Unlock to Upgrade Your Artwork!
@@ -453,6 +456,89 @@
         <p><strong>3. Every week, the gallery shuffles</strong> — All artwork is randomly reassigned to new tiles. Your unlocked artwork may find itself in a Small, Medium, or even a Large tile!</p>
         <p><strong>4. Lock in your size</strong> — If you land in a larger tile, you can choose to upgrade to that tile level, ensuring your artwork will never fall below that size during future shuffles.</p>
         <p><strong>Important:</strong> When the gallery is completely full, no new art will be accepted and every existing piece will be permanently frozen in place. At that point, the Gallery has become a time capsule of creative work. On the day of the final random shuffle, the tile size you've upgraded to is where it stays for the life of The Last Gallery.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upgrade Pricing Modal -->
+  <div id="pricingOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
+    <div class="countdown-info-card pricing-card">
+      <div class="countdown-info-accent"></div>
+      <div class="countdown-info-body pricing-body">
+        <button id="pricingCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
+        <h3>Upgrade Pricing</h3>
+        <p class="pricing-intro">All artwork begins in a locked XS (extra small) tile size and must be unlocked before it's able to land in a larger tile during the weekly shuffle. Note: limit 4 tiles (of any size) per artist.</p>
+        <div class="pricing-spacer"></div>
+        <div class="pricing-scroll-wrap">
+          <div class="pricing-columns">
+            <div class="pricing-col">
+              <div class="pricing-col-header">XS Locked</div>
+              <div class="pricing-col-req">&nbsp;</div>
+              <div class="pricing-col-desc">Included in weekly shuffles. Restricted to XS tiles only.</div>
+              <div class="pricing-col-price-wrap">
+                <div class="pricing-col-price">FREE</div>
+                <div class="pricing-col-subtext">for the life of the gallery!</div>
+              </div>
+            </div>
+            <div class="pricing-col">
+              <div class="pricing-col-header">XS Unlocked</div>
+              <div class="pricing-col-req">&nbsp;</div>
+              <div class="pricing-col-desc">Eligible to land in all tile sizes during weekly shuffle&nbsp;*</div>
+              <div class="pricing-col-price-wrap">
+                <div class="pricing-col-badge">50% OFF</div>
+                <div class="pricing-col-original">$19.99</div>
+                <div class="pricing-col-price">$9.99</div>
+                <div class="pricing-col-payment">One-time</div>
+              </div>
+            </div>
+            <div class="pricing-col">
+              <div class="pricing-col-header">Small</div>
+              <div class="pricing-col-req">Must be unlocked **</div>
+              <div class="pricing-col-desc">Never shuffles below a Small tile</div>
+              <div class="pricing-col-price-wrap">
+                <div class="pricing-col-badge">37% OFF</div>
+                <div class="pricing-col-original">$39.99</div>
+                <div class="pricing-col-price">$24.99</div>
+                <div class="pricing-col-payment">One-time</div>
+              </div>
+            </div>
+            <div class="pricing-col">
+              <div class="pricing-col-header">Medium</div>
+              <div class="pricing-col-req">Must be unlocked **</div>
+              <div class="pricing-col-desc">Never shuffles below a Medium tile</div>
+              <div class="pricing-col-price-wrap">
+                <div class="pricing-col-price">$59.99</div>
+                <div class="pricing-col-payment">One-time</div>
+              </div>
+            </div>
+            <div class="pricing-col">
+              <div class="pricing-col-header">Large</div>
+              <div class="pricing-col-req">Must be unlocked **</div>
+              <div class="pricing-col-desc">Never shuffles below a Large tile</div>
+              <div class="pricing-col-price-wrap">
+                <div class="pricing-col-price">$99.99</div>
+                <div class="pricing-col-payment">One-time</div>
+              </div>
+            </div>
+            <div class="pricing-col pricing-col--coming">
+              <div class="pricing-col-header">Exhibit</div>
+              <div class="pricing-col-req">Coming Soon</div>
+              <div class="pricing-col-desc">A dedicated space to showcase your portfolio</div>
+              <div class="pricing-col-price-wrap">
+                <div class="pricing-col-price">$199.99</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pricing-footnotes">
+          <p>* Smaller size categories contain more tiles, giving higher odds of landing in them.</p>
+          <p>** Artwork must be unlocked and currently occupying the larger tile size (after a shuffle) to purchase that upgrade. After landing in a larger tile, you only have 1 week (until the next shuffle) to decide to upgrade.</p>
+        </div>
+        <div class="pricing-policies">
+          <p>All purchases are one-time payments. Prices may increase as the gallery fills.</p>
+          <p>All sales are final. For technical issues, contact <a href="mailto:admin@thelastgallery.com">admin@thelastgallery.com</a>.</p>
+        </div>
+        <button id="pricingUpgradeBtn" class="pricing-cta" type="button">Upgrade Now</button>
       </div>
     </div>
   </div>
