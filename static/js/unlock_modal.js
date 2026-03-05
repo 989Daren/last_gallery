@@ -447,6 +447,11 @@
             '<span class="unlock-tier-price-original">' + formatPrice(1999) + '</span> ' +
             '<span class="unlock-tier-price">' + formatPrice(tier.price_cents) + '</span> ' +
             '<span class="unlock-tier-badge">50% OFF</span>';
+        } else if (tier.tier === 'floor_s' && tier.status === 'available') {
+          priceHtml =
+            '<span class="unlock-tier-price-original">' + formatPrice(3999) + '</span> ' +
+            '<span class="unlock-tier-price">' + formatPrice(tier.price_cents) + '</span> ' +
+            '<span class="unlock-tier-badge">37% OFF</span>';
         } else {
           priceHtml = '<span class="unlock-tier-price">' + formatPrice(tier.price_cents) + '</span>';
         }

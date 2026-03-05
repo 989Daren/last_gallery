@@ -130,27 +130,10 @@
   // Public API for admin.js
   window.refreshCountdown = fetchAndApply;
 
-  // Info modal
+  // Info modal (dismissal handled by registerDismissible)
   function initInfoModal() {
-    const infoBtn = $("countdownInfoBtn");
-    const overlay = $("countdownInfoOverlay");
-    const closeBtn = $("countdownInfoCloseBtn");
-
-    function open() {
-      if (overlay) overlay.classList.remove("hidden");
-      window.ConicalNav && window.ConicalNav.pushToMatchUi();
-    }
-    function close(silent) {
-      if (overlay) overlay.classList.add("hidden");
-      if (!silent) window.ConicalNav && window.ConicalNav.popFromUiClose();
-    }
-
-    infoBtn?.addEventListener("click", open);
-    closeBtn?.addEventListener("click", () => close());
-    overlay?.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && overlay && !overlay.classList.contains("hidden")) close();
-    });
+    const countdownInfo = window.registerDismissible("countdownInfoOverlay", "countdownInfoCloseBtn", "shuffleinfo");
+    $("countdownInfoBtn")?.addEventListener("click", countdownInfo.open);
   }
 
   // Initialize on DOM ready

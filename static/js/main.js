@@ -525,13 +525,64 @@ window.scrollToTile = scrollToTile;
 window.playTileSheen = playTileSheen;
 
 // ==============================
+// ==============================
+// Dismissible Overlay Registry
+// Unified close behavior: close button, backdrop tap, Escape, back button.
+// Call registerDismissible() once per overlay — replaces per-overlay boilerplate.
+// ==============================
+const _dismissibleRegistry = [];
+
+window.registerDismissible = function(overlayId, closeBtnId, hashName) {
+  const overlay = document.getElementById(overlayId);
+  if (!overlay) return { open() {}, close() {} };
+
+  const closeBtn = closeBtnId ? document.getElementById(closeBtnId) : null;
+  let _pushedHash = false;
+
+  function close(silent) {
+    const shouldPop = _pushedHash;
+    _pushedHash = false;
+    overlay.classList.add("hidden");
+    if (!silent && shouldPop) window.ConicalNav && window.ConicalNav.popFromUiClose();
+  }
+
+  function open() {
+    overlay.classList.remove("hidden");
+    _pushedHash = true;
+    window.ConicalNav && window.ConicalNav.pushToMatchUi();
+  }
+
+  if (closeBtn) closeBtn.addEventListener("click", () => close());
+  // Tap anywhere to dismiss — except interactive elements (links, buttons, inputs)
+  overlay.addEventListener("click", (e) => {
+    if (e.target.closest("a, button, input, textarea, select")) return;
+    close();
+  });
+
+  const entry = { overlay, hashName, isOpen: () => !overlay.classList.contains("hidden"), close, open };
+  _dismissibleRegistry.push(entry);
+  return entry;
+};
+
+// Unified Escape handler for all registered overlays (topmost open one closes)
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  for (let i = _dismissibleRegistry.length - 1; i >= 0; i--) {
+    if (_dismissibleRegistry[i].isOpen()) {
+      _dismissibleRegistry[i].close();
+      return;
+    }
+  }
+});
+
+// ==============================
 // ConicalNav: Back button closes UI layers (no history weirdness).
 // Hash encodes layer stack: "", "#art", "#art/ribbon", "#upload".
 // ==============================
 const ConicalNav = {
   ignoreNextHashChange: false,
 
-  // ---- Update these selectors / checks to match your actual UI ----
+  // ---- Checks for non-registry UI layers ----
   isRibbonOpen() {
     return (typeof isInfoRibbonOpen === "function") ? isInfoRibbonOpen() : false;
   },
@@ -544,18 +595,6 @@ const ConicalNav = {
   isUnlockOpen() {
     return (typeof window.isUnlockModalOpen === "function") ? window.isUnlockModalOpen() : false;
   },
-  isCountdownInfoOpen() {
-    const el = document.getElementById("countdownInfoOverlay");
-    return !!el && !el.classList.contains("hidden");
-  },
-  isHowItWorksOpen() {
-    const el = document.getElementById("howItWorksOverlay");
-    return !!el && !el.classList.contains("hidden");
-  },
-  isHumanCentricOpen() {
-    const el = document.getElementById("humanCentricOverlay");
-    return !!el && !el.classList.contains("hidden");
-  },
   isZoomedOut() {
     return typeof zoomState !== "undefined" && zoomState.scale < 0.999;
   },
@@ -563,10 +602,11 @@ const ConicalNav = {
   // Choose the desired conical hash based on current UI state
   // Builds compound hash for layered states: #zoom/art/ribbon
   desiredHash() {
-    // Full-screen overlays don't layer with zoom
-    if (this.isHowItWorksOpen()) return "#howitworks";
-    if (this.isHumanCentricOpen()) return "#humancentric";
-    if (this.isCountdownInfoOpen()) return "#shuffleinfo";
+    // Check registered dismissible overlays first
+    for (const entry of _dismissibleRegistry) {
+      if (entry.hashName && entry.isOpen()) return "#" + entry.hashName;
+    }
+    // Non-registry full-screen overlays
     if (this.isUnlockOpen()) return "#unlock";
     if (this.isUploadOpen()) return "#upload";
 
@@ -621,25 +661,11 @@ const ConicalNav = {
       try { closeArtworkPopup(true); } catch (e) {}
     }
 
-    // Close how it works if hash no longer includes howitworks
-    const wantsHowItWorks = stack.includes("howitworks");
-    if (!wantsHowItWorks && this.isHowItWorksOpen()) {
-      const el = document.getElementById("howItWorksOverlay");
-      if (el) el.classList.add("hidden");
-    }
-
-    // Close human centric if hash no longer includes humancentric
-    const wantsHumanCentric = stack.includes("humancentric");
-    if (!wantsHumanCentric && this.isHumanCentricOpen()) {
-      const el = document.getElementById("humanCentricOverlay");
-      if (el) el.classList.add("hidden");
-    }
-
-    // Close countdown info if hash no longer includes shuffleinfo
-    const wantsShuffleInfo = stack.includes("shuffleinfo");
-    if (!wantsShuffleInfo && this.isCountdownInfoOpen()) {
-      const el = document.getElementById("countdownInfoOverlay");
-      if (el) el.classList.add("hidden");
+    // Close any registered dismissible overlays not wanted by current hash
+    for (const entry of _dismissibleRegistry) {
+      if (entry.hashName && !stack.includes(entry.hashName) && entry.isOpen()) {
+        entry.overlay.classList.add("hidden");
+      }
     }
 
     // Close unlock if hash no longer includes unlock
@@ -1019,23 +1045,7 @@ function wirePopupEventsOnce() {
 }
 
 // Unlock info banner (from ribbon icon click)
-(function() {
-  const overlay = document.getElementById("unlockInfoOverlay");
-  if (!overlay) return;
-  const closeBtn = document.getElementById("unlockInfoCloseBtn");
-
-  function closeUnlockInfo() {
-    overlay.classList.add("hidden");
-  }
-
-  if (closeBtn) closeBtn.addEventListener("click", closeUnlockInfo);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) closeUnlockInfo();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeUnlockInfo();
-  });
-})();
+window.registerDismissible("unlockInfoOverlay", "unlockInfoCloseBtn", "unlockinfo");
 
 // Map size string → units (square tiles, N × N)
 function sizeToUnits(size) {
