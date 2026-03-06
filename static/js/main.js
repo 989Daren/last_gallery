@@ -177,7 +177,10 @@ const zoomState = {
   _vw: 0,
   _vh: 0,
 
-  initialized: false
+  initialized: false,
+
+  // True when zoomed out programmatically at boot (not by user gesture)
+  isInitialOverview: false
 };
 
 // Reusable object for clampTransform output — avoids per-frame allocation
@@ -296,6 +299,7 @@ function handleZoomTouchStart(e) {
 
   if (e.touches.length === 2) {
     e.preventDefault();
+    zoomState.isInitialOverview = false;
 
     // Scroll→transform handoff: capture scroll position BEFORE locking
     if (zoomState.scale >= 0.999) {
@@ -679,9 +683,9 @@ const ConicalNav = {
       try { closeUploadModal(true); } catch (e) {}
     }
 
-    // Reset zoom if hash no longer includes zoom
+    // Reset zoom if hash no longer includes zoom (but not if it's the boot overview)
     const wantsZoom = stack.includes("zoom");
-    if (!wantsZoom && this.isZoomedOut()) {
+    if (!wantsZoom && this.isZoomedOut() && !zoomState.isInitialOverview) {
       try { resetZoom(true); } catch (e) {}
     }
 
@@ -1702,6 +1706,18 @@ document.addEventListener("DOMContentLoaded", () => {
       requestAnimationFrame(() => {
         centerGalleryView();
         initZoom();
+
+        // On touch devices, start zoomed out so the full wall is visible behind the welcome modal
+        if (window.matchMedia('(pointer: coarse)').matches && zoomState.initialized) {
+          recalculateZoomLimits();
+          zoomState.scale = zoomState.minScale;
+          clampTransform(0, 0, zoomState.minScale);
+          zoomState.tx = _clampResult.tx;
+          zoomState.ty = _clampResult.ty;
+          zoomState.isInitialOverview = true;
+          lockScroll();
+          applyZoomTransform();
+        }
       });
     } catch (err) {
       error("Failed to load SVG grid:", err);
