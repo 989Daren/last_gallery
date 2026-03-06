@@ -2746,13 +2746,13 @@ label {
 }
 
 @keyframes pinchFromLeft {
-  0%   { transform: translate(-60px, 0); }
-  100% { transform: translate(-15px, 0); }
+  0%   { transform: translate(-15px, 0); }
+  100% { transform: translate(-60px, 0); }
 }
 
 @keyframes pinchFromRight {
-  0%   { transform: translate(60px, 0); }
-  100% { transform: translate(15px, 0); }
+  0%   { transform: translate(15px, 0); }
+  100% { transform: translate(60px, 0); }
 }
 
 .pinch-hint-label {
