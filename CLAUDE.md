@@ -26,8 +26,9 @@ python app.py
 |------|---------|
 | `app.py` | Flask application, all API endpoints |
 | `db.py` | Database connection, schema initialization, versioned migrations |
-| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + purchase_history + schema_version tables, schema v8) |
+| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + purchase_history + schema_version tables, schema v10) |
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
+| `cleanup_expired.py` | Remove artwork past its 24-hour payment deadline (runs via systemd timer) |
 
 ### Frontend
 | File | Purpose |
@@ -37,6 +38,7 @@ python app.py
 | `static/js/countdown.js` | Countdown timer bar module (fetch state, tick, show/hide) |
 | `static/js/unlock_modal.js` | Upgrade modal: 3-step purchase flow (identify → select artwork → choose tier) |
 | `static/js/upload_modal.js` | Image upload flow with cropping and metadata entry |
+| `static/js/deadline_banner.js` | 24-hour unlock deadline banner shown after 2nd+ uploads |
 | `templates/index.html` | Main HTML template |
 | `static/css/styles.css` | All styling including popup animations |
 | `static/grid_full.svg` | SVG defining tile positions and sizes |
@@ -73,7 +75,11 @@ CREATE TABLE assets (
     contact2_value TEXT NOT NULL DEFAULT '',
     -- Qualified floor model (migration v7)
     qualified_floor TEXT NOT NULL DEFAULT 'xs',  -- 'xs' | 's' | 'm' | 'lg' — artwork never shuffles below this size
-    stripe_payment_id TEXT                        -- nullable, Stripe payment reference for tile upgrades
+    stripe_payment_id TEXT,                       -- nullable, Stripe payment reference for tile upgrades
+    -- Asset type (migration v9)
+    asset_type TEXT NOT NULL DEFAULT 'artwork',   -- 'artwork' | 'info'
+    -- Payment deadline (migration v10)
+    payment_deadline TEXT                          -- nullable, ISO 8601 UTC — 24h unlock window for 2nd+ free uploads
 );
 
 -- Tiles: links tile positions to assets
@@ -117,7 +123,7 @@ CREATE TABLE purchase_history (
 );
 ```
 
-Current schema version: **8**
+Current schema version: **10**
 
 ## Tile Registration
 
@@ -127,9 +133,14 @@ Tiles are defined visually in `grid_full.svg` but must exist in the `tiles` data
 1. **On Upload**: `INSERT OR REPLACE INTO tiles` creates the tile entry if it doesn't exist
 2. **After SVG Extension**: Run `grid utilities/repair_tiles.py` to sync database with new SVG tiles
 
+### SVG Structure
+- Ungrouped `<rect>` elements inside the main layer `<g>` are individual XS tiles
+- `<g>` elements containing `<rect>` children are larger tiles (S, M, LG) — the group's bounding box determines size classification
+- All three parsers (app.py, repair_tiles.py, main.js) use this same group-aware logic
+
 ### Extending the Grid
 When adding tiles to `grid_full.svg`:
-1. Add new `<rect>` elements to the SVG
+1. Add `<rect>` elements (for XS) or `<g>` groups containing `<rect>` children (for larger tiles) to the SVG
 2. Run `python "grid utilities/repair_tiles.py"` from project root
 3. Script parses SVG, finds new tile IDs, inserts them into database
 4. Existing artwork assignments are preserved
@@ -276,8 +287,8 @@ Focal-point zoom for touch devices — content under fingers stays anchored duri
 - **Gestures**:
   - Two-finger pinch: Zoom in/out (focal-point anchored)
   - Single-finger drag (when zoomed): Pan within clamped bounds
-  - Back button: Unwinds layers (ribbon → popup → shuffleinfo → unlock → zoom → leave page)
-- **Disabled during**: Welcome modal, upload modal, admin modal, artwork popup
+  - Back button: Unwinds layers (ribbon → popup → shuffleinfo → unlock → leave page)
+- **Disabled during**: Welcome modal, upload modal, admin modal, artwork popup, any open dismissible overlay
 - **Auto-reset**: Zoom resets to 1.0x after wall refresh (shuffle, clear, move, undo)
 
 - **Performance**: DOM elements (`_wrapper`, `_zoomWrapper`) and viewport metrics (`_vw`, `_vh`) cached in `zoomState`; refreshed only on resize/orientation change. `clampTransform` writes to a reusable `_clampResult` object (zero per-frame allocation). Touch distance and midpoint inlined in hot path.
@@ -319,6 +330,8 @@ window.openUnlockModal(assetId, tileId)  // Open unlock modal (from unlock_modal
 window.closeUnlockModal()         // Close unlock modal (from unlock_modal.js)
 window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_modal.js)
 window.registerDismissible(overlayId, closeBtnId, hashName)  // Register overlay for unified dismiss behavior
+window.showDeadlineBanner(opts)    // Show 24-hour deadline banner (from deadline_banner.js)
+window.dismissDeadlineBanner()     // Dismiss deadline banner (from deadline_banner.js)
 ```
 
 ### Dismissible Overlay Registry (main.js)
@@ -389,6 +402,14 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **Derangement rule**: Every artwork must change position during a shuffle — no artwork may remain in its previous tile. The algorithm excludes each artwork's original tile from candidates; if the original tile is the last remaining in its pool, a swap with a previously-assigned artwork resolves it.
 - **Admin force_unlock**: `/api/admin/force_unlock` sets unlocked explicitly (0 or 1). Locking (unlocked=0) also resets `qualified_floor` to 'xs'.
 
+## Free Tile Limit & 24-Hour Deadline
+- **1 free tile per email**: Each artist gets one free (`unlocked=0`) tile. On 2nd+ uploads, a `payment_deadline` is set 24 hours from metadata save.
+- **Deadline banner**: After metadata save for a 2nd+ upload, the UI shows a deadline banner (clock icon, "Unlock Now" CTA → upgrade modal, "OK, I understand" dismiss). Replaces the normal success banner.
+- **Deadline notification email**: `send_deadline_notification()` emails the artist with artwork title, 24-hour warning, access code, and "Unlock Now" link (`/?upgrade=1&asset_id=X`).
+- **Deadline clearing**: Any unlock action (Stripe webhook, admin force_unlock, lock_tile) sets `payment_deadline = NULL`. Additionally, if the email's remaining free tile count drops to ≤1, all sibling deadlines for that email are cleared — so unlocking **either** artwork saves both.
+- **Limit checks on email change**: Upload limits (4-tile max + free tile limit) also apply when editing an artwork and changing its email to a new address.
+- **Cleanup**: `cleanup_expired.py` removes expired artwork (`payment_deadline < now AND unlocked = 0`), deletes image files, clears tile assignments, and cleans up orphaned edit codes. Runs via systemd timer (`cleanup-expired.timer`) every 12 hours at midnight and noon ET.
+
 ## Planned: Exhibit Tiles
 Top-tier artist feature. An exhibit tile is an easily identifiable tile that, when clicked, opens an introduction modal covering the artist. A "Continue" button leads to a horizontally scrolling presentation of all the artist's works — full (scaled) images with padding, layered on a transparent dark background, centered at roughly 1/4 to 1/3 screen height, auto-scrolling left to right with viewer scroll controls. This will require linking multiple artworks to a single artist and a new tile designation or size class.
 
@@ -447,6 +468,7 @@ Top-tier artist feature. An exhibit tile is an easily identifiable tile that, wh
 systemctl --user status flask.service
 systemctl --user restart flask.service
 systemctl --user status thelastgallery-tunnel.service
+systemctl --user status cleanup-expired.timer
 ```
 
 ### Tailscale + SSH (Remote Dev Access)
@@ -486,7 +508,7 @@ systemctl --user status thelastgallery-tunnel.service
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
 - `CLAUDE_URL.txt` in project root contains a raw GitHub URL pinned to the latest commit hash that changed `CLAUDE.md` — auto-generated by the post-commit hook
-- Last reviewed: 2026-03-05
+- Last reviewed: 2026-03-08
 
 ---
 
