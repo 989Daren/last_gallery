@@ -1705,8 +1705,11 @@ label {
 
 /* File input: hide native, style label as gold-accented button */
 .upload-controls {
-  position: relative;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
   padding: 14px 24px 0;
 }
 
@@ -1759,12 +1762,6 @@ label {
 }
 
 .upload-guidelines-btn {
-  position: absolute;
-  left: 50%;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  text-align: center;
   background: none;
   border: none;
   color: rgba(212, 168, 67, 0.6);
@@ -1774,6 +1771,7 @@ label {
   text-underline-offset: 3px;
   transition: color 0.2s;
   padding: 0;
+  white-space: nowrap;
 }
 
 .upload-guidelines-btn:hover {
@@ -1883,12 +1881,6 @@ label {
     padding: 12px 18px 0;
   }
 
-  .upload-guidelines-btn {
-    position: static;
-    transform: none;
-    display: block;
-    margin: 10px auto 0;
-  }
 
   #uploadModal .upload-actions {
     max-width: 320px;
