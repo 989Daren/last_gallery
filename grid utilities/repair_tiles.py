@@ -22,7 +22,12 @@ SVG_PATH = os.path.join(BASE_DIR, "static", "grid_full.svg")
 
 
 def parse_svg_tiles(svg_path):
-    """Parse the SVG and return tile IDs (same logic as app.py)."""
+    """Parse the SVG and return tile IDs (same logic as app.py).
+
+    Ungrouped <rect> elements are individual (XS) tiles.
+    <g> elements containing <rect> children are larger tiles — the group's
+    bounding box determines size classification (S, M, LG).
+    """
     try:
         tree = ET.parse(svg_path)
         root = tree.getroot()
@@ -30,35 +35,64 @@ def parse_svg_tiles(svg_path):
         print(f"Error parsing SVG: {e}")
         return []
 
-    rects = []
-    for rect in root.findall('.//{http://www.w3.org/2000/svg}rect') + root.findall('.//rect'):
-        try:
-            width = float(rect.get('width') or 0)
-            height = float(rect.get('height') or 0)
-            transform = rect.get('transform') or ''
+    ns = '{http://www.w3.org/2000/svg}'
 
-            cx = cy = None
-            m = re.search(r'translate\(([-0-9.]+)[ ,]([-0-9.]+)\)', transform)
-            if m:
-                cx = float(m.group(1))
-                cy = float(m.group(2))
+    def rect_position(rect):
+        """Extract top-left position and dimensions from a <rect> element."""
+        width = float(rect.get('width') or 0)
+        height = float(rect.get('height') or 0)
+        transform = rect.get('transform') or ''
 
-            if cx is not None and cy is not None:
-                left = cx - width / 2
-                top = cy - height / 2
-            else:
-                left = float(rect.get('x') or 0)
-                top = float(rect.get('y') or 0)
+        cx = cy = None
+        m = re.search(r'translate\(([-0-9.]+)[ ,]([-0-9.]+)\)', transform)
+        if m:
+            cx = float(m.group(1))
+            cy = float(m.group(2))
 
-            rects.append({'width': width, 'height': height, 'svg_left': left, 'svg_top': top})
-        except Exception:
-            continue
+        if cx is not None and cy is not None:
+            left = cx - width / 2
+            top = cy - height / 2
+        else:
+            left = float(rect.get('x') or 0)
+            top = float(rect.get('y') or 0)
 
-    if not rects:
+        return left, top, width, height
+
+    # Find the main layer group (first <g> child of root)
+    layer = root.find(ns + 'g') or root.find('g')
+    if layer is None:
+        print("No layer group found in SVG")
         return []
 
-    # Infer scale factor
-    xs_candidates = [r['width'] for r in rects if 40 <= r['width'] <= 90]
+    tiles = []
+    for child in layer:
+        tag = child.tag.replace(ns, '')
+
+        if tag == 'rect':
+            left, top, width, height = rect_position(child)
+            tiles.append({'width': width, 'height': height, 'svg_left': left, 'svg_top': top})
+
+        elif tag == 'g':
+            child_rects = child.findall(ns + 'rect') + child.findall('rect')
+            if not child_rects:
+                continue
+            positions = [rect_position(r) for r in child_rects]
+            min_l = min(p[0] for p in positions)
+            min_t = min(p[1] for p in positions)
+            max_r = max(p[0] + p[2] for p in positions)
+            max_b = max(p[1] + p[3] for p in positions)
+            tiles.append({
+                'width': max_r - min_l,
+                'height': max_b - min_t,
+                'svg_left': min_l,
+                'svg_top': min_t
+            })
+
+    if not tiles:
+        return []
+
+    # Infer scale factor from XS tiles (individual rects, width 40-90 SVG units)
+    xs_candidates = [t['width'] for t in tiles if 40 <= t['width'] <= 90]
     if not xs_candidates:
         print("No XS tiles found for scale detection")
         return []
@@ -67,14 +101,14 @@ def parse_svg_tiles(svg_path):
     DESIGN_XS = 85.0
     scale = avg_xs / DESIGN_XS
 
-    for r in rects:
-        r['design_width'] = r['width'] / scale
-        r['design_height'] = r['height'] / scale
-        r['design_left'] = r['svg_left'] / scale
-        r['design_top'] = r['svg_top'] / scale
+    for t in tiles:
+        t['design_width'] = t['width'] / scale
+        t['design_height'] = t['height'] / scale
+        t['design_left'] = t['svg_left'] / scale
+        t['design_top'] = t['svg_top'] / scale
 
-    min_left = min(r['design_left'] for r in rects)
-    min_top = min(r['design_top'] for r in rects)
+    min_left = min(t['design_left'] for t in tiles)
+    min_top = min(t['design_top'] for t in tiles)
 
     def classify(w):
         if w >= 60 and w < 128: return 'xs'
@@ -84,20 +118,20 @@ def parse_svg_tiles(svg_path):
         return 'unknown'
 
     # Normalize and classify
-    for r in rects:
-        r['norm_left'] = r['design_left'] - min_left
-        r['norm_top'] = r['design_top'] - min_top
-        r['size'] = classify(r['design_width'])
+    for t in tiles:
+        t['norm_left'] = t['design_left'] - min_left
+        t['norm_top'] = t['design_top'] - min_top
+        t['size'] = classify(t['design_width'])
 
     # Assign IDs
     counters = {'xs': 0, 's': 0, 'm': 0, 'lg': 0, 'unknown': 0}
     prefix = {'xs': 'X', 's': 'S', 'm': 'M', 'lg': 'L', 'unknown': 'U'}
     tile_ids = []
-    for r in rects:
-        if r['size'] == 'unknown':
+    for t in tiles:
+        if t['size'] == 'unknown':
             continue
-        counters[r['size']] += 1
-        tid = prefix[r['size']] + str(counters[r['size']])
+        counters[t['size']] += 1
+        tid = prefix[t['size']] + str(counters[t['size']])
         tile_ids.append(tid)
 
     return tile_ids

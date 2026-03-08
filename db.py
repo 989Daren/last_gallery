@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def get_db():
@@ -236,6 +236,18 @@ def init_db():
 
         _set_schema_version(cursor, 9)
         print("Migration 9 complete: Asset type column added")
+
+    # Migration 10: Payment deadline column (24-hour unlock window for 2nd+ uploads)
+    if current_version < 10:
+        print("Applying migration 10: Payment deadline column...")
+        cursor.execute("PRAGMA table_info(assets)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if 'payment_deadline' not in columns:
+            cursor.execute("ALTER TABLE assets ADD COLUMN payment_deadline TEXT")
+
+        _set_schema_version(cursor, 10)
+        print("Migration 10 complete: Payment deadline column added")
 
     conn.commit()
     conn.close()
