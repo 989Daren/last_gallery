@@ -648,7 +648,6 @@ label {
 /* Origin 0,0 with translate positions the scaled grid centered in viewport */
 .zoom-wrapper {
   transform-origin: 0 0;
-  will-change: transform;     /* GPU layer hint for smooth zoom */
 }
 
 .gallery-wall {
@@ -2977,6 +2976,106 @@ label {
 
 @media (max-width: 600px) {
   .success-banner-body {
+    padding: 20px 18px;
+  }
+}
+
+/* =====================================================
+   24-HOUR DEADLINE BANNER
+   ===================================================== */
+
+.deadline-banner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.deadline-banner {
+  width: min(420px, 90%);
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 12px;
+  color: #fff;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.deadline-banner-accent {
+  height: 4px;
+  background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+}
+
+.deadline-banner-body {
+  padding: 24px 28px;
+}
+
+.deadline-banner-headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.deadline-banner-clock {
+  color: #D4A843;
+  filter: drop-shadow(0 0 4px rgba(212, 168, 67, 0.4));
+  flex-shrink: 0;
+}
+
+.deadline-banner-text {
+  margin: 14px 0 0 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.6;
+}
+
+.deadline-banner-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+
+.deadline-banner-unlock {
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  border: none;
+  color: #000;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+.deadline-banner-unlock:hover {
+  filter: brightness(1.1);
+}
+
+.deadline-banner-dismiss {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.deadline-banner-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 600px) {
+  .deadline-banner-body {
     padding: 20px 18px;
   }
 }

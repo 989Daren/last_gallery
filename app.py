@@ -197,9 +197,9 @@ def check_admin_pin():
 def _parse_svg_tiles(svg_path):
     """Parse the SVG and return an array of tile descriptors similar to the client.
 
-    Each tile is a dict with keys including `width` and `height` (SVG units)
-    and an inferred `size` string (xs, s, m, lg) used to generate tile IDs.
-    If parsing fails, returns an empty list.
+    Ungrouped <rect> elements are individual (XS) tiles.
+    <g> elements containing <rect> children are larger tiles — the group's
+    bounding box determines size classification (S, M, LG).
     """
     try:
         tree = ET.parse(svg_path)
@@ -207,35 +207,62 @@ def _parse_svg_tiles(svg_path):
     except Exception:
         return []
 
-    rects = []
-    for rect in root.findall('.//{http://www.w3.org/2000/svg}rect') + root.findall('.//rect'):
-        try:
-            width = float(rect.get('width') or 0)
-            height = float(rect.get('height') or 0)
-            transform = rect.get('transform') or ''
+    ns = '{http://www.w3.org/2000/svg}'
 
-            cx = cy = None
-            m = re.search(r'translate\(([-0-9.]+)[ ,]([-0-9.]+)\)', transform)
-            if m:
-                cx = float(m.group(1))
-                cy = float(m.group(2))
+    def rect_position(rect):
+        width = float(rect.get('width') or 0)
+        height = float(rect.get('height') or 0)
+        transform = rect.get('transform') or ''
 
-            if cx is not None and cy is not None:
-                left = cx - width / 2
-                top = cy - height / 2
-            else:
-                left = float(rect.get('x') or 0)
-                top = float(rect.get('y') or 0)
+        cx = cy = None
+        m = re.search(r'translate\(([-0-9.]+)[ ,]([-0-9.]+)\)', transform)
+        if m:
+            cx = float(m.group(1))
+            cy = float(m.group(2))
 
-            rects.append({'width': width, 'height': height, 'svg_left': left, 'svg_top': top})
-        except Exception:
-            continue
+        if cx is not None and cy is not None:
+            left = cx - width / 2
+            top = cy - height / 2
+        else:
+            left = float(rect.get('x') or 0)
+            top = float(rect.get('y') or 0)
 
-    if not rects:
+        return left, top, width, height
+
+    # Find the main layer group (first <g> child of root)
+    layer = root.find(ns + 'g') or root.find('g')
+    if layer is None:
+        return []
+
+    raw_tiles = []
+    for child in layer:
+        tag = child.tag.replace(ns, '')
+
+        if tag == 'rect':
+            left, top, width, height = rect_position(child)
+            raw_tiles.append({'width': width, 'height': height, 'svg_left': left, 'svg_top': top})
+
+        elif tag == 'g':
+            child_rects = child.findall(ns + 'rect') + child.findall('rect')
+            if not child_rects:
+                continue
+            positions = [rect_position(r) for r in child_rects]
+            min_l = min(p[0] for p in positions)
+            min_t = min(p[1] for p in positions)
+            max_r = max(p[0] + p[2] for p in positions)
+            max_b = max(p[1] + p[3] for p in positions)
+            raw_tiles.append({
+                'width': max_r - min_l,
+                'height': max_b - min_t,
+                'svg_left': min_l,
+                'svg_top': min_t
+            })
+
+    if not raw_tiles:
         return []
 
     # Infer scale factor using XS candidates (same thresholds as client)
-    xs_candidates = [r['width'] for r in rects if 40 <= r['width'] <= 90]
+    xs_candidates = [t['width'] for t in raw_tiles if 40 <= t['width'] <= 90]
     if not xs_candidates:
         return []
 
@@ -243,14 +270,14 @@ def _parse_svg_tiles(svg_path):
     DESIGN_XS = 85.0
     scale = avg_xs / DESIGN_XS
 
-    for r in rects:
-        r['design_width'] = r['width'] / scale
-        r['design_height'] = r['height'] / scale
-        r['design_left'] = r['svg_left'] / scale
-        r['design_top'] = r['svg_top'] / scale
+    for t in raw_tiles:
+        t['design_width'] = t['width'] / scale
+        t['design_height'] = t['height'] / scale
+        t['design_left'] = t['svg_left'] / scale
+        t['design_top'] = t['svg_top'] / scale
 
-    min_left = min(r['design_left'] for r in rects)
-    min_top = min(r['design_top'] for r in rects)
+    min_left = min(t['design_left'] for t in raw_tiles)
+    min_top = min(t['design_top'] for t in raw_tiles)
 
     def classify(w):
         if w >= 60 and w < 128: return 'xs'
@@ -260,21 +287,21 @@ def _parse_svg_tiles(svg_path):
         return 'unknown'
 
     # Normalize and classify
-    for r in rects:
-        r['norm_left'] = r['design_left'] - min_left
-        r['norm_top'] = r['design_top'] - min_top
-        r['size'] = classify(r['design_width'])
+    for t in raw_tiles:
+        t['norm_left'] = t['design_left'] - min_left
+        t['norm_top'] = t['design_top'] - min_top
+        t['size'] = classify(t['design_width'])
 
     # Assign IDs
     counters = {'xs': 0, 's': 0, 'm': 0, 'lg': 0, 'unknown': 0}
     prefix = {'xs': 'X', 's': 'S', 'm': 'M', 'lg': 'L', 'unknown': 'U'}
     tiles = []
-    for r in rects:
-        if r['size'] == 'unknown':
+    for t in raw_tiles:
+        if t['size'] == 'unknown':
             continue
-        counters[r['size']] += 1
-        tid = prefix[r['size']] + str(counters[r['size']])
-        tiles.append({'id': tid, 'size': r['size']})
+        counters[t['size']] += 1
+        tid = prefix[t['size']] + str(counters[t['size']])
+        tiles.append({'id': tid, 'size': t['size']})
 
     return tiles
 
@@ -562,6 +589,65 @@ def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, 
         app.logger.exception("[UPGRADE NOTIFY] Failed to send email to %s for asset %s", email, asset_id)
 
 
+def send_deadline_notification(email, artwork_title, asset_id, access_code=''):
+    """Send 24-hour unlock deadline email when an artist uploads a 2nd+ free tile."""
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        app.logger.warning("[DEADLINE NOTIFY] RESEND_API_KEY not set — notification not emailed. To: %s | Asset: %s", email, asset_id)
+        return
+
+    safe_title = html_mod.escape(artwork_title) if artwork_title else "your artwork"
+    upgrade_link = f"{BASE_URL}/?upgrade=1&asset_id={asset_id}"
+
+    access_code_html = ''
+    access_code_plain = ''
+    if access_code:
+        safe_code = html_mod.escape(access_code)
+        access_code_html = (
+            '<p style="margin-top:16px; padding:12px; background:#1a1a1a; border:1px solid #D4A843; '
+            'border-radius:6px; text-align:center;">'
+            '<span style="color:#ffffff; font-size:15px;">Your access code:</span> '
+            '<strong style="color:#D4A843; font-size:17px; letter-spacing:2px;">'
+            f'{safe_code}</strong></p>'
+        )
+        access_code_plain = f"\nYour access code: {access_code}\n"
+
+    html_body = (
+        '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
+        f'<h2 style="color:#D4A843;">Your artwork is live — 24 hours to unlock</h2>'
+        f'<p style="font-size:18px;"><strong>{safe_title}</strong> has been placed on the gallery wall.</p>'
+        '<p>Since you already have a free tile, this upload must be unlocked within '
+        '<strong>24 hours</strong> or it will be removed from the gallery.</p>'
+        f'{access_code_html}'
+        f'<p><a href="{html_mod.escape(upgrade_link)}" style="display:inline-block; padding:12px 24px; '
+        'background:linear-gradient(135deg,#b8860b,#ffd700); color:#000; text-decoration:none; '
+        'border-radius:6px; font-weight:bold;">Unlock Now</a></p>'
+        '</div>'
+    )
+
+    plain_body = (
+        "Your artwork is live — 24 hours to unlock\n\n"
+        f"{artwork_title or 'Your artwork'} has been placed on the gallery wall.\n\n"
+        "Since you already have a free tile, this upload must be unlocked within "
+        "24 hours or it will be removed from the gallery.\n"
+        f"{access_code_plain}\n"
+        f"{upgrade_link}\n"
+    )
+
+    resend.api_key = api_key
+    try:
+        resend.Emails.send({
+            "from": "The Last Gallery <noreply@thelastgallery.com>",
+            "to": [email],
+            "subject": "Your artwork is live — 24 hours to unlock",
+            "html": html_body,
+            "text": plain_body,
+        })
+        app.logger.info("[DEADLINE NOTIFY] Email sent to %s for asset %s", email, asset_id)
+    except Exception:
+        app.logger.exception("[DEADLINE NOTIFY] Failed to send email to %s for asset %s", email, asset_id)
+
+
 # ---- Routes ----
 @app.route("/")
 def index():
@@ -815,10 +901,28 @@ def save_tile_metadata(tile_id):
                     "error": "Artwork title already exists for this email."
                 }), 409
 
-        # Upload limit: max 4 artworks per email (new uploads only, admin bypass)
-        if not is_edit and contact1_value:
-            admin_pin = request.headers.get("X-Admin-Pin")
-            if admin_pin != ADMIN_PIN:
+        # Capture old email before update (for edit code cleanup + limit checks)
+        cursor.execute("SELECT contact1_value, unlocked FROM assets WHERE asset_id = ?", (asset_id,))
+        old_asset = cursor.fetchone()
+        old_email = (old_asset["contact1_value"] or "").strip().lower() if old_asset else ""
+        asset_unlocked = old_asset["unlocked"] if old_asset else 0
+
+        # Upload limit + free tile limit
+        # Enforced on new uploads AND edits that change the email address
+        payment_deadline_value = None
+        checked_limits = False
+        is_admin = request.headers.get("X-Admin-Pin") == ADMIN_PIN
+        if contact1_value and not is_admin:
+            # Determine if we need to check limits against this email
+            check_limit = not is_edit
+            if is_edit:
+                if old_email != contact1_value.strip().lower():
+                    check_limit = True
+
+            if check_limit:
+                checked_limits = True
+
+                # 4-tile max
                 cursor.execute(
                     "SELECT COUNT(*) FROM assets WHERE LOWER(TRIM(contact1_value)) = LOWER(?) AND artist_name != '' AND asset_id != ?",
                     (contact1_value, asset_id)
@@ -831,10 +935,18 @@ def save_tile_metadata(tile_id):
                         "error": "Upload limit reached. An artist's work may occupy no more than 4 tiles in the gallery."
                     }), 409
 
-        # Capture old email before update (for edit code cleanup)
-        cursor.execute("SELECT contact1_value FROM assets WHERE asset_id = ?", (asset_id,))
-        old_asset = cursor.fetchone()
-        old_email = (old_asset["contact1_value"] or "").strip().lower() if old_asset else ""
+                # Free tile limit: only 1 free (unlocked=0) tile per email
+                # If this asset is unlocked=0 and email already has a free tile, set a 24h deadline
+                # Otherwise clear any existing deadline (this becomes the free tile for the new email)
+                if not asset_unlocked:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM assets WHERE LOWER(TRIM(contact1_value)) = LOWER(?) AND unlocked = 0 AND artist_name != '' AND asset_id != ?",
+                        (contact1_value, asset_id)
+                    )
+                    free_count = cursor.fetchone()[0]
+                    if free_count >= 1:
+                        deadline = datetime.now(timezone.utc) + timedelta(hours=24)
+                        payment_deadline_value = deadline.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         # Update the asset's metadata (all fields)
         cursor.execute(
@@ -849,6 +961,14 @@ def save_tile_metadata(tile_id):
              edition_info, for_sale, sale_type,
              contact1_type, contact1_value, contact2_type, contact2_value, asset_id)
         )
+
+        # Set or clear payment_deadline when limits were checked
+        # (separate UPDATE so edits that don't change email preserve existing deadline)
+        if checked_limits:
+            cursor.execute(
+                "UPDATE assets SET payment_deadline = ? WHERE asset_id = ?",
+                (payment_deadline_value, asset_id)
+            )
 
         # Generate or reuse edit code if email contact provided
         edit_code = None
@@ -885,6 +1005,13 @@ def save_tile_metadata(tile_id):
         if edit_code and contact1_value and (not is_edit or is_new_code or email_changed):
             send_edit_code(contact1_value, edit_code, artwork_title)
 
+        # Send deadline notification for 2nd+ uploads that need payment
+        if payment_deadline_value and contact1_value:
+            try:
+                send_deadline_notification(contact1_value, artwork_title, asset_id, edit_code or '')
+            except Exception:
+                app.logger.exception("[DEADLINE NOTIFY] Failed for asset %s", asset_id)
+
         return jsonify({
             "ok": True,
             "tile_id": tile_id,
@@ -900,7 +1027,8 @@ def save_tile_metadata(tile_id):
             "contact1_type": contact1_type,
             "contact1_value": contact1_value,
             "contact2_type": contact2_type,
-            "contact2_value": contact2_value
+            "contact2_value": contact2_value,
+            "payment_deadline": payment_deadline_value
         })
         
     except Exception as e:
@@ -1185,7 +1313,8 @@ def _get_db_snapshot():
                              for_sale, sale_type, artist_contact,
                              contact1_type, contact1_value,
                              contact2_type, contact2_value,
-                             unlocked, qualified_floor, stripe_payment_id FROM assets""")
+                             unlocked, qualified_floor, stripe_payment_id,
+                             payment_deadline FROM assets""")
     assets = [dict(row) for row in cursor.fetchall()]
     cursor.execute("SELECT tile_id, asset_id FROM tiles")
     tiles = [dict(row) for row in cursor.fetchall()]
@@ -1210,8 +1339,9 @@ def _restore_db_snapshot(snapshot):
                                   for_sale, sale_type, artist_contact,
                                   contact1_type, contact1_value,
                                   contact2_type, contact2_value,
-                                  unlocked, qualified_floor, stripe_payment_id)
-               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                  unlocked, qualified_floor, stripe_payment_id,
+                                  payment_deadline)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (a["asset_id"], a["artist_name"], a["artwork_title"], a["tile_url"], a["popup_url"],
              a.get("year_created", ""), a.get("medium", ""), a.get("dimensions", ""),
              a.get("edition_info", ""), a.get("for_sale", ""), a.get("sale_type", ""),
@@ -1219,7 +1349,7 @@ def _restore_db_snapshot(snapshot):
              a.get("contact1_type", ""), a.get("contact1_value", ""),
              a.get("contact2_type", ""), a.get("contact2_value", ""),
              a.get("unlocked", 0), a.get("qualified_floor", "xs"),
-             a.get("stripe_payment_id"))
+             a.get("stripe_payment_id"), a.get("payment_deadline"))
         )
 
     # Restore tiles
@@ -1721,9 +1851,25 @@ def admin_force_unlock():
             )
         else:
             cursor.execute(
-                "UPDATE assets SET unlocked = 1 WHERE asset_id = ?",
+                "UPDATE assets SET unlocked = 1, payment_deadline = NULL WHERE asset_id = ?",
                 (asset_id,)
             )
+
+            # Clear deadline on sibling artwork if this email now has <= 1 free tile
+            cursor.execute("SELECT contact1_value FROM assets WHERE asset_id = ?", (asset_id,))
+            asset_row = cursor.fetchone()
+            email = (asset_row["contact1_value"] or "").strip().lower() if asset_row else ""
+            if email:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM assets WHERE LOWER(TRIM(contact1_value)) = ? AND unlocked = 0 AND artist_name != ''",
+                    (email,)
+                )
+                free_remaining = cursor.fetchone()[0]
+                if free_remaining <= 1:
+                    cursor.execute(
+                        "UPDATE assets SET payment_deadline = NULL WHERE LOWER(TRIM(contact1_value)) = ? AND unlocked = 0 AND payment_deadline IS NOT NULL",
+                        (email,)
+                    )
 
         conn.commit()
         conn.close()
@@ -1831,9 +1977,9 @@ def lock_tile():
             conn.close()
             return jsonify({"ok": False, "error": "cannot lock at XS size"}), 400
 
-        # Set the floor and unlock
+        # Set the floor and unlock (clear any payment deadline)
         cursor.execute(
-            "UPDATE assets SET qualified_floor = ?, unlocked = 1, stripe_payment_id = ? WHERE asset_id = ?",
+            "UPDATE assets SET qualified_floor = ?, unlocked = 1, stripe_payment_id = ?, payment_deadline = NULL WHERE asset_id = ?",
             (current_size, payment_id, asset_id)
         )
 
@@ -2314,7 +2460,7 @@ def stripe_webhook():
             if cfg:
                 floor_value = cfg['floor']
                 cursor.execute(
-                    "UPDATE assets SET unlocked = 1, qualified_floor = ?, stripe_payment_id = ? WHERE asset_id = ?",
+                    "UPDATE assets SET unlocked = 1, qualified_floor = ?, stripe_payment_id = ?, payment_deadline = NULL WHERE asset_id = ?",
                     (floor_value, payment_intent, int(asset_id))
                 )
 
@@ -2323,6 +2469,20 @@ def stripe_webhook():
                 "UPDATE purchase_history SET status = 'fulfilled', fulfilled_at = datetime('now'), stripe_payment_intent = ? WHERE purchase_id = ?",
                 (payment_intent, int(purchase_id))
             )
+
+            # Clear deadline on sibling artwork if this email now has <= 1 free tile
+            email = metadata.get("email", "").lower()
+            if email:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM assets WHERE LOWER(TRIM(contact1_value)) = ? AND unlocked = 0 AND artist_name != ''",
+                    (email,)
+                )
+                free_remaining = cursor.fetchone()[0]
+                if free_remaining <= 1:
+                    cursor.execute(
+                        "UPDATE assets SET payment_deadline = NULL WHERE LOWER(TRIM(contact1_value)) = ? AND unlocked = 0 AND payment_deadline IS NOT NULL",
+                        (email,)
+                    )
 
             conn.commit()
             conn.close()

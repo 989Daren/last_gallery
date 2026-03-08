@@ -177,10 +177,7 @@ const zoomState = {
   _vw: 0,
   _vh: 0,
 
-  initialized: false,
-
-  // True when zoomed out programmatically at boot (not by user gesture)
-  isInitialOverview: false
+  initialized: false
 };
 
 // Reusable object for clampTransform output — avoids per-frame allocation
@@ -255,6 +252,9 @@ function isZoomDisabled() {
   if (uploadModal && !uploadModal.classList.contains('hidden')) return true;
   const adminModal = document.getElementById('adminModal');
   if (adminModal && !adminModal.classList.contains('hidden')) return true;
+  for (let i = 0; i < _dismissibleRegistry.length; i++) {
+    if (_dismissibleRegistry[i].isOpen()) return true;
+  }
   return false;
 }
 
@@ -299,7 +299,6 @@ function handleZoomTouchStart(e) {
 
   if (e.touches.length === 2) {
     e.preventDefault();
-    zoomState.isInitialOverview = false;
 
     // Scroll→transform handoff: capture scroll position BEFORE locking
     if (zoomState.scale >= 0.999) {
@@ -405,11 +404,6 @@ function handleZoomTouchEnd(e) {
 
   zoomState.isPinching = false;
   zoomState.isPanning = false;
-
-  // Push hash if zoomed out (enables back button to reset zoom)
-  if (zoomState.scale < 0.999) {
-    window.ConicalNav && window.ConicalNav.pushToMatchUi();
-  }
 }
 
 function applyZoomTransform() {
@@ -461,8 +455,7 @@ function unlockScrollTo(scrollX, scrollY) {
   scrollLocked = false;
 }
 
-function resetZoom(silent) {
-  const wasZoomed = zoomState.scale < 0.999;
+function resetZoom() {
   zoomState.scale = 1.0;
   zoomState.tx = 0;
   zoomState.ty = 0;
@@ -470,11 +463,6 @@ function resetZoom(silent) {
 
   // Atomic unlock + origin: no intermediate state is ever paintable
   unlockScrollTo(0, 0);
-
-  // Pop history when reset programmatically (not from back button)
-  if (!silent && wasZoomed) {
-    window.ConicalNav && window.ConicalNav.popFromUiClose();
-  }
 }
 
 // Scroll viewport to center a tile (reset zoom, no sheen)
@@ -599,12 +587,9 @@ const ConicalNav = {
   isUnlockOpen() {
     return (typeof window.isUnlockModalOpen === "function") ? window.isUnlockModalOpen() : false;
   },
-  isZoomedOut() {
-    return typeof zoomState !== "undefined" && zoomState.scale < 0.999;
-  },
 
   // Choose the desired conical hash based on current UI state
-  // Builds compound hash for layered states: #zoom/art/ribbon
+  // Builds compound hash for layered states: #art/ribbon
   desiredHash() {
     // Check registered dismissible overlays first
     for (const entry of _dismissibleRegistry) {
@@ -614,9 +599,8 @@ const ConicalNav = {
     if (this.isUnlockOpen()) return "#unlock";
     if (this.isUploadOpen()) return "#upload";
 
-    // Build compound hash for zoom + popup layers
+    // Build compound hash for popup layers
     const parts = [];
-    if (this.isZoomedOut()) parts.push("zoom");
     if (this.isArtOpen()) parts.push("art");
     if (this.isRibbonOpen()) parts.push("ribbon");
 
@@ -681,12 +665,6 @@ const ConicalNav = {
     // Close upload if hash no longer includes upload/standalone upload
     if (!wantsUpload && !standaloneUpload && this.isUploadOpen()) {
       try { closeUploadModal(true); } catch (e) {}
-    }
-
-    // Reset zoom if hash no longer includes zoom (but not if it's the boot overview)
-    const wantsZoom = stack.includes("zoom");
-    if (!wantsZoom && this.isZoomedOut() && !zoomState.isInitialOverview) {
-      try { resetZoom(true); } catch (e) {}
     }
 
     // NOTE: We do NOT auto-open layers on forward navigation.
@@ -1074,19 +1052,14 @@ function classifySizeDesign(widthDesign) {
 }
 
 // Parse the SVG text into tile objects following the scaling guide.
+// Ungrouped <rect> elements are individual (XS) tiles.
+// <g> elements containing <rect> children are larger tiles — the group's
+// bounding box determines size classification (S, M, LG).
 function parseSvgToTiles(svgText) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgText, "image/svg+xml");
 
-  // 1) Collect all <rect> elements = tiles
-  const rectElements = Array.from(doc.querySelectorAll("rect"));
-  if (!rectElements.length) {
-    warn("No <rect> tiles found in SVG.");
-    return [];
-  }
-
-  // 2) For each rect, get width, height, and center/position
-  const rects = rectElements.map((rect) => {
+  function rectPosition(rect) {
     const width  = parseFloat(rect.getAttribute("width")  || "0");
     const height = parseFloat(rect.getAttribute("height") || "0");
     const transform = rect.getAttribute("transform") || "";
@@ -1096,26 +1069,61 @@ function parseSvgToTiles(svgText) {
     if (m) {
       cx = parseFloat(m[1]);
       cy = parseFloat(m[2]);
-    } else if (transform) {
-      // Non-destructive: only warn (helps catch future SVG changes)
-      warn("Unsupported SVG transform encountered:", transform);
     }
 
     let left, top;
     if (cx !== null && cy !== null) {
-      // center → top-left
       left = cx - width / 2;
       top  = cy - height / 2;
     } else {
-      // fallback: direct x,y
       left = parseFloat(rect.getAttribute("x") || "0");
       top  = parseFloat(rect.getAttribute("y") || "0");
     }
 
-    return { width, height, svg_left: left, svg_top: top };
-  });
+    return { left, top, width, height };
+  }
 
-  // 3) Infer scale factor from XS candidates (40–90 SVG units wide)
+  // Find the main layer group (first <g> child of root)
+  const layer = doc.querySelector("svg > g");
+  if (!layer) {
+    warn("No layer group found in SVG.");
+    return [];
+  }
+
+  // 1) Build tile list: ungrouped rects + group bounding boxes
+  const rects = [];
+  for (const child of layer.children) {
+    const tag = child.tagName.toLowerCase();
+
+    if (tag === "rect") {
+      const { left, top, width, height } = rectPosition(child);
+      rects.push({ width, height, svg_left: left, svg_top: top });
+
+    } else if (tag === "g") {
+      const childRects = Array.from(child.querySelectorAll("rect"));
+      if (!childRects.length) continue;
+
+      const positions = childRects.map(r => rectPosition(r));
+      const minL = Math.min(...positions.map(p => p.left));
+      const minT = Math.min(...positions.map(p => p.top));
+      const maxR = Math.max(...positions.map(p => p.left + p.width));
+      const maxB = Math.max(...positions.map(p => p.top + p.height));
+
+      rects.push({
+        width: maxR - minL,
+        height: maxB - minT,
+        svg_left: minL,
+        svg_top: minT
+      });
+    }
+  }
+
+  if (!rects.length) {
+    warn("No tiles found in SVG.");
+    return [];
+  }
+
+  // 2) Infer scale factor from XS candidates (40-90 SVG units wide)
   const xsCandidates = rects.map(r => r.width).filter(w => w >= 40 && w <= 90);
   if (!xsCandidates.length) {
     warn("No XS candidates found to infer scale factor.");
@@ -1126,7 +1134,7 @@ function parseSvgToTiles(svgText) {
   const DESIGN_XS = 85;
   const scaleFactor = avgXsWidth / DESIGN_XS;
 
-  // 4) Convert everything into design space
+  // 3) Convert everything into design space
   rects.forEach(r => {
     r.design_width  = r.width  / scaleFactor;
     r.design_height = r.height / scaleFactor;
@@ -1134,7 +1142,7 @@ function parseSvgToTiles(svgText) {
     r.design_top    = r.svg_top  / scaleFactor;
   });
 
-  // 5) Normalize so the top-left of the wall is (0,0) in design space
+  // 4) Normalize so the top-left of the wall is (0,0) in design space
   const minLeft = Math.min(...rects.map(r => r.design_left));
   const minTop  = Math.min(...rects.map(r => r.design_top));
 
@@ -1143,7 +1151,7 @@ function parseSvgToTiles(svgText) {
     r.norm_top  = r.design_top  - minTop;
   });
 
-  // 6) Snap to the 85px grid and classify sizes
+  // 5) Snap to the 85px grid and classify sizes
   rects.forEach(r => {
     const col = Math.round(r.norm_left / BASE_UNIT);
     const row = Math.round(r.norm_top  / BASE_UNIT);
@@ -1153,7 +1161,7 @@ function parseSvgToTiles(svgText) {
     r.size   = classifySizeDesign(r.design_width);
   });
 
-  // 7) Assign IDs per size bucket (X1, X2… S1, S2… etc.)
+  // 6) Assign IDs per size bucket (X1, X2… S1, S2… etc.)
   const counters = { xs: 0, s: 0, m: 0, lg: 0, unknown: 0 };
   const prefix   = { xs: "X", s: "S", m: "M", lg: "L", unknown: "U" };
 
@@ -1707,14 +1715,15 @@ document.addEventListener("DOMContentLoaded", () => {
         centerGalleryView();
         initZoom();
 
-        // On touch devices, start zoomed out so the full wall is visible behind the welcome modal
+        // On touch devices, start zoomed out so the full wall is visible behind the welcome modal.
+        // No will-change here — applied only during active gestures to avoid mobile
+        // compositor texture limits that clip the bottom half of the grid.
         if (window.matchMedia('(pointer: coarse)').matches && zoomState.initialized) {
           recalculateZoomLimits();
           zoomState.scale = zoomState.minScale;
           clampTransform(0, 0, zoomState.minScale);
           zoomState.tx = _clampResult.tx;
           zoomState.ty = _clampResult.ty;
-          zoomState.isInitialOverview = true;
           lockScroll();
           applyZoomTransform();
         }

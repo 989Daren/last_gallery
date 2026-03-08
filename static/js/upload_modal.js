@@ -801,14 +801,25 @@ document.addEventListener("DOMContentLoaded", () => {
         closeModal(true);
       }
 
-      // Post-save flow: scroll to tile, then show success banner (or just sheen for edits)
+      // Post-save flow: scroll to tile, then show appropriate banner
       setTimeout(() => {
         if (typeof window.scrollToTile === 'function') {
           window.scrollToTile(savedTileId);
         }
 
-        if (!wasEditMode && typeof window.showSuccessBanner === 'function') {
-          // New upload: show success banner, sheen plays on dismiss
+        if (!wasEditMode && result.payment_deadline && typeof window.showDeadlineBanner === 'function') {
+          // 2nd+ upload: show 24-hour deadline banner
+          window.showDeadlineBanner({
+            tileId: savedTileId,
+            assetId: result.asset_id,
+            onDismiss: function() {
+              if (typeof window.playTileSheen === 'function') {
+                window.playTileSheen(savedTileId);
+              }
+            }
+          });
+        } else if (!wasEditMode && typeof window.showSuccessBanner === 'function') {
+          // First upload: show normal success banner, sheen plays on dismiss
           window.showSuccessBanner({
             email: savedEmail,
             tileId: savedTileId,

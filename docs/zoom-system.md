@@ -358,45 +358,17 @@ function resetZoom(silent) {
 }
 ```
 
-**The `silent` parameter:**
-- `silent = false` (default): Called from user action (e.g., pinch snap-back). Pops browser history via `history.back()`.
-- `silent = true`: Called from `ConicalNav.syncUiToHash()` when the user pressed the browser back button. The hash has already changed — calling `history.back()` again would over-pop.
-
 **Exposed globally:** `window.resetZoom = resetZoom`
 
 **Called from:**
 1. `handleZoomTouchEnd()` — when pinch ends at `scale > 0.95` (snap-back)
 2. `refreshWallFromServer()` — after shuffle/clear/move/undo (always resets to 1.0x)
-3. `ConicalNav.syncUiToHash()` — when back button pops the `#zoom` hash (silent=true)
 
 ---
 
 ## Back Button Integration — ConicalNav
 
-Zoom is integrated with the browser back button via the `ConicalNav` hash-based navigation system.
-
-### Hash encoding
-
-Zoom state is encoded as `#zoom` in the URL hash. It can combine with other layers:
-- `#zoom` — zoomed out, no popup
-- `#zoom/art` — zoomed out with artwork popup open
-- `#zoom/art/ribbon` — zoomed out with popup and ribbon
-
-### How it works
-
-1. **On zoom out** (`handleZoomTouchEnd`): If `scale < 0.999`, calls `ConicalNav.pushToMatchUi()` which pushes `#zoom` (or compound hash) to `location.hash`, creating a browser history entry.
-2. **On back button press**: Browser fires `hashchange`. `ConicalNav.syncUiToHash()` checks if `zoom` is still in the hash. If not, calls `resetZoom(true)` — the `true` (silent) prevents a double `history.back()`.
-3. **On programmatic reset** (snap-back, wall refresh): `resetZoom(false)` calls `ConicalNav.popFromUiClose()` which calls `history.back()` and sets `ignoreNextHashChange = true` to prevent the resulting hashchange from re-triggering `syncUiToHash`.
-
-### `ConicalNav.isZoomedOut()`
-
-```javascript
-isZoomedOut() {
-  return typeof zoomState !== "undefined" && zoomState.scale < 0.999;
-}
-```
-
-This is how ConicalNav checks zoom state when building the desired hash.
+Zoom operates independently of the browser back button. It does not push or pop any hash — zooming is purely gesture-driven and resets programmatically (on wall refresh or snap-back).
 
 ---
 
@@ -430,9 +402,9 @@ Added on `touchstart` (2 fingers), removed on `touchend`. Prevents text selectio
 ```css
 .zoom-wrapper {
   transform-origin: 0 0;           /* Scale from top-left corner */
-  will-change: transform;          /* GPU compositing hint */
 }
 ```
+Note: `will-change: transform` was intentionally removed — on mobile, permanent GPU layer promotion can hit compositor texture limits, clipping the bottom half of the grid.
 No explicit sizing — it wraps `#galleryWall` and inherits its dimensions. The `transform-origin: 0 0` is critical — it means `translate(x, y) scale(s)` places the scaled grid's top-left at `(x, y)` in the wrapper's coordinate space.
 
 ### `--header-height`
