@@ -3845,6 +3845,13 @@ label {
   font-style: italic;
 }
 
+.pricing-col-note {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
 .pricing-col-payment {
   font-size: 0.58rem;
   color: rgba(255, 255, 255, 0.3);
