@@ -1,5 +1,6 @@
 from flask import Flask, render_template, send_from_directory, jsonify, request
 import os
+import time
 import json
 import uuid
 import re
@@ -585,8 +586,9 @@ def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, 
             "text": plain_body,
         })
         app.logger.info("[UPGRADE NOTIFY] Email sent to %s for asset %s (size: %s)", email, asset_id, new_size)
-    except Exception:
-        app.logger.exception("[UPGRADE NOTIFY] Failed to send email to %s for asset %s", email, asset_id)
+    except Exception as e:
+        app.logger.warning("[UPGRADE NOTIFY] Failed to send email to %s for asset %s: %s", email, asset_id, e)
+        raise
 
 
 def send_deadline_notification(email, artwork_title, asset_id, access_code=''):
@@ -1778,6 +1780,7 @@ def _run_shuffle():
                 cursor.execute(f"SELECT email, code FROM edit_codes WHERE email IN ({ep})", email_list)
                 edit_code_map = {row['email']: row['code'] for row in cursor.fetchall()}
 
+            sent = 0
             for aid, new_size in notification_candidates:
                 info = asset_info.get(aid)
                 if not info:
@@ -1785,10 +1788,21 @@ def _run_shuffle():
                 email = (info['contact1_value'] or '').strip()
                 if not email:
                     continue
+                if sent > 0:
+                    time.sleep(0.6)
                 tier_name = tier_for_size.get(new_size)
                 price_cents = TIER_CONFIG[tier_name]['price_cents'] if tier_name else 0
                 access_code = edit_code_map.get(email, '')
-                send_upgrade_notification(email, info['artwork_title'] or '', new_size, price_cents, asset_id=aid, access_code=access_code)
+                for attempt in range(3):
+                    try:
+                        send_upgrade_notification(email, info['artwork_title'] or '', new_size, price_cents, asset_id=aid, access_code=access_code)
+                        sent += 1
+                        break
+                    except Exception:
+                        if attempt < 2:
+                            time.sleep(1.5 * (attempt + 1))
+                        else:
+                            app.logger.exception("[SHUFFLE] Upgrade notification failed after 3 attempts: asset %s, email %s", aid, email)
     except Exception:
         app.logger.exception("[SHUFFLE] Upgrade notification error (shuffle succeeded)")
 
