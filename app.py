@@ -156,6 +156,7 @@ TIER_CONFIG = {
     'floor_s':   {'price_cents': 2499, 'floor': 's', 'label': 'Small Floor'},
     'floor_m':   {'price_cents': 5999, 'floor': 'm', 'label': 'Medium Floor'},
     'floor_lg':  {'price_cents': 9999, 'floor': 'lg', 'label': 'Large Floor'},
+    'exhibit':   {'price_cents': 19999, 'floor': None, 'label': 'Exhibit Tile'},
 }
 
 # Popup image optimization settings
@@ -2214,7 +2215,7 @@ def upgrade_options(asset_id):
 
         # Verify this email owns the asset
         cursor.execute("""
-            SELECT a.asset_id, a.unlocked, a.qualified_floor
+            SELECT a.asset_id, a.unlocked, a.qualified_floor, a.asset_type
             FROM assets a
             WHERE a.asset_id = ? AND LOWER(a.contact1_value) = ?
         """, (asset_id, email))
@@ -2276,15 +2277,25 @@ def upgrade_options(asset_id):
 
             tiers.append(tier_info)
 
-        # Exhibit tier placeholder
-        tiers.append({
+        # Exhibit tier — available for unlocked S/M/LG artworks not already exhibits
+        exhibit_tier = {
             'tier': 'exhibit',
             'label': 'Exhibit Tile',
-            'price_cents': 9999,
+            'price_cents': TIER_CONFIG['exhibit']['price_cents'],
             'floor': None,
-            'status': 'coming_soon',
-            'reason': 'Coming Soon',
-        })
+        }
+        if asset_row.get("asset_type") == 'exhibit':
+            exhibit_tier['status'] = 'completed'
+            exhibit_tier['reason'] = 'Already an Exhibit'
+        elif not unlocked:
+            exhibit_tier['status'] = 'locked'
+            exhibit_tier['reason'] = 'Requires Unlock first'
+        elif current_tile_size and current_tile_size in ('s', 'm', 'lg'):
+            exhibit_tier['status'] = 'available'
+        else:
+            exhibit_tier['status'] = 'locked'
+            exhibit_tier['reason'] = 'Your artwork must be in a S, M, or LG tile'
+        tiers.append(exhibit_tier)
 
         return jsonify({
             "ok": True,
@@ -2333,7 +2344,7 @@ def stripe_checkout():
 
         # Verify ownership and check prerequisites
         cursor.execute("""
-            SELECT a.asset_id, a.unlocked, a.qualified_floor, a.artwork_title, a.artist_name
+            SELECT a.asset_id, a.unlocked, a.qualified_floor, a.artwork_title, a.artist_name, a.asset_type
             FROM assets a
             WHERE a.asset_id = ? AND LOWER(a.contact1_value) = ?
         """, (asset_id, email))
@@ -2347,14 +2358,33 @@ def stripe_checkout():
         current_floor = asset_row["qualified_floor"] or 'xs'
         current_floor_order = SIZE_ORDER.get(current_floor, 0)
         cfg = TIER_CONFIG[tier]
-        tier_floor_order = SIZE_ORDER.get(cfg['floor'], 0)
 
         # Prerequisite checks
-        if tier == 'unlock_xs':
+        if tier == 'exhibit':
+            # Exhibit tier: must be unlocked, in S/M/LG tile, not already an exhibit
+            if asset_row["asset_type"] == 'exhibit':
+                conn.close()
+                return jsonify({"ok": False, "error": "This artwork is already an Exhibit."}), 400
+            if not unlocked:
+                conn.close()
+                return jsonify({"ok": False, "error": "Artwork must be unlocked first."}), 400
+            cursor.execute("SELECT tile_id FROM tiles WHERE asset_id = ?", (asset_id,))
+            tile_row = cursor.fetchone()
+            if tile_row:
+                tile_size_map = get_tile_size_map()
+                current_tile_size = tile_size_map.get(tile_row["tile_id"])
+                if current_tile_size not in ('s', 'm', 'lg'):
+                    conn.close()
+                    return jsonify({"ok": False, "error": "Your artwork must be in a S, M, or LG tile."}), 400
+            else:
+                conn.close()
+                return jsonify({"ok": False, "error": "Artwork is not placed on any tile."}), 400
+        elif tier == 'unlock_xs':
             if unlocked:
                 conn.close()
                 return jsonify({"ok": False, "error": "Artwork is already unlocked."}), 400
         else:
+            tier_floor_order = SIZE_ORDER.get(cfg['floor'], 0)
             if not unlocked:
                 conn.close()
                 return jsonify({"ok": False, "error": "Artwork must be unlocked first."}), 400
@@ -2471,7 +2501,45 @@ def stripe_webhook():
 
             # Apply the upgrade
             cfg = TIER_CONFIG.get(tier)
-            if cfg:
+            if cfg and tier == 'exhibit':
+                # Exhibit fulfillment: set asset_type, lock floor at current tile size, create exhibits row
+                # Determine current tile size for floor lock
+                cursor.execute("SELECT tile_id FROM tiles WHERE asset_id = ?", (int(asset_id),))
+                tile_row = cursor.fetchone()
+                exhibit_floor = 's'  # minimum exhibit size
+                if tile_row:
+                    tile_size_map = get_tile_size_map()
+                    current_size = tile_size_map.get(tile_row["tile_id"])
+                    if current_size in ('s', 'm', 'lg'):
+                        exhibit_floor = current_size
+                cursor.execute(
+                    "UPDATE assets SET asset_type = 'exhibit', qualified_floor = ?, unlocked = 1, stripe_payment_id = ?, payment_deadline = NULL WHERE asset_id = ?",
+                    (exhibit_floor, payment_intent, int(asset_id))
+                )
+                cursor.execute("""
+                    INSERT OR IGNORE INTO exhibits (asset_id) VALUES (?)
+                """, (int(asset_id),))
+                exhibit_id = cursor.execute(
+                    "SELECT exhibit_id FROM exhibits WHERE asset_id = ?", (int(asset_id),)
+                ).fetchone()["exhibit_id"]
+                # Seed the tile's artwork as exhibit image #1
+                cursor.execute(
+                    "SELECT popup_url, artwork_title, artist_name, year_created, medium, dimensions, edition_info, for_sale, sale_type, contact1_type, contact1_value, contact2_type, contact2_value FROM assets WHERE asset_id = ?",
+                    (int(asset_id),)
+                )
+                src = cursor.fetchone()
+                if src:
+                    cursor.execute("""
+                        INSERT INTO exhibit_images (exhibit_id, image_url, source_asset_id, display_order,
+                            artwork_title, artist_name, year_created, medium, dimensions, edition_info,
+                            for_sale, sale_type, contact1_type, contact1_value, contact2_type, contact2_value)
+                        VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (exhibit_id, src["popup_url"], int(asset_id),
+                          src["artwork_title"], src["artist_name"], src["year_created"],
+                          src["medium"], src["dimensions"], src["edition_info"],
+                          src["for_sale"], src["sale_type"], src["contact1_type"],
+                          src["contact1_value"], src["contact2_type"], src["contact2_value"]))
+            elif cfg:
                 floor_value = cfg['floor']
                 cursor.execute(
                     "UPDATE assets SET unlocked = 1, qualified_floor = ?, stripe_payment_id = ?, payment_deadline = NULL WHERE asset_id = ?",
@@ -2511,6 +2579,454 @@ def stripe_webhook():
 
     # Always return 200 to Stripe
     return jsonify({"ok": True}), 200
+
+
+# ========================================
+# Exhibit API Endpoints
+# ========================================
+
+@app.route("/api/exhibit/<int:asset_id>", methods=["GET"])
+def get_exhibit(asset_id):
+    """Get exhibit data + images for an asset. Requires edit code via query param."""
+    code = (request.args.get("code") or "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "Missing edit code."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify code → email → ownership
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+
+    email = code_row["email"].lower()
+    cursor.execute(
+        "SELECT asset_id, asset_type FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+        (asset_id, email)
+    )
+    asset_row = cursor.fetchone()
+    if not asset_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Not found or not owned."}), 404
+    if asset_row["asset_type"] != 'exhibit':
+        conn.close()
+        return jsonify({"ok": False, "error": "This artwork is not an exhibit."}), 400
+
+    cursor.execute("SELECT * FROM exhibits WHERE asset_id = ?", (asset_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        conn.close()
+        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
+
+    cursor.execute(
+        "SELECT * FROM exhibit_images WHERE exhibit_id = ? ORDER BY display_order",
+        (exhibit["exhibit_id"],)
+    )
+    images = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "exhibit": {
+            "exhibit_id": exhibit["exhibit_id"],
+            "asset_id": exhibit["asset_id"],
+            "artist_bio": exhibit["artist_bio"],
+            "artist_photo_url": exhibit["artist_photo_url"],
+            "artist_location": exhibit["artist_location"],
+        },
+        "images": images,
+    })
+
+
+@app.route("/api/exhibit/<int:asset_id>/profile", methods=["POST"])
+def update_exhibit_profile(asset_id):
+    """Update exhibit artist profile (bio, location, headshot). Accepts multipart or JSON."""
+    code = (request.form.get("code") or "").strip()
+    if not code and request.content_type and 'json' in request.content_type:
+        code = (request.get_json(silent=True) or {}).get("code", "").strip()
+
+    if not code:
+        return jsonify({"ok": False, "error": "Missing edit code."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify ownership
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+
+    email = code_row["email"].lower()
+    cursor.execute(
+        "SELECT asset_id, asset_type FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+        (asset_id, email)
+    )
+    asset_row = cursor.fetchone()
+    if not asset_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Not found or not owned."}), 404
+
+    cursor.execute("SELECT exhibit_id FROM exhibits WHERE asset_id = ?", (asset_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        conn.close()
+        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
+
+    exhibit_id = exhibit["exhibit_id"]
+
+    # Handle JSON or multipart
+    if request.content_type and 'json' in request.content_type:
+        data = request.get_json()
+        bio = data.get("artist_bio", "").strip()
+        location = data.get("artist_location", "").strip()
+    else:
+        bio = (request.form.get("artist_bio") or "").strip()
+        location = (request.form.get("artist_location") or "").strip()
+
+    # Handle optional headshot upload
+    photo_url = None
+    if 'artist_photo' in request.files:
+        photo = request.files['artist_photo']
+        if photo and photo.filename:
+            exhibit_dir = os.path.join(UPLOAD_DIR, 'exhibits', str(exhibit_id))
+            os.makedirs(exhibit_dir, exist_ok=True)
+            photo_path = os.path.join(exhibit_dir, 'artist_photo.jpg')
+            optimized = _optimize_image(photo)
+            with open(photo_path, 'wb') as f:
+                f.write(optimized.getvalue())
+            photo_url = f'/uploads/exhibits/{exhibit_id}/artist_photo.jpg'
+
+    update_parts = ["artist_bio = ?", "artist_location = ?", "updated_at = datetime('now')"]
+    update_vals = [bio, location]
+    if photo_url is not None:
+        update_parts.append("artist_photo_url = ?")
+        update_vals.append(photo_url)
+
+    update_vals.append(exhibit_id)
+    cursor.execute(f"UPDATE exhibits SET {', '.join(update_parts)} WHERE exhibit_id = ?", update_vals)
+    conn.commit()
+    conn.close()
+
+    return jsonify({"ok": True})
+
+
+@app.route("/api/exhibit/<int:exhibit_id>/upload_image", methods=["POST"])
+def upload_exhibit_image(exhibit_id):
+    """Upload a new image to an exhibit."""
+    code = (request.form.get("code") or "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "Missing edit code."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify ownership via exhibit → asset → email
+    cursor.execute("SELECT e.exhibit_id, e.asset_id FROM exhibits e WHERE e.exhibit_id = ?", (exhibit_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        conn.close()
+        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
+
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+    email = code_row["email"].lower()
+
+    cursor.execute(
+        "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+        (exhibit["asset_id"], email)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"ok": False, "error": "Not authorized."}), 403
+
+    # Check 20-image limit
+    cursor.execute("SELECT COUNT(*) FROM exhibit_images WHERE exhibit_id = ?", (exhibit_id,))
+    count = cursor.fetchone()[0]
+    if count >= 20:
+        conn.close()
+        return jsonify({"ok": False, "error": "Maximum 20 images reached."}), 400
+
+    # Process uploaded image
+    if 'image' not in request.files:
+        conn.close()
+        return jsonify({"ok": False, "error": "No image file provided."}), 400
+
+    file = request.files['image']
+    if not file or not file.filename:
+        conn.close()
+        return jsonify({"ok": False, "error": "Empty file."}), 400
+
+    exhibit_dir = os.path.join(UPLOAD_DIR, 'exhibits', str(exhibit_id))
+    os.makedirs(exhibit_dir, exist_ok=True)
+
+    filename = f"gallery_{uuid.uuid4().hex[:12]}.jpg"
+    filepath = os.path.join(exhibit_dir, filename)
+
+    optimized = _optimize_image(file)
+    with open(filepath, 'wb') as f:
+        f.write(optimized.getvalue())
+
+    image_url = f'/uploads/exhibits/{exhibit_id}/{filename}'
+
+    # Get next display_order
+    cursor.execute("SELECT COALESCE(MAX(display_order), 0) + 1 FROM exhibit_images WHERE exhibit_id = ?", (exhibit_id,))
+    next_order = cursor.fetchone()[0]
+
+    # Get artist_name from parent asset for pre-fill
+    cursor.execute("SELECT artist_name FROM assets WHERE asset_id = ?", (exhibit["asset_id"],))
+    artist_row = cursor.fetchone()
+    artist_name = artist_row["artist_name"] if artist_row else ""
+
+    cursor.execute("""
+        INSERT INTO exhibit_images (exhibit_id, image_url, display_order, artist_name)
+        VALUES (?, ?, ?, ?)
+    """, (exhibit_id, image_url, next_order, artist_name))
+    image_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    return jsonify({"ok": True, "image_id": image_id, "image_url": image_url, "display_order": next_order})
+
+
+@app.route("/api/exhibit/<int:exhibit_id>/image/<int:image_id>/metadata", methods=["POST"])
+def update_exhibit_image_metadata(exhibit_id, image_id):
+    """Update metadata for an exhibit image."""
+    data = request.get_json() or {}
+    code = data.get("code", "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "Missing edit code."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify ownership
+    cursor.execute("SELECT asset_id FROM exhibits WHERE exhibit_id = ?", (exhibit_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        conn.close()
+        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
+
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+    email = code_row["email"].lower()
+
+    cursor.execute(
+        "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+        (exhibit["asset_id"], email)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"ok": False, "error": "Not authorized."}), 403
+
+    # Verify image belongs to this exhibit
+    cursor.execute("SELECT image_id FROM exhibit_images WHERE image_id = ? AND exhibit_id = ?", (image_id, exhibit_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"ok": False, "error": "Image not found."}), 404
+
+    cursor.execute("""
+        UPDATE exhibit_images SET
+            artwork_title = ?, artist_name = ?, year_created = ?, medium = ?,
+            dimensions = ?, edition_info = ?, for_sale = ?, sale_type = ?,
+            contact1_type = ?, contact1_value = ?, contact2_type = ?, contact2_value = ?
+        WHERE image_id = ?
+    """, (
+        data.get("artwork_title", "").strip(),
+        data.get("artist_name", "").strip(),
+        data.get("year_created", "").strip(),
+        data.get("medium", "").strip(),
+        data.get("dimensions", "").strip(),
+        data.get("edition_info", "").strip(),
+        data.get("for_sale", "").strip(),
+        data.get("sale_type", "").strip(),
+        data.get("contact1_type", "").strip(),
+        data.get("contact1_value", "").strip(),
+        data.get("contact2_type", "").strip(),
+        data.get("contact2_value", "").strip(),
+        image_id,
+    ))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"ok": True})
+
+
+@app.route("/api/exhibit/<int:exhibit_id>/image/<int:image_id>", methods=["DELETE"])
+def delete_exhibit_image(exhibit_id, image_id):
+    """Remove an image from an exhibit."""
+    data = request.get_json() or {}
+    code = data.get("code", "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "Missing edit code."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify ownership
+    cursor.execute("SELECT asset_id FROM exhibits WHERE exhibit_id = ?", (exhibit_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        conn.close()
+        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
+
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+    email = code_row["email"].lower()
+
+    cursor.execute(
+        "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+        (exhibit["asset_id"], email)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"ok": False, "error": "Not authorized."}), 403
+
+    # Get image details
+    cursor.execute(
+        "SELECT image_id, image_url, source_asset_id FROM exhibit_images WHERE image_id = ? AND exhibit_id = ?",
+        (image_id, exhibit_id)
+    )
+    img_row = cursor.fetchone()
+    if not img_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Image not found."}), 404
+
+    # Prevent removal of the tile's original artwork
+    if img_row["source_asset_id"] == exhibit["asset_id"]:
+        conn.close()
+        return jsonify({"ok": False, "error": "Cannot remove the tile's original artwork from the exhibit."}), 400
+
+    # Delete the file if it's an exhibit-only upload (not a source_asset_id reference)
+    if not img_row["source_asset_id"]:
+        rel_path = img_row["image_url"]
+        if rel_path.startswith('/uploads/'):
+            rel_path = rel_path[len('/uploads/'):]
+        file_path = os.path.join(UPLOAD_DIR, rel_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    cursor.execute("DELETE FROM exhibit_images WHERE image_id = ?", (image_id,))
+
+    # Reorder remaining images
+    cursor.execute(
+        "SELECT image_id FROM exhibit_images WHERE exhibit_id = ? ORDER BY display_order",
+        (exhibit_id,)
+    )
+    for idx, row in enumerate(cursor.fetchall(), 1):
+        cursor.execute("UPDATE exhibit_images SET display_order = ? WHERE image_id = ?", (idx, row["image_id"]))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"ok": True})
+
+
+@app.route("/api/exhibit/<int:exhibit_id>/reorder", methods=["POST"])
+def reorder_exhibit_images(exhibit_id):
+    """Reorder exhibit images. Body: {code, order: [image_id, ...]}"""
+    data = request.get_json() or {}
+    code = data.get("code", "").strip()
+    order = data.get("order", [])
+
+    if not code:
+        return jsonify({"ok": False, "error": "Missing edit code."}), 400
+    if not order or not isinstance(order, list):
+        return jsonify({"ok": False, "error": "Missing order array."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify ownership
+    cursor.execute("SELECT asset_id FROM exhibits WHERE exhibit_id = ?", (exhibit_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        conn.close()
+        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
+
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+    email = code_row["email"].lower()
+
+    cursor.execute(
+        "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+        (exhibit["asset_id"], email)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"ok": False, "error": "Not authorized."}), 403
+
+    for idx, image_id in enumerate(order, 1):
+        cursor.execute(
+            "UPDATE exhibit_images SET display_order = ? WHERE image_id = ? AND exhibit_id = ?",
+            (idx, image_id, exhibit_id)
+        )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"ok": True})
+
+
+@app.route("/api/exhibit/public/<int:asset_id>", methods=["GET"])
+def get_exhibit_public(asset_id):
+    """Get exhibit data for public viewing (no edit code required). Used when clicking an exhibit tile."""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT asset_type FROM assets WHERE asset_id = ?", (asset_id,))
+    asset_row = cursor.fetchone()
+    if not asset_row or asset_row["asset_type"] != 'exhibit':
+        conn.close()
+        return jsonify({"ok": False, "error": "Not an exhibit."}), 404
+
+    cursor.execute("SELECT * FROM exhibits WHERE asset_id = ?", (asset_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        conn.close()
+        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
+
+    cursor.execute(
+        "SELECT * FROM exhibit_images WHERE exhibit_id = ? ORDER BY display_order",
+        (exhibit["exhibit_id"],)
+    )
+    images = [dict(row) for row in cursor.fetchall()]
+
+    # Get artist name from parent asset
+    cursor.execute("SELECT artist_name, tile_url FROM assets WHERE asset_id = ?", (asset_id,))
+    asset_info = cursor.fetchone()
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "exhibit": {
+            "exhibit_id": exhibit["exhibit_id"],
+            "asset_id": exhibit["asset_id"],
+            "artist_name": asset_info["artist_name"] if asset_info else "",
+            "exhibit_title": exhibit["exhibit_title"] or (asset_info["artist_name"] if asset_info else ""),
+            "artist_bio": exhibit["artist_bio"],
+            "artist_photo_url": exhibit["artist_photo_url"],
+            "artist_location": exhibit["artist_location"],
+            "tile_url": asset_info["tile_url"] if asset_info else "",
+        },
+        "images": images,
+    })
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def get_db():
@@ -248,6 +248,56 @@ def init_db():
 
         _set_schema_version(cursor, 10)
         print("Migration 10 complete: Payment deadline column added")
+
+    # Migration 11: Exhibits tables + asset_type 'exhibit' value
+    if current_version < 11:
+        print("Applying migration 11: Exhibits tables...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS exhibits (
+                exhibit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id INTEGER NOT NULL,
+                artist_bio TEXT NOT NULL DEFAULT '',
+                artist_photo_url TEXT,
+                artist_location TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_exhibits_asset_id
+            ON exhibits(asset_id)
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS exhibit_images (
+                image_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exhibit_id INTEGER NOT NULL,
+                image_url TEXT NOT NULL,
+                source_asset_id INTEGER,
+                display_order INTEGER NOT NULL,
+                artwork_title TEXT NOT NULL DEFAULT '',
+                artist_name TEXT NOT NULL DEFAULT '',
+                year_created TEXT NOT NULL DEFAULT '',
+                medium TEXT NOT NULL DEFAULT '',
+                dimensions TEXT NOT NULL DEFAULT '',
+                edition_info TEXT NOT NULL DEFAULT '',
+                for_sale TEXT NOT NULL DEFAULT '',
+                sale_type TEXT NOT NULL DEFAULT '',
+                contact1_type TEXT NOT NULL DEFAULT '',
+                contact1_value TEXT NOT NULL DEFAULT '',
+                contact2_type TEXT NOT NULL DEFAULT '',
+                contact2_value TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY(exhibit_id) REFERENCES exhibits(exhibit_id) ON DELETE CASCADE,
+                FOREIGN KEY(source_asset_id) REFERENCES assets(asset_id) ON DELETE SET NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_exhibit_images_exhibit_id
+            ON exhibit_images(exhibit_id)
+        """)
+        _set_schema_version(cursor, 11)
+        print("Migration 11 complete: Exhibits tables created")
 
     conn.commit()
     conn.close()
