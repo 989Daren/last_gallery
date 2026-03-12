@@ -1085,27 +1085,27 @@ function sizeToUnits(size) {
   if (!size) return 1;
   const s = size.toLowerCase();
   switch (s) {
-    case "xs":  return 1;
-    case "s":   return 2;
-    case "m":   return 3;
-    case "lg":  return 4;
+    case "s":   return 1;
+    case "m":   return 2;
+    case "lg":  return 3;
+    case "xl":  return 4;
     default:    return 1;
   }
 }
 
 // Classification in design space (after scaling correction)
 function classifySizeDesign(widthDesign) {
-  if (widthDesign >= 60  && widthDesign < 128) return "xs";   // ~85
-  if (widthDesign >= 128 && widthDesign < 213) return "s";    // ~170
-  if (widthDesign >= 213 && widthDesign < 298) return "m";    // ~255
-  if (widthDesign >= 298 && widthDesign < 425) return "lg";   // ~340
+  if (widthDesign >= 60  && widthDesign < 128) return "s";    // ~85
+  if (widthDesign >= 128 && widthDesign < 213) return "m";    // ~170
+  if (widthDesign >= 213 && widthDesign < 298) return "lg";   // ~255
+  if (widthDesign >= 298 && widthDesign < 425) return "xl";   // ~340
   return "unknown";
 }
 
 // Parse the SVG text into tile objects following the scaling guide.
-// Ungrouped <rect> elements are individual (XS) tiles.
+// Ungrouped <rect> elements are individual (S) tiles.
 // <g> elements containing <rect> children are larger tiles — the group's
-// bounding box determines size classification (S, M, LG).
+// bounding box determines size classification (M, LG, XL).
 function parseSvgToTiles(svgText) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgText, "image/svg+xml");
@@ -1174,16 +1174,16 @@ function parseSvgToTiles(svgText) {
     return [];
   }
 
-  // 2) Infer scale factor from XS candidates (40-90 SVG units wide)
-  const xsCandidates = rects.map(r => r.width).filter(w => w >= 40 && w <= 90);
-  if (!xsCandidates.length) {
-    warn("No XS candidates found to infer scale factor.");
+  // 2) Infer scale factor from S candidates (40-90 SVG units wide)
+  const sCandidates = rects.map(r => r.width).filter(w => w >= 40 && w <= 90);
+  if (!sCandidates.length) {
+    warn("No S candidates found to infer scale factor.");
     return [];
   }
 
-  const avgXsWidth = xsCandidates.reduce((a, b) => a + b, 0) / xsCandidates.length;
-  const DESIGN_XS = 85;
-  const scaleFactor = avgXsWidth / DESIGN_XS;
+  const avgSWidth = sCandidates.reduce((a, b) => a + b, 0) / sCandidates.length;
+  const DESIGN_S = 85;
+  const scaleFactor = avgSWidth / DESIGN_S;
 
   // 3) Convert everything into design space
   rects.forEach(r => {
@@ -1212,9 +1212,9 @@ function parseSvgToTiles(svgText) {
     r.size   = classifySizeDesign(r.design_width);
   });
 
-  // 6) Assign IDs per size bucket (X1, X2… S1, S2… etc.)
-  const counters = { xs: 0, s: 0, m: 0, lg: 0, unknown: 0 };
-  const prefix   = { xs: "X", s: "S", m: "M", lg: "L", unknown: "U" };
+  // 6) Assign IDs per size bucket (S1, S2… M1, M2… etc.)
+  const counters = { s: 0, m: 0, lg: 0, xl: 0, unknown: 0 };
+  const prefix   = { s: "S", m: "M", lg: "L", xl: "XL", unknown: "U" };
 
   return rects
     .filter(r => r.size !== "unknown")
@@ -1853,10 +1853,10 @@ document.addEventListener("DOMContentLoaded", () => {
     delete window._purchaseSuccessData;
 
     const tierMessages = {
-      'unlock_xs': 'Your artwork is now unlocked! It can appear in larger tiles during the weekly shuffle.<br><br><strong>Note:</strong> Because the weekly shuffle is random, there is no guarantee your artwork will land in a larger tile size.',
-      'floor_s': 'Your artwork floor has been set to Small. It will never drop below a Small tile.',
+      'unlock_s': 'Your artwork is now unlocked! It can appear in larger tiles during the weekly shuffle.<br><br><strong>Note:</strong> Because the weekly shuffle is random, there is no guarantee your artwork will land in a larger tile size.',
       'floor_m': 'Your artwork floor has been set to Medium. It will never drop below a Medium tile.',
       'floor_lg': 'Your artwork floor has been set to Large. It will never drop below a Large tile.',
+      'floor_xl': 'Your artwork floor has been set to Extra Large. It will never drop below an Extra Large tile.',
     };
     const msg = tierMessages[data.tier] || 'Your upgrade has been applied!';
 

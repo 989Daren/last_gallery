@@ -800,11 +800,11 @@ label {
   border: 1px solid rgba(0,0,0,0.7);
 }
 
-/* ✅ FIX: size-specific padding must match your JS (data-size), not .tile.xs etc. */
-.tile[data-size="xs"] .art-frame { padding: 4px; }
-.tile[data-size="s"]  .art-frame { padding: 6px; }
-.tile[data-size="m"]  .art-frame { padding: 8px; }
-.tile[data-size="lg"] .art-frame { padding: 10px; }
+/* Size-specific padding must match your JS (data-size) */
+.tile[data-size="s"]  .art-frame { padding: 4px; }
+.tile[data-size="m"]  .art-frame { padding: 6px; }
+.tile[data-size="lg"] .art-frame { padding: 8px; }
+.tile[data-size="xl"] .art-frame { padding: 10px; }
 
 /* ===== Exhibit Tile Visual Identity ===== */
 /* No muting — exhibit tiles show full unedited artwork */

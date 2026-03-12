@@ -24,9 +24,9 @@ SVG_PATH = os.path.join(BASE_DIR, "static", "grid_full.svg")
 def parse_svg_tiles(svg_path):
     """Parse the SVG and return tile IDs (same logic as app.py).
 
-    Ungrouped <rect> elements are individual (XS) tiles.
+    Ungrouped <rect> elements are individual (S) tiles.
     <g> elements containing <rect> children are larger tiles — the group's
-    bounding box determines size classification (S, M, LG).
+    bounding box determines size classification (M, LG, XL).
     """
     try:
         tree = ET.parse(svg_path)
@@ -91,15 +91,15 @@ def parse_svg_tiles(svg_path):
     if not tiles:
         return []
 
-    # Infer scale factor from XS tiles (individual rects, width 40-90 SVG units)
-    xs_candidates = [t['width'] for t in tiles if 40 <= t['width'] <= 90]
-    if not xs_candidates:
-        print("No XS tiles found for scale detection")
+    # Infer scale factor from S tiles (individual rects, width 40-90 SVG units)
+    s_candidates = [t['width'] for t in tiles if 40 <= t['width'] <= 90]
+    if not s_candidates:
+        print("No S tiles found for scale detection")
         return []
 
-    avg_xs = sum(xs_candidates) / len(xs_candidates)
-    DESIGN_XS = 85.0
-    scale = avg_xs / DESIGN_XS
+    avg_s = sum(s_candidates) / len(s_candidates)
+    DESIGN_S = 85.0
+    scale = avg_s / DESIGN_S
 
     for t in tiles:
         t['design_width'] = t['width'] / scale
@@ -111,10 +111,10 @@ def parse_svg_tiles(svg_path):
     min_top = min(t['design_top'] for t in tiles)
 
     def classify(w):
-        if w >= 60 and w < 128: return 'xs'
-        if w >= 128 and w < 213: return 's'
-        if w >= 213 and w < 298: return 'm'
-        if w >= 298 and w < 425: return 'lg'
+        if w >= 60 and w < 128: return 's'
+        if w >= 128 and w < 213: return 'm'
+        if w >= 213 and w < 298: return 'lg'
+        if w >= 298 and w < 425: return 'xl'
         return 'unknown'
 
     # Normalize and classify
@@ -124,8 +124,8 @@ def parse_svg_tiles(svg_path):
         t['size'] = classify(t['design_width'])
 
     # Assign IDs
-    counters = {'xs': 0, 's': 0, 'm': 0, 'lg': 0, 'unknown': 0}
-    prefix = {'xs': 'X', 's': 'S', 'm': 'M', 'lg': 'L', 'unknown': 'U'}
+    counters = {'s': 0, 'm': 0, 'lg': 0, 'xl': 0, 'unknown': 0}
+    prefix = {'s': 'S', 'm': 'M', 'lg': 'L', 'xl': 'XL', 'unknown': 'U'}
     tile_ids = []
     for t in tiles:
         if t['size'] == 'unknown':

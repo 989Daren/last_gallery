@@ -26,7 +26,7 @@ python app.py
 |------|---------|
 | `app.py` | Flask application, all API endpoints |
 | `db.py` | Database connection, schema initialization, versioned migrations |
-| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + purchase_history + schema_version tables, schema v10) |
+| `data/gallery.db` | SQLite database (assets + tiles + edit_codes + countdown_schedule + purchase_history + schema_version tables, schema v14) |
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
 | `cleanup_expired.py` | Remove artwork past its 24-hour payment deadline (runs via systemd timer) |
 
@@ -74,7 +74,7 @@ CREATE TABLE assets (
     contact2_type TEXT NOT NULL DEFAULT '',
     contact2_value TEXT NOT NULL DEFAULT '',
     -- Qualified floor model (migration v7)
-    qualified_floor TEXT NOT NULL DEFAULT 'xs',  -- 'xs' | 's' | 'm' | 'lg' — artwork never shuffles below this size
+    qualified_floor TEXT NOT NULL DEFAULT 's',  -- 's' | 'm' | 'lg' | 'xl' — artwork never shuffles below this size
     stripe_payment_id TEXT,                       -- nullable, Stripe payment reference for tile upgrades
     -- Asset type (migration v9)
     asset_type TEXT NOT NULL DEFAULT 'artwork',   -- 'artwork' | 'info'
@@ -112,7 +112,7 @@ CREATE TABLE purchase_history (
     purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
     asset_id INTEGER NOT NULL,
     email TEXT NOT NULL DEFAULT '',
-    tier TEXT NOT NULL DEFAULT '',              -- 'unlock_xs' | 'floor_s' | 'floor_m' | 'floor_lg'
+    tier TEXT NOT NULL DEFAULT '',              -- 'unlock_s' | 'floor_m' | 'floor_lg' | 'floor_xl'
     amount_cents INTEGER NOT NULL DEFAULT 0,
     stripe_session_id TEXT,
     stripe_payment_intent TEXT,
@@ -123,7 +123,7 @@ CREATE TABLE purchase_history (
 );
 ```
 
-Current schema version: **10**
+Current schema version: **14**
 
 ## Tile Registration
 
@@ -134,13 +134,13 @@ Tiles are defined visually in `grid_full.svg` but must exist in the `tiles` data
 2. **After SVG Extension**: Run `grid utilities/repair_tiles.py` to sync database with new SVG tiles
 
 ### SVG Structure
-- Ungrouped `<rect>` elements inside the main layer `<g>` are individual XS tiles
-- `<g>` elements containing `<rect>` children are larger tiles (S, M, LG) — the group's bounding box determines size classification
+- Ungrouped `<rect>` elements inside the main layer `<g>` are individual S tiles
+- `<g>` elements containing `<rect>` children are larger tiles (M, LG, XL) — the group's bounding box determines size classification
 - All three parsers (app.py, repair_tiles.py, main.js) use this same group-aware logic
 
 ### Extending the Grid
 When adding tiles to `grid_full.svg`:
-1. Add `<rect>` elements (for XS) or `<g>` groups containing `<rect>` children (for larger tiles) to the SVG
+1. Add `<rect>` elements (for S) or `<g>` groups containing `<rect>` children (for larger tiles) to the SVG
 2. Run `python "grid utilities/repair_tiles.py"` from project root
 3. Script parses SVG, finds new tile IDs, inserts them into database
 4. Existing artwork assignments are preserved
@@ -149,10 +149,10 @@ When adding tiles to `grid_full.svg`:
 Tiles are classified by size and numbered sequentially:
 | Size Class | Width Range (design units) | Prefix | Example |
 |------------|---------------------------|--------|---------|
-| XS | 60-128 | X | X1, X2, X3... |
-| S | 128-213 | S | S1, S2... |
-| M | 213-298 | M | M1, M2... |
-| LG | 298-425 | L | L1, L2... |
+| S | 60-128 | S | S1, S2, S3... |
+| M | 128-213 | M | M1, M2... |
+| LG | 213-298 | L | L1, L2... |
+| XL | 298-425 | XL | XL1, XL2... |
 
 ## API Endpoints
 
@@ -185,7 +185,7 @@ Tiles are classified by size and numbered sequentially:
 | `/api/admin/undo` | POST | Undo last action (supports `action_type: shuffle/non_shuffle`) |
 | `/api/admin/history_status` | GET | Get undo availability counts |
 | `/api/admin/force_unlock` | POST | Set unlocked to 0 or 1 explicitly (body: `{asset_id, unlocked: 0\|1}`) |
-| `/api/admin/set_qualified_floor` | POST | Set qualified floor for artwork (body: `{asset_id, qualified_floor: "xs"\|"s"\|"m"\|"lg"}`) |
+| `/api/admin/set_qualified_floor` | POST | Set qualified floor for artwork (body: `{asset_id, qualified_floor: "s"\|"m"\|"lg"\|"xl"}`) |
 | `/api/admin/countdown` | POST | Control countdown timer (actions: set_active, set_scheduled, clear) |
 | `/shuffle` | POST | Randomly redistribute all images (body: `{pin: "REDACTED_PIN"}`) |
 
@@ -373,7 +373,7 @@ Menu items in order:
 ## Upgrade Modal (unlock_modal.js)
 Three-step purchase flow using edit codes for identity ("lock what you landed on" model):
 - **Step 1: Identification** — Enter edit code → calls `POST /api/my_artworks` to get artworks. "Forgot your code?" inline resend form.
-- **Step 2: Artwork Selection** — Shows all artworks for that email with status badges (Locked/Unlocked/Floor: S/M/LG). Auto-skipped if only 1 artwork.
+- **Step 2: Artwork Selection** — Shows all artworks for that email with status badges (Locked/Unlocked/Floor: M/LG/XL). Auto-skipped if only 1 artwork.
 - **Step 3: Upgrade Options** — Shows "Currently in a [Size] tile" subtitle. Fetches `GET /api/upgrade_options/<asset_id>` for tiers. Only the tier matching the artwork's current tile size is available (gold CTA → Stripe). Other floor tiers show "Your artwork must be in a [Size] tile". "Coming Soon: Exhibit Tile" teaser at bottom.
 - **Tile-size validation**: `/api/stripe/checkout` re-verifies tile size before creating session, preventing race conditions with shuffle.
 - **Navigation**: Same `#unlock` ConicalNav hash for all steps. `openUnlockModal(assetId)` auto-selects artwork after identification.
@@ -390,17 +390,17 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **Also opened from**: "Submission Guidelines" link in upload modal (opens without hash push so upload modal stays open underneath)
 
 ## Shuffle & Unlock Rules (Qualified Floor Model)
-- **New uploads** always land in an XS tile (`pick_next_xs_tile_id()` in `app.py`). Available XS count accounts for floor-xs unlocked artwork in non-XS tiles needing a reserved XS slot.
-- **Unupgraded** (`unlocked = 0`): XS tiles only — most constrained, placed first during shuffle.
-- **Floor > xs** (`unlocked = 1`, `qualified_floor` in s/m/lg): Shuffles into tiles at floor size or larger. Higher floor = fewer eligible tiles = placed earlier.
-- **Unlocked** (`unlocked = 1`, `qualified_floor = 'xs'`): Any tile size — least constrained, placed last. Weighted random: more tiles in a size = higher probability.
-- **`qualified_floor`** column (values: xs, s, m, lg): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment.
+- **New uploads** always land in an S tile (`pick_next_s_tile_id()` in `app.py`). Available S count accounts for floor-s unlocked artwork in non-S tiles needing a reserved S slot.
+- **Unupgraded** (`unlocked = 0`): S tiles only — most constrained, placed first during shuffle.
+- **Floor > s** (`unlocked = 1`, `qualified_floor` in m/lg/xl): Shuffles into tiles at floor size or larger. Higher floor = fewer eligible tiles = placed earlier.
+- **Unlocked** (`unlocked = 1`, `qualified_floor = 's'`): Any tile size — least constrained, placed last. Weighted random: more tiles in a size = higher probability.
+- **`qualified_floor`** column (values: s, m, lg, xl): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment.
 - **"Lock what you landed on"**: Artists can only purchase the floor tier matching their artwork's current tile size. Creates urgency around the weekly shuffle cycle — land in a bigger tile, lock it in before the next shuffle.
-- **Stripe integration**: `/api/stripe/checkout` creates a Stripe Checkout Session for a tier purchase. Webhook (`/api/stripe/webhook`) applies the upgrade on `checkout.session.completed`. Tiers: `unlock_xs` ($9.99), `floor_s` ($24.99), `floor_m` ($39.99), `floor_lg` ($59.99). Defined in `TIER_CONFIG` dict in `app.py`. Uses inline `price_data` (no pre-created Stripe Price IDs). Fulfillment is idempotent via `purchase_history` table.
+- **Stripe integration**: `/api/stripe/checkout` creates a Stripe Checkout Session for a tier purchase. Webhook (`/api/stripe/webhook`) applies the upgrade on `checkout.session.completed`. Tiers: `unlock_s` ($9.99), `floor_m` ($24.99), `floor_lg` ($59.99), `floor_xl` ($99.99). Defined in `TIER_CONFIG` dict in `app.py`. Uses inline `price_data` (no pre-created Stripe Price IDs). Fulfillment is idempotent via `purchase_history` table.
 - **Post-shuffle notifications**: After each shuffle, `_run_shuffle()` emails artists whose unlocked artwork landed in a tile above their current floor. Email includes artwork title, new tile size, price to upgrade, access code (edit code, called "access code" in this context), and CTA link (`/?upgrade=1&asset_id=X`). Uses `send_upgrade_notification()`. Wrapped in try/except — failures never break the shuffle.
-- **`/api/lock_tile`**: Admin/direct-use endpoint, sets `qualified_floor` to artwork's current tile size + `unlocked=1`. Rejects XS locks.
+- **`/api/lock_tile`**: Admin/direct-use endpoint, sets `qualified_floor` to artwork's current tile size + `unlocked=1`. Rejects S locks.
 - **Derangement rule**: Every artwork must change position during a shuffle — no artwork may remain in its previous tile. The algorithm excludes each artwork's original tile from candidates; if the original tile is the last remaining in its pool, a swap with a previously-assigned artwork resolves it.
-- **Admin force_unlock**: `/api/admin/force_unlock` sets unlocked explicitly (0 or 1). Locking (unlocked=0) also resets `qualified_floor` to 'xs'.
+- **Admin force_unlock**: `/api/admin/force_unlock` sets unlocked explicitly (0 or 1). Locking (unlocked=0) also resets `qualified_floor` to 's'.
 
 ## Free Tile Limit & 24-Hour Deadline
 - **1 free tile per email**: Each artist gets one free (`unlocked=0`) tile. On 2nd+ uploads, a `payment_deadline` is set 24 hours from metadata save.

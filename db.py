@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 
 def get_db():
@@ -329,6 +329,51 @@ def init_db():
 
         _set_schema_version(cursor, 13)
         print("Migration 13 complete: Exhibit profile fields added")
+
+    # Migration 14: Rename tile sizes up by one (xs→s, s→m, m→lg, lg→xl)
+    if current_version < 14:
+        print("Applying migration 14: Tile size rename (xs→s, s→m, m→lg, lg→xl)...")
+
+        # 1) Rename qualified_floor values in assets (use CASE to avoid collisions)
+        cursor.execute("""
+            UPDATE assets SET qualified_floor = CASE qualified_floor
+                WHEN 'lg' THEN 'xl'
+                WHEN 'm'  THEN 'lg'
+                WHEN 's'  THEN 'm'
+                WHEN 'xs' THEN 's'
+                ELSE qualified_floor
+            END
+        """)
+        print(f"  - Updated {cursor.rowcount} asset qualified_floor values")
+
+        # 2) Rename tile_id prefixes (X→S, S→M, M→L, L→XL)
+        #    Two-pass via temp prefix to avoid primary key collisions
+        cursor.execute("UPDATE tiles SET tile_id = '~' || tile_id")
+        cursor.execute("""
+            UPDATE tiles SET tile_id = CASE
+                WHEN tile_id GLOB '~L*'  THEN 'XL' || SUBSTR(tile_id, 3)
+                WHEN tile_id GLOB '~M*'  THEN 'L'  || SUBSTR(tile_id, 3)
+                WHEN tile_id GLOB '~S*'  THEN 'M'  || SUBSTR(tile_id, 3)
+                WHEN tile_id GLOB '~X*'  THEN 'S'  || SUBSTR(tile_id, 3)
+                ELSE SUBSTR(tile_id, 2)
+            END
+        """)
+        print(f"  - Renamed {cursor.rowcount} tile_id prefixes")
+
+        # 3) Rename tier values in purchase_history
+        cursor.execute("""
+            UPDATE purchase_history SET tier = CASE tier
+                WHEN 'floor_lg' THEN 'floor_xl'
+                WHEN 'floor_m'  THEN 'floor_lg'
+                WHEN 'floor_s'  THEN 'floor_m'
+                WHEN 'unlock_xs' THEN 'unlock_s'
+                ELSE tier
+            END
+        """)
+        print(f"  - Updated {cursor.rowcount} purchase_history tier values")
+
+        _set_schema_version(cursor, 14)
+        print("Migration 14 complete: Tile sizes renamed")
 
     conn.commit()
     conn.close()

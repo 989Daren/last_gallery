@@ -90,7 +90,7 @@ _generate_info_tile_image()
 
 # ---- Seed info tiles ----
 def _seed_info_tiles():
-    """Ensure 3 info-type assets exist and are assigned to XS tiles."""
+    """Ensure 3 info-type assets exist and are assigned to S tiles."""
     import random
 
     conn = get_db()
@@ -104,23 +104,23 @@ def _seed_info_tiles():
 
     needed = 3 - count
     tile_size_map = get_tile_size_map()
-    xs_tile_ids = {tid for tid, sz in tile_size_map.items() if sz == 'xs'}
+    s_tile_ids = {tid for tid, sz in tile_size_map.items() if sz == 's'}
 
     # Get occupied tiles
     cursor.execute("SELECT tile_id FROM tiles WHERE asset_id IS NOT NULL")
     occupied = {row["tile_id"] for row in cursor.fetchall()}
-    empty_xs = list(xs_tile_ids - occupied)
-    random.shuffle(empty_xs)
+    empty_s = list(s_tile_ids - occupied)
+    random.shuffle(empty_s)
 
     for i in range(needed):
-        if not empty_xs:
-            print(f"Warning: no empty XS tiles for info asset {i+1}")
+        if not empty_s:
+            print(f"Warning: no empty S tiles for info asset {i+1}")
             break
-        tile_id = empty_xs.pop()
+        tile_id = empty_s.pop()
         cursor.execute("""
             INSERT INTO assets (artist_name, artwork_title, tile_url, popup_url,
                                 unlocked, qualified_floor, asset_type)
-            VALUES ('', '', '/static/images/info_tile.jpg', '', 0, 'xs', 'info')
+            VALUES ('', '', '/static/images/info_tile.jpg', '', 0, 's', 'info')
         """)
         asset_id = cursor.lastrowid
         cursor.execute(
@@ -152,10 +152,10 @@ if STRIPE_SECRET_KEY:
 
 # Upgrade tier configuration: tier_name -> (price_cents, floor_value, label)
 TIER_CONFIG = {
-    'unlock_xs': {'price_cents': 999, 'floor': 'xs', 'label': 'Unlock (XS)'},
-    'floor_s':   {'price_cents': 2499, 'floor': 's', 'label': 'Small Floor'},
-    'floor_m':   {'price_cents': 5999, 'floor': 'm', 'label': 'Medium Floor'},
-    'floor_lg':  {'price_cents': 9999, 'floor': 'lg', 'label': 'Large Floor'},
+    'unlock_s':  {'price_cents': 999, 'floor': 's', 'label': 'Unlock (S)'},
+    'floor_m':   {'price_cents': 2499, 'floor': 'm', 'label': 'Medium Floor'},
+    'floor_lg':  {'price_cents': 5999, 'floor': 'lg', 'label': 'Large Floor'},
+    'floor_xl':  {'price_cents': 9999, 'floor': 'xl', 'label': 'Extra Large Floor'},
     'exhibit':   {'price_cents': 19999, 'floor': None, 'label': 'Exhibit Tile'},
 }
 
@@ -164,8 +164,10 @@ POPUP_MAX_DIMENSION = 2560  # Max pixels on longest side
 POPUP_JPEG_QUALITY = 90
 
 # Tile size ordering for qualified_floor model
-SIZE_ORDER = {'xs': 0, 's': 1, 'm': 2, 'lg': 3}
-SIZE_NAMES = ['xs', 's', 'm', 'lg']
+SIZE_ORDER = {'s': 0, 'm': 1, 'lg': 2, 'xl': 3}
+SIZE_NAMES = ['s', 'm', 'lg', 'xl']
+SIZE_DISPLAY = {'s': 'Small', 'm': 'Medium', 'lg': 'Large', 'xl': 'Extra Large'}
+TIER_FOR_SIZE = {cfg['floor']: name for name, cfg in TIER_CONFIG.items() if cfg['floor'] and name.startswith('floor_')}
 
 
 def load_grid_color():
@@ -199,9 +201,9 @@ def check_admin_pin():
 def _parse_svg_tiles(svg_path):
     """Parse the SVG and return an array of tile descriptors similar to the client.
 
-    Ungrouped <rect> elements are individual (XS) tiles.
+    Ungrouped <rect> elements are individual (S) tiles.
     <g> elements containing <rect> children are larger tiles — the group's
-    bounding box determines size classification (S, M, LG).
+    bounding box determines size classification (M, LG, XL).
     """
     try:
         tree = ET.parse(svg_path)
@@ -263,14 +265,14 @@ def _parse_svg_tiles(svg_path):
     if not raw_tiles:
         return []
 
-    # Infer scale factor using XS candidates (same thresholds as client)
-    xs_candidates = [t['width'] for t in raw_tiles if 40 <= t['width'] <= 90]
-    if not xs_candidates:
+    # Infer scale factor using S candidates (same thresholds as client)
+    s_candidates = [t['width'] for t in raw_tiles if 40 <= t['width'] <= 90]
+    if not s_candidates:
         return []
 
-    avg_xs = sum(xs_candidates) / len(xs_candidates)
-    DESIGN_XS = 85.0
-    scale = avg_xs / DESIGN_XS
+    avg_s = sum(s_candidates) / len(s_candidates)
+    DESIGN_S = 85.0
+    scale = avg_s / DESIGN_S
 
     for t in raw_tiles:
         t['design_width'] = t['width'] / scale
@@ -282,10 +284,10 @@ def _parse_svg_tiles(svg_path):
     min_top = min(t['design_top'] for t in raw_tiles)
 
     def classify(w):
-        if w >= 60 and w < 128: return 'xs'
-        if w >= 128 and w < 213: return 's'
-        if w >= 213 and w < 298: return 'm'
-        if w >= 298 and w < 425: return 'lg'
+        if w >= 60 and w < 128: return 's'
+        if w >= 128 and w < 213: return 'm'
+        if w >= 213 and w < 298: return 'lg'
+        if w >= 298 and w < 425: return 'xl'
         return 'unknown'
 
     # Normalize and classify
@@ -295,8 +297,8 @@ def _parse_svg_tiles(svg_path):
         t['size'] = classify(t['design_width'])
 
     # Assign IDs
-    counters = {'xs': 0, 's': 0, 'm': 0, 'lg': 0, 'unknown': 0}
-    prefix = {'xs': 'X', 's': 'S', 'm': 'M', 'lg': 'L', 'unknown': 'U'}
+    counters = {'s': 0, 'm': 0, 'lg': 0, 'xl': 0, 'unknown': 0}
+    prefix = {'s': 'S', 'm': 'M', 'lg': 'L', 'xl': 'XL', 'unknown': 'U'}
     tiles = []
     for t in raw_tiles:
         if t['size'] == 'unknown':
@@ -329,16 +331,16 @@ def get_tile_size_map():
 _seed_info_tiles()
 
 
-def pick_next_xs_tile_id():
-    """Pick a random unoccupied XS tile, accounting for floor-xs unlocked artwork reservations.
+def pick_next_s_tile_id():
+    """Pick a random unoccupied S tile, accounting for floor-s unlocked artwork reservations.
 
-    Floor-xs unlocked artwork currently sitting in a non-XS tile still needs
-    an XS slot reserved for it (so it has somewhere to go if shuffled back).
+    Floor-s unlocked artwork currently sitting in a non-S tile still needs
+    an S slot reserved for it (so it has somewhere to go if shuffled back).
     """
     import random
 
     tile_size_map = get_tile_size_map()
-    xs_tile_ids = {tid for tid, sz in tile_size_map.items() if sz == 'xs'}
+    s_tile_ids = {tid for tid, sz in tile_size_map.items() if sz == 's'}
 
     try:
         conn = get_db()
@@ -357,20 +359,20 @@ def pick_next_xs_tile_id():
         occupied = []
 
     occupied_tile_ids = {o['tile_id'] for o in occupied}
-    empty_xs = xs_tile_ids - occupied_tile_ids
+    empty_s = s_tile_ids - occupied_tile_ids
 
-    # Count floor-xs unlocked artwork sitting in non-XS tiles (needs XS reserved)
+    # Count floor-s unlocked artwork sitting in non-S tiles (needs S reserved)
     reservations = sum(
         1 for o in occupied
-        if o['unlocked'] and o.get('qualified_floor', 'xs') == 'xs'
-        and o['tile_id'] not in xs_tile_ids
+        if o['unlocked'] and o.get('qualified_floor', 's') == 's'
+        and o['tile_id'] not in s_tile_ids
     )
 
-    available_count = len(empty_xs) - reservations
+    available_count = len(empty_s) - reservations
     if available_count <= 0:
         return None
 
-    return random.choice(list(empty_xs))
+    return random.choice(list(empty_s))
 
 
 def _allowed_ext(filename: str):
@@ -534,8 +536,7 @@ def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, 
         app.logger.warning("[UPGRADE NOTIFY] RESEND_API_KEY not set — notification not emailed. To: %s | Asset: %s", email, asset_id)
         return
 
-    size_display = {'s': 'Small', 'm': 'Medium', 'lg': 'Large'}
-    display_name = size_display.get(new_size, new_size.upper())
+    display_name = SIZE_DISPLAY.get(new_size, new_size.upper())
     price_str = f"${tier_price_cents / 100:.2f}"
     safe_title = html_mod.escape(artwork_title) if artwork_title else "your artwork"
     upgrade_link = f"{BASE_URL}/?upgrade=1&asset_id={asset_id}"
@@ -735,7 +736,7 @@ def wall_state():
                 "contact2_type": row["contact2_type"] or "",
                 "contact2_value": row["contact2_value"] or "",
                 "unlocked": row["unlocked"] or 0,
-                "qualified_floor": row["qualified_floor"] or "xs",
+                "qualified_floor": row["qualified_floor"] or "s",
                 "asset_type": row["asset_type"] or "artwork",
             })
         conn.close()
@@ -755,7 +756,7 @@ def uploads(filename):
 
 @app.route("/api/upload_assets", methods=["POST"])
 def upload_assets():
-    """Upload cropped tile image + popup image and place into next available XS tile.
+    """Upload cropped tile image + popup image and place into next available S tile.
 
     Expected multipart form fields:
     - tile_image: required
@@ -777,9 +778,9 @@ def upload_assets():
     if popup_fs.filename and not _allowed_ext(popup_fs.filename):
         return jsonify({"ok": False, "error": "unsupported popup_image type"}), 400
 
-    tile_id = pick_next_xs_tile_id()
+    tile_id = pick_next_s_tile_id()
     if not tile_id:
-        return jsonify({"ok": False, "error": "no available XS tile"}), 409
+        return jsonify({"ok": False, "error": "no available S tile"}), 409
 
     # Generate unique ID for filenames
     file_id = str(uuid.uuid4())
@@ -1351,7 +1352,7 @@ def _restore_db_snapshot(snapshot):
              a.get("artist_contact", ""),
              a.get("contact1_type", ""), a.get("contact1_value", ""),
              a.get("contact2_type", ""), a.get("contact2_value", ""),
-             a.get("unlocked", 0), a.get("qualified_floor", "xs"),
+             a.get("unlocked", 0), a.get("qualified_floor", "s"),
              a.get("stripe_payment_id"), a.get("payment_deadline"))
         )
 
@@ -1428,7 +1429,7 @@ def admin_tile_info():
                 "tile_url": row["tile_url"] or "",
                 "popup_url": row["popup_url"] or "",
                 "unlocked": row["unlocked"] or 0,
-                "qualified_floor": row["qualified_floor"] or "xs"
+                "qualified_floor": row["qualified_floor"] or "s"
             })
 
         return jsonify({
@@ -1645,12 +1646,12 @@ def _run_shuffle():
     # Sort artwork by constraint level (most constrained first)
     def constraint_key(o):
         if not o['unlocked']:
-            return (0, 0)  # XS only — most constrained
-        floor = o.get('qualified_floor', 'xs') or 'xs'
+            return (0, 0)  # S only — most constrained
+        floor = o.get('qualified_floor', 's') or 's'
         floor_idx = SIZE_ORDER.get(floor, 0)
         if floor_idx > 0:
             return (1, -floor_idx)  # Higher floor = fewer options = earlier
-        return (2, 0)  # Unlocked floor=xs — least constrained
+        return (2, 0)  # Unlocked floor=s — least constrained
 
     random.shuffle(occupied)  # Random within same constraint level
     occupied.sort(key=constraint_key)
@@ -1668,10 +1669,10 @@ def _run_shuffle():
     for o in occupied:
         asset_id = o['asset_id']
         orig_tid = original_tile[asset_id]
-        floor = o.get('qualified_floor', 'xs') or 'xs'
+        floor = o.get('qualified_floor', 's') or 's'
 
         if not o['unlocked']:
-            eligible_sizes = ['xs']
+            eligible_sizes = ['s']
         else:
             floor_idx = SIZE_ORDER.get(floor, 0)
             eligible_sizes = [s for s in SIZE_NAMES if SIZE_ORDER[s] >= floor_idx]
@@ -1743,7 +1744,7 @@ def _run_shuffle():
     # Post-shuffle upgrade notifications: email artists whose artwork landed above their floor
     try:
         tile_size_map = get_tile_size_map()
-        tier_for_size = {'s': 'floor_s', 'm': 'floor_m', 'lg': 'floor_lg'}
+        tier_for_size = TIER_FOR_SIZE
         notification_candidates = []
 
         for o in occupied:
@@ -1751,9 +1752,9 @@ def _run_shuffle():
             if aid not in assignments:
                 continue
             new_size = tile_size_map.get(assignments[aid])
-            if not new_size or new_size == 'xs':
+            if not new_size or new_size == 's':
                 continue
-            current_floor = o.get('qualified_floor') or 'xs'
+            current_floor = o.get('qualified_floor') or 's'
             if SIZE_ORDER.get(new_size, 0) > SIZE_ORDER.get(current_floor, 0):
                 notification_candidates.append((aid, new_size))
 
@@ -1835,7 +1836,7 @@ def shuffle_tiles():
 
 @app.route("/api/admin/force_unlock", methods=["POST"])
 def admin_force_unlock():
-    """Set unlocked to 0 or 1 explicitly (not toggle). Resets floor to xs when locking."""
+    """Set unlocked to 0 or 1 explicitly (not toggle). Resets floor to s when locking."""
     ok, err = check_admin_pin()
     if not ok:
         return err
@@ -1859,9 +1860,9 @@ def admin_force_unlock():
             return jsonify({"ok": False, "error": "asset not found"}), 404
 
         if unlocked == 0:
-            # Locking: also reset qualified_floor to xs for consistency
+            # Locking: also reset qualified_floor to s for consistency
             cursor.execute(
-                "UPDATE assets SET unlocked = 0, qualified_floor = 'xs' WHERE asset_id = ?",
+                "UPDATE assets SET unlocked = 0, qualified_floor = 's' WHERE asset_id = ?",
                 (asset_id,)
             )
         else:
@@ -1903,7 +1904,7 @@ def admin_force_unlock():
 
 @app.route("/api/admin/set_qualified_floor", methods=["POST"])
 def admin_set_qualified_floor():
-    """Admin override: set the qualified floor for an artwork. Auto-unlocks if floor > xs."""
+    """Admin override: set the qualified floor for an artwork. Auto-unlocks if floor > s."""
     ok, err = check_admin_pin()
     if not ok:
         return err
@@ -1914,8 +1915,8 @@ def admin_set_qualified_floor():
 
     if asset_id is None:
         return jsonify({"ok": False, "error": "missing asset_id"}), 400
-    if floor not in ('xs', 's', 'm', 'lg'):
-        return jsonify({"ok": False, "error": "qualified_floor must be xs, s, m, or lg"}), 400
+    if floor not in SIZE_ORDER:
+        return jsonify({"ok": False, "error": f"qualified_floor must be one of: {', '.join(SIZE_NAMES)}"}), 400
 
     try:
         conn = get_db()
@@ -1926,15 +1927,15 @@ def admin_set_qualified_floor():
             conn.close()
             return jsonify({"ok": False, "error": "asset not found"}), 404
 
-        # If floor > xs, auto-set unlocked=1 (having a floor implies unlocked)
-        if floor != 'xs':
+        # If floor > s, auto-set unlocked=1 (having a floor implies unlocked)
+        if floor != 's':
             cursor.execute(
                 "UPDATE assets SET qualified_floor = ?, unlocked = 1 WHERE asset_id = ?",
                 (floor, asset_id)
             )
         else:
             cursor.execute(
-                "UPDATE assets SET qualified_floor = 'xs' WHERE asset_id = ?",
+                "UPDATE assets SET qualified_floor = 's' WHERE asset_id = ?",
                 (asset_id,)
             )
 
@@ -1959,7 +1960,7 @@ def lock_tile():
 
     Sets qualified_floor to the current tile's size and unlocked=1.
     Accepts optional payment_id for future Stripe webhook integration.
-    Rejects if artwork is in an XS tile (nothing to lock).
+    Rejects if artwork is in an S tile (nothing to lock).
 
     Note: The public Stripe payment flow uses /api/stripe/checkout + webhook instead.
     """
@@ -1986,11 +1987,11 @@ def lock_tile():
 
         tile_id = row["tile_id"]
         tile_size_map = get_tile_size_map()
-        current_size = tile_size_map.get(tile_id, 'xs')
+        current_size = tile_size_map.get(tile_id, 's')
 
-        if current_size == 'xs':
+        if current_size == 's':
             conn.close()
-            return jsonify({"ok": False, "error": "cannot lock at XS size"}), 400
+            return jsonify({"ok": False, "error": "cannot lock at S size"}), 400
 
         # Set the floor and unlock (clear any payment deadline)
         cursor.execute(
@@ -2173,7 +2174,7 @@ def my_artworks():
         artworks = []
         for row in rows:
             tile_id = row["tile_id"]
-            current_size = tile_size_map.get(tile_id, 'xs') if tile_id else 'xs'
+            current_size = tile_size_map.get(tile_id, 's') if tile_id else 's'
             artworks.append({
                 "asset_id": row["asset_id"],
                 "artwork_title": row["artwork_title"],
@@ -2227,7 +2228,7 @@ def upgrade_options(asset_id):
             return jsonify({"ok": False, "error": "Artwork not found or not owned by this account."}), 404
 
         unlocked = asset_row["unlocked"]
-        current_floor = asset_row["qualified_floor"] or 'xs'
+        current_floor = asset_row["qualified_floor"] or 's'
         current_floor_order = SIZE_ORDER.get(current_floor, 0)
 
         # Determine artwork's current tile size
@@ -2240,10 +2241,10 @@ def upgrade_options(asset_id):
             tile_size_map = get_tile_size_map()
             current_tile_size = tile_size_map.get(tile_row["tile_id"])
 
-        size_display = {'s': 'Small', 'm': 'Medium', 'lg': 'Large'}
-
         tiers = []
         for tier_name, cfg in TIER_CONFIG.items():
+            if tier_name == 'exhibit':
+                continue  # handled separately below
             tier_floor = cfg['floor']
             tier_floor_order = SIZE_ORDER.get(tier_floor, 0)
 
@@ -2254,7 +2255,7 @@ def upgrade_options(asset_id):
                 'floor': tier_floor,
             }
 
-            if tier_name == 'unlock_xs':
+            if tier_name == 'unlock_s':
                 if not unlocked:
                     tier_info['status'] = 'available'
                 else:
@@ -2272,9 +2273,10 @@ def upgrade_options(asset_id):
                     tier_info['status'] = 'available'
                 else:
                     # Artwork is not in this tier's tile size
-                    display_name = size_display.get(tier_floor, tier_floor.upper())
+                    display_name = SIZE_DISPLAY.get(tier_floor, tier_floor.upper())
+                    article = 'an' if display_name[0] in 'AEIOUaeiou' else 'a'
                     tier_info['status'] = 'locked'
-                    tier_info['reason'] = f'Your artwork must be in a {display_name} tile'
+                    tier_info['reason'] = f'Your artwork must be in {article} {display_name} tile'
 
             tiers.append(tier_info)
 
@@ -2285,17 +2287,17 @@ def upgrade_options(asset_id):
             'price_cents': TIER_CONFIG['exhibit']['price_cents'],
             'floor': None,
         }
-        if asset_row.get("asset_type") == 'exhibit':
+        if asset_row["asset_type"] == 'exhibit':
             exhibit_tier['status'] = 'completed'
             exhibit_tier['reason'] = 'Already an Exhibit'
         elif not unlocked:
             exhibit_tier['status'] = 'locked'
             exhibit_tier['reason'] = 'Requires Unlock first'
-        elif current_tile_size and current_tile_size in ('s', 'm', 'lg'):
+        elif current_tile_size and current_tile_size in ('m', 'lg', 'xl'):
             exhibit_tier['status'] = 'available'
         else:
             exhibit_tier['status'] = 'locked'
-            exhibit_tier['reason'] = 'Your artwork must be in a S, M, or LG tile'
+            exhibit_tier['reason'] = 'Your artwork must be in a Medium, Large, or Extra Large tile'
         tiers.append(exhibit_tier)
 
         return jsonify({
@@ -2356,13 +2358,13 @@ def stripe_checkout():
             return jsonify({"ok": False, "error": "Artwork not found or not owned by this account."}), 404
 
         unlocked = asset_row["unlocked"]
-        current_floor = asset_row["qualified_floor"] or 'xs'
+        current_floor = asset_row["qualified_floor"] or 's'
         current_floor_order = SIZE_ORDER.get(current_floor, 0)
         cfg = TIER_CONFIG[tier]
 
         # Prerequisite checks
         if tier == 'exhibit':
-            # Exhibit tier: must be unlocked, in S/M/LG tile, not already an exhibit
+            # Exhibit tier: must be unlocked, in M/LG/XL tile, not already an exhibit
             if asset_row["asset_type"] == 'exhibit':
                 conn.close()
                 return jsonify({"ok": False, "error": "This artwork is already an Exhibit."}), 400
@@ -2374,13 +2376,13 @@ def stripe_checkout():
             if tile_row:
                 tile_size_map = get_tile_size_map()
                 current_tile_size = tile_size_map.get(tile_row["tile_id"])
-                if current_tile_size not in ('s', 'm', 'lg'):
+                if current_tile_size not in ('m', 'lg', 'xl'):
                     conn.close()
-                    return jsonify({"ok": False, "error": "Your artwork must be in a S, M, or LG tile."}), 400
+                    return jsonify({"ok": False, "error": "Your artwork must be in a Medium, Large, or Extra Large tile."}), 400
             else:
                 conn.close()
                 return jsonify({"ok": False, "error": "Artwork is not placed on any tile."}), 400
-        elif tier == 'unlock_xs':
+        elif tier == 'unlock_s':
             if unlocked:
                 conn.close()
                 return jsonify({"ok": False, "error": "Artwork is already unlocked."}), 400
@@ -2400,10 +2402,10 @@ def stripe_checkout():
                 tile_size_map = get_tile_size_map()
                 current_tile_size = tile_size_map.get(tile_row["tile_id"])
                 if current_tile_size != cfg['floor']:
-                    size_display = {'s': 'Small', 'm': 'Medium', 'lg': 'Large'}
-                    display_name = size_display.get(cfg['floor'], cfg['floor'].upper())
+                    display_name = SIZE_DISPLAY.get(cfg['floor'], cfg['floor'].upper())
                     conn.close()
-                    return jsonify({"ok": False, "error": f"Your artwork must be in a {display_name} tile to purchase this upgrade."}), 400
+                    article = 'an' if display_name[0] in 'AEIOUaeiou' else 'a'
+                    return jsonify({"ok": False, "error": f"Your artwork must be in {article} {display_name} tile to purchase this upgrade."}), 400
 
         # Insert pending purchase record
         cursor.execute("""
@@ -2486,6 +2488,15 @@ def stripe_webhook():
         if not asset_id or not tier or not purchase_id:
             return jsonify({"ok": True}), 200
 
+        # Map old tier names from pre-rename in-flight Stripe sessions
+        OLD_TIER_MAP = {
+            'unlock_xs': 'unlock_s',
+            'floor_s': 'floor_m',
+            'floor_m': 'floor_lg',
+            'floor_lg': 'floor_xl',
+        }
+        tier = OLD_TIER_MAP.get(tier, tier)
+
         try:
             conn = get_db()
             cursor = conn.cursor()
@@ -2507,11 +2518,11 @@ def stripe_webhook():
                 # Determine current tile size for floor lock
                 cursor.execute("SELECT tile_id FROM tiles WHERE asset_id = ?", (int(asset_id),))
                 tile_row = cursor.fetchone()
-                exhibit_floor = 's'  # minimum exhibit size
+                exhibit_floor = 'm'  # minimum exhibit size
                 if tile_row:
                     tile_size_map = get_tile_size_map()
                     current_size = tile_size_map.get(tile_row["tile_id"])
-                    if current_size in ('s', 'm', 'lg'):
+                    if current_size in ('m', 'lg', 'xl'):
                         exhibit_floor = current_size
                 cursor.execute(
                     "UPDATE assets SET asset_type = 'exhibit', qualified_floor = ?, unlocked = 1, stripe_payment_id = ?, payment_deadline = NULL WHERE asset_id = ?",
