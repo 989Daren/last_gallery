@@ -345,7 +345,7 @@
             <input
               type="text"
               id="adminClearTileIdInput"
-              placeholder="Tile ID (e.g., X99)"
+              placeholder="Tile ID (e.g., S99)"
               maxlength="10"
             >
             <button id="clearTileBtn" type="button">Clear Tile</button>
@@ -359,7 +359,7 @@
             <input
               type="text"
               id="adminMoveFromInput"
-              placeholder="From: X99"
+              placeholder="From: S99"
               maxlength="10"
             >
           </div>
@@ -367,7 +367,7 @@
             <input
               type="text"
               id="adminMoveToInput"
-              placeholder="To: X12"
+              placeholder="To: S12"
               maxlength="10"
             >
           </div>
@@ -455,9 +455,9 @@
         <div class="countdown-info-graphic">
           <img src="{{ url_for('static', filename='images/unlock_graphic.jpg') }}" alt="How it All Works">
         </div>
-        <p><strong>1. Upload your artwork (It's Free!)</strong> — Your art will be added at the "locked" XS (extra small) tile level. It is free to shuffle, but needs to be unlocked by you to move to the next size level.</p>
+        <p><strong>1. Upload your artwork (It's Free!)</strong> — Your art will be added at the "locked" Small tile level. It is free to shuffle, but needs to be unlocked by you to move to the next size level.</p>
         <p><strong>2. Unlock your artwork</strong> — This is the next step so your artwork can shuffle into larger tile sizes. The bigger the tile, the more your artwork stands out on the gallery wall.</p>
-        <p><strong>3. Every week, the gallery shuffles</strong> — All artwork is randomly reassigned to new tiles. Your unlocked artwork may find itself in a Small, Medium, or even a Large tile!</p>
+        <p><strong>3. Every week, the gallery shuffles</strong> — All artwork is randomly reassigned to new tiles. Your unlocked artwork may find itself in a Medium, Large, or even an Extra Large tile!</p>
         <p><strong>4. Lock in your size</strong> — If you land in a larger tile, you can choose to upgrade to that tile level, ensuring your artwork will never fall below that size during future shuffles.</p>
         <p><strong>Important:</strong> When the gallery is completely full, no new art will be accepted and every existing piece will be permanently frozen in place. At that point, the Gallery has become a time capsule of creative work. On the day of the final random shuffle, the tile size you've upgraded to is where it stays for the life of The Last Gallery.</p>
       </div>
@@ -471,14 +471,14 @@
       <div class="countdown-info-body pricing-body">
         <button id="pricingCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
         <h3>Upgrade Pricing</h3>
-        <p class="pricing-intro">All artwork begins in a locked XS (extra small) tile size and must be unlocked before it's able to land in a larger tile during the weekly shuffle. Note: limit 4 tiles (of any size) per artist.</p>
+        <p class="pricing-intro">All artwork begins in a locked Small tile size and must be unlocked before it's able to land in a larger tile during the weekly shuffle. Note: limit 4 tiles (of any size) per artist.</p>
         <div class="pricing-spacer"></div>
         <div class="pricing-scroll-wrap">
           <div class="pricing-columns">
             <div class="pricing-col">
-              <div class="pricing-col-header">XS Locked</div>
+              <div class="pricing-col-header">Small Locked</div>
               <div class="pricing-col-req">&nbsp;</div>
-              <div class="pricing-col-desc">Included in weekly shuffles. Restricted to XS tiles only.</div>
+              <div class="pricing-col-desc">Included in weekly shuffles. Restricted to Small tiles only.</div>
               <div class="pricing-col-price-wrap">
                 <div class="pricing-col-price">FREE</div>
                 <div class="pricing-col-subtext">for the life of the gallery!</div>
@@ -486,7 +486,7 @@
               </div>
             </div>
             <div class="pricing-col">
-              <div class="pricing-col-header">XS Unlocked</div>
+              <div class="pricing-col-header">Small Unlocked</div>
               <div class="pricing-col-req">&nbsp;</div>
               <div class="pricing-col-desc">Eligible to land in all tile sizes during weekly shuffle&nbsp;*</div>
               <div class="pricing-col-price-wrap">
@@ -497,9 +497,9 @@
               </div>
             </div>
             <div class="pricing-col">
-              <div class="pricing-col-header">Small</div>
+              <div class="pricing-col-header">Medium</div>
               <div class="pricing-col-req">Must be unlocked **</div>
-              <div class="pricing-col-desc">Never shuffles below a Small tile</div>
+              <div class="pricing-col-desc">Never shuffles below a Medium tile</div>
               <div class="pricing-col-price-wrap">
                 <div class="pricing-col-badge">37% OFF</div>
                 <div class="pricing-col-original">$39.99</div>
@@ -508,18 +508,18 @@
               </div>
             </div>
             <div class="pricing-col">
-              <div class="pricing-col-header">Medium</div>
+              <div class="pricing-col-header">Large</div>
               <div class="pricing-col-req">Must be unlocked **</div>
-              <div class="pricing-col-desc">Never shuffles below a Medium tile</div>
+              <div class="pricing-col-desc">Never shuffles below a Large tile</div>
               <div class="pricing-col-price-wrap">
                 <div class="pricing-col-price">$59.99</div>
                 <div class="pricing-col-payment">One-time</div>
               </div>
             </div>
             <div class="pricing-col">
-              <div class="pricing-col-header">Large</div>
+              <div class="pricing-col-header">Extra Large</div>
               <div class="pricing-col-req">Must be unlocked **</div>
-              <div class="pricing-col-desc">Never shuffles below a Large tile</div>
+              <div class="pricing-col-desc">Never shuffles below an Extra Large tile</div>
               <div class="pricing-col-price-wrap">
                 <div class="pricing-col-price">$99.99</div>
                 <div class="pricing-col-payment">One-time</div>

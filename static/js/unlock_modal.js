@@ -20,10 +20,10 @@
   const LOCK_OPEN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
 
   const TIER_DESCRIPTIONS = {
-    'unlock_xs': 'Unlock your artwork for larger tile eligibility during the weekly shuffle + enter Creator of the Month drawings.',
-    'floor_s':   'Your artwork will never drop below a Small tile during shuffles.',
+    'unlock_s':  'Unlock your artwork for larger tile eligibility during the weekly shuffle + enter Creator of the Month drawings.',
     'floor_m':   'Your artwork will never drop below a Medium tile during shuffles.',
     'floor_lg':  'Your artwork will never drop below a Large tile during shuffles.',
+    'floor_xl':  'Your artwork will never drop below an Extra Large tile during shuffles.',
   };
 
   function maskEmail(email) {
@@ -42,8 +42,8 @@
 
   function statusBadgeText(artwork) {
     if (!artwork.unlocked) return 'Locked';
-    var floor = (artwork.qualified_floor || 'xs').toUpperCase();
-    if (floor === 'XS') return 'Unlocked';
+    var floor = (artwork.qualified_floor || 's').toUpperCase();
+    if (floor === 'S') return 'Unlocked';
     return 'Floor: ' + floor;
   }
 
@@ -423,7 +423,7 @@
       // Update current tile size display
       var sizeEl = _overlay.querySelector("#unlockCurrentSize");
       if (sizeEl && data.current_tile_size) {
-        var sizeNames = {'xs': 'Extra Small', 's': 'Small', 'm': 'Medium', 'lg': 'Large'};
+        var sizeNames = {'s': 'Small', 'm': 'Medium', 'lg': 'Large', 'xl': 'Extra Large'};
         sizeEl.textContent = sizeNames[data.current_tile_size] || data.current_tile_size.toUpperCase();
       } else if (sizeEl) {
         sizeEl.textContent = '';
@@ -442,12 +442,12 @@
         }
 
         var priceHtml = '';
-        if (tier.tier === 'unlock_xs' && tier.status === 'available') {
+        if (tier.tier === 'unlock_s' && tier.status === 'available') {
           priceHtml =
             '<span class="unlock-tier-price-original">' + formatPrice(1999) + '</span> ' +
             '<span class="unlock-tier-price">' + formatPrice(tier.price_cents) + '</span> ' +
             '<span class="unlock-tier-badge">50% OFF</span>';
-        } else if (tier.tier === 'floor_s' && tier.status === 'available') {
+        } else if (tier.tier === 'floor_m' && tier.status === 'available') {
           priceHtml =
             '<span class="unlock-tier-price-original">' + formatPrice(3999) + '</span> ' +
             '<span class="unlock-tier-price">' + formatPrice(tier.price_cents) + '</span> ' +
