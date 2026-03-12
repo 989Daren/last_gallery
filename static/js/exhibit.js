@@ -51,12 +51,7 @@
   var _dragVelocity = 0;        // px/ms, smoothed
 
   // ===== Helpers =====
-  function escapeHtml(str) {
-    if (!str) return '';
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
+  var escapeHtml = window.escapeHtml;
 
   function origCount() {
     return _currentExhibit ? _currentExhibit.images.length : 0;
@@ -126,7 +121,7 @@
     _overlay.innerHTML =
       '<div class="exhibit-intro-container">' +
         '<div class="exhibit-intro-welcome">' +
-          escapeHtml(exhibit.exhibit_title || exhibit.artist_name) + ' Art Exhibit' +
+          (exhibit.exhibit_title ? escapeHtml(exhibit.exhibit_title) + ' Art Exhibit' : 'Art Exhibit') +
         '</div>' +
         '<div class="exhibit-intro-card">' +
           '<div class="exhibit-intro-accent"></div>' +
@@ -156,6 +151,34 @@
     enterBtn.addEventListener('click', function() {
       openScrollingGallery();
     });
+
+    // Owner edit button — absolute bottom-left of intro card
+    var ownedInfo = typeof window.getOwnedAssetInfo === 'function'
+      ? window.getOwnedAssetInfo(exhibit.asset_id) : null;
+    if (ownedInfo) {
+      var editBtn = document.createElement('button');
+      editBtn.className = 'exhibit-intro-edit-btn';
+      editBtn.type = 'button';
+      editBtn.textContent = 'edit';
+      editBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var code = typeof window.getStoredEditCode === 'function' ? window.getStoredEditCode() : '';
+        closeExhibit();
+        if (typeof window.openExhibitDashboard === 'function') {
+          window.openExhibitDashboard(ownedInfo.asset_id, code);
+        }
+      });
+      var cardEl = _overlay.querySelector('.exhibit-intro-card');
+      var containerEl = _overlay.querySelector('.exhibit-intro-container');
+      if (cardEl && containerEl) {
+        containerEl.appendChild(editBtn);
+        // Position just above the card's top-right corner
+        requestAnimationFrame(function() {
+          editBtn.style.top = (cardEl.offsetTop - editBtn.offsetHeight - 6) + 'px';
+          editBtn.style.right = (containerEl.offsetWidth - cardEl.offsetLeft - cardEl.offsetWidth) + 'px';
+        });
+      }
+    }
 
     // Close on backdrop click
     _overlay.addEventListener('click', function(e) {
@@ -732,8 +755,7 @@
         contact1Type: imgData.contact1_type || '',
         contact1Value: imgData.contact1_value || '',
         contact2Type: imgData.contact2_type || '',
-        contact2Value: imgData.contact2_value || '',
-        exhibitMode: true
+        contact2Value: imgData.contact2_value || ''
       });
     }
   }

@@ -13,7 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentObjectUrl = null;
   let cropper = null;
   
-  // Track current upload tile ID for Tier-2 metadata modal
+  // Track current upload tile ID for metadata modal
   let currentUploadTileId = null;
 
   // Track current upload asset ID and save state for orphan cleanup
@@ -36,6 +36,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.closeUploadModal = function(silent) {
     closeModal(silent);
+  };
+
+  window.openMetaModalForEdit = function(tileId) {
+    openMetaModalForEdit(tileId);
   };
 
   function enableCropperContextMenuBlocker() {
@@ -145,6 +149,8 @@ document.addEventListener("DOMContentLoaded", () => {
     disableCropperContextMenuBlocker();
     currentUploadAssetId = null;
     metaSavedSuccessfully = false;
+    isEditMode = false;
+    editOriginalEmail = "";
     if (!silent) {
       window.ConicalNav && window.ConicalNav.popFromUiClose();
     }
@@ -986,9 +992,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (editCodeLabel) editCodeLabel.style.display = "";
       if (editCodeInput) editCodeInput.style.display = "";
       if (forgotCodeLink) forgotCodeLink.style.display = "";
-      if (editTitleLabel) editTitleLabel.textContent = "Artwork title";
+      if (editTitleLabel) editTitleLabel.innerHTML = 'Artwork title <span class="edit-label-hint">or type &quot;Exhibit&quot;</span>';
       if (editTitleInput) {
-        editTitleInput.placeholder = "Enter the title of your artwork";
+        editTitleInput.placeholder = "Enter title";
         editTitleInput.maxLength = 120;
       }
     }
@@ -1106,6 +1112,46 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // "Exhibit" keyword → open exhibit dashboard
+      if (title.toLowerCase() === 'exhibit') {
+        try {
+          editBannerContinueBtn.disabled = true;
+          const res = await fetch('/api/my_artworks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          });
+          const result = await res.json();
+          if (!result.ok) {
+            if (editCodeError) {
+              editCodeError.textContent = result.error || 'Invalid edit code.';
+              editCodeError.classList.remove('hidden');
+            }
+            return;
+          }
+          const exhibit = result.artworks.find(a => a.asset_type === 'exhibit');
+          if (!exhibit) {
+            if (editCodeError) {
+              editCodeError.textContent = 'No exhibit found for this edit code.';
+              editCodeError.classList.remove('hidden');
+            }
+            return;
+          }
+          if (typeof window.storeEditCode === 'function') window.storeEditCode(code);
+          closeEditBanner();
+          window.openExhibitDashboard(exhibit.asset_id, code);
+        } catch (err) {
+          console.error(`${LOG_PREFIX} Exhibit lookup error:`, err);
+          if (editCodeError) {
+            editCodeError.textContent = 'Lookup failed. Please try again.';
+            editCodeError.classList.remove('hidden');
+          }
+        } finally {
+          editBannerContinueBtn.disabled = false;
+        }
+        return;
+      }
+
       try {
         editBannerContinueBtn.disabled = true;
         const res = await fetch("/api/verify_edit_code", {
@@ -1123,7 +1169,8 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        // Success — close banner and open prefilled metadata modal
+        // Success — store code for owner edit links, close banner
+        if (typeof window.storeEditCode === 'function') window.storeEditCode(code);
         closeEditBanner();
         openMetaModalForEdit(result.tile_id);
       } catch (err) {

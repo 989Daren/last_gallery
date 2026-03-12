@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 13
 
 
 def get_db():
@@ -298,6 +298,37 @@ def init_db():
         """)
         _set_schema_version(cursor, 11)
         print("Migration 11 complete: Exhibits tables created")
+
+    # Migration 12: Add artist_name column to exhibits (display name independent of asset)
+    if current_version < 12:
+        print("Applying migration 12: Exhibits artist_name column...")
+        cursor.execute("PRAGMA table_info(exhibits)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if 'artist_name' not in columns:
+            cursor.execute("ALTER TABLE exhibits ADD COLUMN artist_name TEXT NOT NULL DEFAULT ''")
+
+        _set_schema_version(cursor, 12)
+        print("Migration 12 complete: Exhibits artist_name column added")
+
+    # Migration 13: Additional exhibit profile fields
+    if current_version < 13:
+        print("Applying migration 13: Exhibit profile fields...")
+        cursor.execute("PRAGMA table_info(exhibits)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        new_columns = [
+            ('medium_techniques', "TEXT NOT NULL DEFAULT ''"),
+            ('artistic_focus', "TEXT NOT NULL DEFAULT ''"),
+            ('background_education', "TEXT NOT NULL DEFAULT ''"),
+            ('professional_highlights', "TEXT NOT NULL DEFAULT ''"),
+        ]
+        for col_name, col_def in new_columns:
+            if col_name not in columns:
+                cursor.execute(f"ALTER TABLE exhibits ADD COLUMN {col_name} {col_def}")
+
+        _set_schema_version(cursor, 13)
+        print("Migration 13 complete: Exhibit profile fields added")
 
     conn.commit()
     conn.close()
