@@ -247,8 +247,8 @@ Tiles are classified by size and numbered sequentially:
 - Dismissed via "Enter" button, backdrop click, or Escape key
 
 ## Edit Artwork Flow
-- **Trigger**: Hamburger menu → "Edit Your Artwork Submission", or deep-link via `/edit` (auto-opens edit banner, skips welcome modal)
-- **Edit banner**: Title "A note about editing", body text, two input fields (artwork title + edit code), Cancel/Continue buttons. "Forgot your edit code?" link toggles inline email resend form.
+- **Trigger**: Hamburger menu → "Edit Your Artwork or Exhibit", or deep-link via `/edit` (auto-opens edit banner, skips welcome modal)
+- **Edit banner**: Title "Edit Your Artwork or Exhibit", body text, two input fields (artwork title + edit code), Cancel/Continue buttons. "Forgot your edit code?" link toggles inline email resend form.
 - **Admin edit shortcut**: When admin is active, edit banner hides the edit code field and accepts a tile ID instead. Uses `/api/admin/tile_info` with PIN header for lookup.
 - **Verification**: `POST /api/verify_edit_code` with `{title, code}`. Title matching is case-insensitive, trims whitespace and trailing periods. Code maps to email, then finds asset where both title and email match.
 - **Edit codes**: Generated on first metadata save (8-char hex via `uuid.uuid4().hex[:8]`), one per email. Emailed to artist via Resend API (`send_edit_code(email, code, artwork_title)`). HTML email includes artwork title, edit code, link to `/edit` with title prefilled, and Creator of the Month teaser linking to `/creator-of-the-month`. Plain-text fallback included. Reused across multiple uploads with same email.
@@ -364,7 +364,7 @@ window.dismissDeadlineBanner()     // Dismiss deadline banner (from deadline_ban
 ## Hamburger Menu
 Menu items in order:
 1. **Unlock to Upgrade Your Artwork!** — opens upgrade modal (3-step flow)
-2. **Edit Your Artwork Submission** — opens edit banner
+2. **Edit Your Artwork or Exhibit** — opens edit banner
 3. **How it All Works** — opens info modal explaining the upload → unlock → shuffle → upgrade cycle
 4. **Upgrade Pricing** — opens pricing modal with tier comparison columns and "Upgrade Now" CTA
 5. **A Human Centric Gallery** — opens info modal (see below)

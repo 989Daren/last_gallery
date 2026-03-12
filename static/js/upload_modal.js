@@ -1017,7 +1017,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Hamburger menu "Edit Your Artwork Submission" opens the banner
+  // Hamburger menu "Edit Your Artwork or Exhibit" opens the banner
   if (menuItemEdit) {
     menuItemEdit.addEventListener("click", () => {
       // Close hamburger menu
