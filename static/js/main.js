@@ -33,6 +33,7 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+window.escapeHtml = escapeHtml;
 
 // ============================
 // Gallery View Origin
@@ -247,7 +248,7 @@ function recalculateZoomLimits() {
 function isZoomDisabled() {
   const welcomeModal = document.getElementById('simpleWelcome');
   if (welcomeModal && !welcomeModal.classList.contains('hidden')) return true;
-  if (typeof isArtworkPopupOpen === 'function' && isArtworkPopupOpen()) return true;
+  if (isArtworkPopupOpen()) return true;
   const uploadModal = document.getElementById('uploadModal');
   if (uploadModal && !uploadModal.classList.contains('hidden')) return true;
   const adminModal = document.getElementById('adminModal');
@@ -588,8 +589,13 @@ const ConicalNav = {
     return (typeof window.isUnlockModalOpen === "function") ? window.isUnlockModalOpen() : false;
   },
 
+  // Is an exhibit's scrolling gallery open?
+  isExhibitViewOpen() {
+    return (typeof window.isExhibitOpen === "function") ? window.isExhibitOpen() : false;
+  },
+
   // Choose the desired conical hash based on current UI state
-  // Builds compound hash for layered states: #art/ribbon
+  // Builds compound hash for layered states: #art/ribbon, #exhibitview/art/ribbon
   desiredHash() {
     // Check registered dismissible overlays first
     for (const entry of _dismissibleRegistry) {
@@ -601,6 +607,7 @@ const ConicalNav = {
 
     // Build compound hash for popup layers
     const parts = [];
+    if (this.isExhibitViewOpen()) parts.push("exhibitview");
     if (this.isArtOpen()) parts.push("art");
     if (this.isRibbonOpen()) parts.push("ribbon");
 
@@ -635,6 +642,8 @@ const ConicalNav = {
     const wantsArt = stack.includes("art");
     const wantsRibbon = stack.includes("ribbon");
     const wantsUpload = stack.includes("upload");
+    const wantsExhibitView = stack.includes("exhibitview");
+    const wantsExhibit = stack.includes("exhibit");
 
     // If you used "#upload" as standalone, detect it:
     const standaloneUpload = (location.hash === "#upload");
@@ -644,9 +653,20 @@ const ConicalNav = {
       try { closeInfoRibbon(true); } catch (e) {}
     }
 
-    // Close art if hash no longer includes art
+    // Close art popup if hash no longer includes art
+    // When inside an exhibit, also notify exhibit module so it can resume
     if (!wantsArt && this.isArtOpen()) {
-      try { closeArtworkPopup(true); } catch (e) {}
+      try {
+        closeArtworkPopup(true);
+        if (typeof window._onExhibitPopupClosed === 'function') {
+          window._onExhibitPopupClosed();
+        }
+      } catch (e) {}
+    }
+
+    // Close exhibit if hash no longer includes exhibitview or exhibit
+    if (!wantsExhibitView && !wantsExhibit && this.isExhibitViewOpen()) {
+      try { window.closeExhibit(true); } catch (e) {}
     }
 
     // Close any registered dismissible overlays not wanted by current hash
@@ -929,6 +949,32 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       });
       popupInfo.appendChild(iconDiv);
     }
+
+    // Owner edit button — absolute bottom-left of ribbon
+    const existingEditBtn = popupInfo?.querySelector(".ribbon-edit");
+    if (existingEditBtn) existingEditBtn.remove();
+
+    var ownedInfo = typeof window.getOwnedAssetInfo === 'function' ? window.getOwnedAssetInfo(assetId) : null;
+    if (ownedInfo && popupInfo) {
+      const editDiv = document.createElement("div");
+      editDiv.className = "ribbon-edit";
+      const editButton = document.createElement("button");
+      editButton.className = "ribbon-edit-btn";
+      editButton.type = "button";
+      editButton.textContent = "edit";
+      editButton.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const code = typeof window.getStoredEditCode === 'function' ? window.getStoredEditCode() : '';
+        closeArtworkPopup();
+        if (ownedInfo.asset_type === 'exhibit' && typeof window.openExhibitDashboard === 'function') {
+          window.openExhibitDashboard(ownedInfo.asset_id, code);
+        } else if (ownedInfo.tile_id && typeof window.openMetaModalForEdit === 'function') {
+          window.openMetaModalForEdit(ownedInfo.tile_id);
+        }
+      });
+      editDiv.appendChild(editButton);
+      popupInfo.appendChild(editDiv);
+    }
   }
 
   // Reset state
@@ -1023,6 +1069,11 @@ function wirePopupEventsOnce() {
 
     // Second click: close popup
     closeArtworkPopup();
+
+    // If this popup was opened from an exhibit, resume the scrolling gallery
+    if (typeof window._onExhibitPopupClosed === 'function') {
+      window._onExhibitPopupClosed();
+    }
   });
 }
 
@@ -1395,7 +1446,26 @@ function renderWallFromState() {
       if (tileData.assetId) el.dataset.assetId = tileData.assetId;
       el.dataset.unlocked = tileData.asset.unlocked || 0;
 
-      if (tileData.asset.asset_type === 'info') {
+      if (tileData.asset.asset_type === 'exhibit') {
+        // Exhibit tiles: full artwork (no muting) + identity overlay + gold shimmer
+        el.dataset.assetType = 'exhibit';
+        el.classList.add('exhibit-tile');
+        el.dataset.popupUrl = tileData.asset.popup_url || tileData.asset.tile_url;
+        el.dataset.artworkName = tileData.asset.artwork_name || '';
+        el.dataset.artistName = tileData.asset.artist_name || '';
+
+        // Add identity overlay (left-aligned banner) — inside frame to align with image
+        var exhibitOverlay = document.createElement('div');
+        exhibitOverlay.classList.add('exhibit-overlay');
+        exhibitOverlay.innerHTML = '<img class="exhibit-identity" src="/static/images/exhibit_overlay.png" alt="" />';
+        frame.appendChild(exhibitOverlay);
+
+        // Add shimmer layer (on top of everything) — on shell so it covers the full tile
+        var shimmer = document.createElement('div');
+        shimmer.classList.add('exhibit-shimmer');
+        shimmer.style.animationDelay = (Math.random() * 6).toFixed(1) + 's';
+        shell.appendChild(shimmer);
+      } else if (tileData.asset.asset_type === 'info') {
         // Info tiles: set asset-type marker, skip artwork metadata
         el.dataset.assetType = 'info';
       } else {
@@ -1427,6 +1497,11 @@ function renderWallFromState() {
 
   // PHASE 6: Finalize layout
   finalizeAfterRender(wall);
+
+  // PHASE 7: Refresh owner data for ribbon edit links
+  if (typeof window.refreshOwnerData === 'function') {
+    window.refreshOwnerData();
+  }
 
   console.log(LOG.render, 'renderWallFromState');
 }
@@ -1640,6 +1715,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (tileEl.dataset.assetType === 'info') {
           if (typeof window.openHowItWorksModal === 'function') {
             window.openHowItWorksModal();
+          }
+          return;
+        }
+
+        // Exhibit tiles → open exhibit intro modal
+        if (tileEl.dataset.assetType === 'exhibit') {
+          var exhibitAssetId = tileEl.dataset.assetId;
+          if (exhibitAssetId && typeof window.openExhibitIntro === 'function') {
+            window.openExhibitIntro(parseInt(exhibitAssetId));
           }
           return;
         }
