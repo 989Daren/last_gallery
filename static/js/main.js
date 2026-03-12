@@ -33,6 +33,7 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+window.escapeHtml = escapeHtml;
 
 // ============================
 // Gallery View Origin
@@ -247,7 +248,7 @@ function recalculateZoomLimits() {
 function isZoomDisabled() {
   const welcomeModal = document.getElementById('simpleWelcome');
   if (welcomeModal && !welcomeModal.classList.contains('hidden')) return true;
-  if (typeof isArtworkPopupOpen === 'function' && isArtworkPopupOpen()) return true;
+  if (isArtworkPopupOpen()) return true;
   const uploadModal = document.getElementById('uploadModal');
   if (uploadModal && !uploadModal.classList.contains('hidden')) return true;
   const adminModal = document.getElementById('adminModal');
@@ -948,6 +949,32 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       });
       popupInfo.appendChild(iconDiv);
     }
+
+    // Owner edit button — absolute bottom-left of ribbon
+    const existingEditBtn = popupInfo?.querySelector(".ribbon-edit");
+    if (existingEditBtn) existingEditBtn.remove();
+
+    var ownedInfo = typeof window.getOwnedAssetInfo === 'function' ? window.getOwnedAssetInfo(assetId) : null;
+    if (ownedInfo && popupInfo) {
+      const editDiv = document.createElement("div");
+      editDiv.className = "ribbon-edit";
+      const editButton = document.createElement("button");
+      editButton.className = "ribbon-edit-btn";
+      editButton.type = "button";
+      editButton.textContent = "edit";
+      editButton.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const code = typeof window.getStoredEditCode === 'function' ? window.getStoredEditCode() : '';
+        closeArtworkPopup();
+        if (ownedInfo.asset_type === 'exhibit' && typeof window.openExhibitDashboard === 'function') {
+          window.openExhibitDashboard(ownedInfo.asset_id, code);
+        } else if (ownedInfo.tile_id && typeof window.openMetaModalForEdit === 'function') {
+          window.openMetaModalForEdit(ownedInfo.tile_id);
+        }
+      });
+      editDiv.appendChild(editButton);
+      popupInfo.appendChild(editDiv);
+    }
   }
 
   // Reset state
@@ -1470,6 +1497,11 @@ function renderWallFromState() {
 
   // PHASE 6: Finalize layout
   finalizeAfterRender(wall);
+
+  // PHASE 7: Refresh owner data for ribbon edit links
+  if (typeof window.refreshOwnerData === 'function') {
+    window.refreshOwnerData();
+  }
 
   console.log(LOG.render, 'renderWallFromState');
 }

@@ -256,8 +256,8 @@
         <h3>Edit Your Submission</h3>
         <p class="edit-banner-intro">Once submitted, artwork becomes a permanent part of The Last Gallery time capsule. However, if you need to correct artist or artwork related information, you're welcome to do that here.</p>
         <div class="edit-code-section">
-          <label for="editTitleInput" class="edit-code-label">Artwork title</label>
-          <input id="editTitleInput" type="text" maxlength="120" placeholder="Enter the title of your artwork" autocomplete="off" spellcheck="false" />
+          <label for="editTitleInput" class="edit-code-label">Artwork title <span class="edit-label-hint">or type "Exhibit"</span></label>
+          <input id="editTitleInput" type="text" maxlength="120" placeholder="Enter title" autocomplete="off" spellcheck="false" />
           <label for="editCodeInput" class="edit-code-label">Edit code sent to your email</label>
           <input id="editCodeInput" type="text" maxlength="8" placeholder="enter/paste your edit code here" autocomplete="off" spellcheck="false" />
           <div id="editCodeError" class="edit-code-error hidden">Invalid edit code. Please try again.</div>
@@ -609,6 +609,8 @@
   <script src="{{ url_for('static', filename='js/success_banner.js') | cachebust }}"></script>
   <script src="{{ url_for('static', filename='js/deadline_banner.js') | cachebust }}"></script>
   <script src="{{ url_for('static', filename='js/exhibit.js') | cachebust }}"></script>
+  <script src="{{ url_for('static', filename='js/exhibit_dashboard.js') | cachebust }}"></script>
+  <script src="{{ url_for('static', filename='js/owner_edit.js') | cachebust }}"></script>
   <script src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') | cachebust }}"></script>
   <script src="{{ url_for('static', filename='js/upload_modal.js') | cachebust }}"></script>
 </body>
