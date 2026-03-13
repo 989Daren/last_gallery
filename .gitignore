@@ -4,6 +4,7 @@ __pycache__/
 # Local data files
 data/grid_color.json
 data/gallery.db
+data/backups/
 
 # Environment variables
 .env

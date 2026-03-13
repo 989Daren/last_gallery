@@ -1340,7 +1340,7 @@ _MAX_HISTORY = 50
 
 
 def _get_db_snapshot():
-    """Get a snapshot of current database state."""
+    """Get a snapshot of current database state (assets, tiles, exhibits, exhibit_images)."""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""SELECT asset_id, artist_name, artwork_title, tile_url, popup_url,
@@ -1349,20 +1349,29 @@ def _get_db_snapshot():
                              contact1_type, contact1_value,
                              contact2_type, contact2_value,
                              unlocked, qualified_floor, stripe_payment_id,
-                             payment_deadline FROM assets""")
+                             payment_deadline, asset_type FROM assets""")
     assets = [dict(row) for row in cursor.fetchall()]
     cursor.execute("SELECT tile_id, asset_id FROM tiles")
     tiles = [dict(row) for row in cursor.fetchall()]
+    cursor.execute("SELECT * FROM exhibits")
+    exhibits = [dict(row) for row in cursor.fetchall()]
+    cursor.execute("SELECT * FROM exhibit_images")
+    exhibit_images = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    return {"assets": assets, "tiles": tiles}
+    return {"assets": assets, "tiles": tiles, "exhibits": exhibits, "exhibit_images": exhibit_images}
 
 
 def _restore_db_snapshot(snapshot):
-    """Restore database to a previous snapshot."""
+    """Restore database to a previous snapshot (assets, tiles, exhibits, exhibit_images)."""
     conn = get_db()
     cursor = conn.cursor()
 
+    # Disable FK constraints so DELETE FROM assets doesn't cascade to exhibits
+    cursor.execute("PRAGMA foreign_keys = OFF")
+
     # Clear current data
+    cursor.execute("DELETE FROM exhibit_images")
+    cursor.execute("DELETE FROM exhibits")
     cursor.execute("DELETE FROM tiles")
     cursor.execute("DELETE FROM assets")
 
@@ -1375,8 +1384,8 @@ def _restore_db_snapshot(snapshot):
                                   contact1_type, contact1_value,
                                   contact2_type, contact2_value,
                                   unlocked, qualified_floor, stripe_payment_id,
-                                  payment_deadline)
-               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                  payment_deadline, asset_type)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (a["asset_id"], a["artist_name"], a["artwork_title"], a["tile_url"], a["popup_url"],
              a.get("year_created", ""), a.get("medium", ""), a.get("dimensions", ""),
              a.get("edition_info", ""), a.get("for_sale", ""), a.get("sale_type", ""),
@@ -1384,7 +1393,8 @@ def _restore_db_snapshot(snapshot):
              a.get("contact1_type", ""), a.get("contact1_value", ""),
              a.get("contact2_type", ""), a.get("contact2_value", ""),
              a.get("unlocked", 0), a.get("qualified_floor", "s"),
-             a.get("stripe_payment_id"), a.get("payment_deadline"))
+             a.get("stripe_payment_id"), a.get("payment_deadline"),
+             a.get("asset_type", "artwork"))
         )
 
     # Restore tiles
@@ -1393,6 +1403,45 @@ def _restore_db_snapshot(snapshot):
             "INSERT INTO tiles(tile_id, asset_id, updated_at) VALUES(?, ?, datetime('now'))",
             (t["tile_id"], t["asset_id"])
         )
+
+    # Restore exhibits
+    for ex in snapshot.get("exhibits", []):
+        cursor.execute(
+            """INSERT INTO exhibits(exhibit_id, asset_id, artist_bio, artist_photo_url,
+                                    artist_location, created_at, updated_at, artist_name,
+                                    medium_techniques, artistic_focus, background_education,
+                                    professional_highlights, exhibit_title)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (ex["exhibit_id"], ex["asset_id"], ex.get("artist_bio", ""),
+             ex.get("artist_photo_url"), ex.get("artist_location", ""),
+             ex.get("created_at", ""), ex.get("updated_at", ""),
+             ex.get("artist_name", ""), ex.get("medium_techniques", ""),
+             ex.get("artistic_focus", ""), ex.get("background_education", ""),
+             ex.get("professional_highlights", ""), ex.get("exhibit_title", ""))
+        )
+
+    # Restore exhibit images
+    for ei in snapshot.get("exhibit_images", []):
+        cursor.execute(
+            """INSERT INTO exhibit_images(image_id, exhibit_id, image_url, source_asset_id,
+                                          display_order, artwork_title, artist_name,
+                                          year_created, medium, dimensions, edition_info,
+                                          for_sale, sale_type, contact1_type, contact1_value,
+                                          contact2_type, contact2_value, created_at, thumb_url)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (ei["image_id"], ei["exhibit_id"], ei.get("image_url", ""),
+             ei.get("source_asset_id"), ei.get("display_order", 0),
+             ei.get("artwork_title", ""), ei.get("artist_name", ""),
+             ei.get("year_created", ""), ei.get("medium", ""),
+             ei.get("dimensions", ""), ei.get("edition_info", ""),
+             ei.get("for_sale", ""), ei.get("sale_type", ""),
+             ei.get("contact1_type", ""), ei.get("contact1_value", ""),
+             ei.get("contact2_type", ""), ei.get("contact2_value", ""),
+             ei.get("created_at", ""), ei.get("thumb_url", ""))
+        )
+
+    # Re-enable FK constraints
+    cursor.execute("PRAGMA foreign_keys = ON")
 
     conn.commit()
     conn.close()
