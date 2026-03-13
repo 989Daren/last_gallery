@@ -654,13 +654,9 @@ const ConicalNav = {
     }
 
     // Close art popup if hash no longer includes art
-    // When inside an exhibit, also notify exhibit module so it can resume
     if (!wantsArt && this.isArtOpen()) {
       try {
         closeArtworkPopup(true);
-        if (typeof window._onExhibitPopupClosed === 'function') {
-          window._onExhibitPopupClosed();
-        }
       } catch (e) {}
     }
 
@@ -1017,6 +1013,11 @@ function closeArtworkPopup(silent) {
   if (!silent) {
     window.ConicalNav && window.ConicalNav.popFromUiClose();
   }
+
+  // Notify exhibit module so it can resume scrolling
+  if (typeof window._onExhibitPopupClosed === 'function') {
+    window._onExhibitPopupClosed();
+  }
 }
 
 function wirePopupEventsOnce() {
@@ -1069,11 +1070,6 @@ function wirePopupEventsOnce() {
 
     // Second click: close popup
     closeArtworkPopup();
-
-    // If this popup was opened from an exhibit, resume the scrolling gallery
-    if (typeof window._onExhibitPopupClosed === 'function') {
-      window._onExhibitPopupClosed();
-    }
   });
 }
 

@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 
 def get_db():
@@ -389,6 +389,12 @@ def init_db():
             cursor.execute("ALTER TABLE exhibits ADD COLUMN exhibit_title TEXT NOT NULL DEFAULT ''")
         _set_schema_version(cursor, 16)
         print("Migration 16 complete: exhibits.exhibit_title added")
+
+    if current_version < 17:
+        print("Applying migration 17: Add scroll_url to exhibit_images...")
+        cursor.execute("ALTER TABLE exhibit_images ADD COLUMN scroll_url TEXT NOT NULL DEFAULT ''")
+        _set_schema_version(cursor, 17)
+        print("Migration 17 complete: exhibit_images.scroll_url added")
 
     conn.commit()
     conn.close()

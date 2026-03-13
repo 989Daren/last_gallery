@@ -260,10 +260,13 @@
       }
     }
 
-    // Close on backdrop click
-    _overlay.addEventListener('click', function(e) {
-      if (e.target === _overlay) closeExhibit();
-    });
+    // Close on backdrop click (wired once on overlay, not per renderIntro call)
+    if (!_overlay.__backdropWired) {
+      _overlay.__backdropWired = true;
+      _overlay.addEventListener('click', function(e) {
+        if (e.target === _overlay) closeExhibit();
+      });
+    }
   }
 
   // ===== Track Item Creation =====
@@ -278,7 +281,7 @@
     }
 
     var img = document.createElement('img');
-    img.src = imgData.image_url;
+    img.src = imgData.scroll_url || imgData.image_url;
     img.alt = imgData.artwork_title || '';
     div.appendChild(img);
 

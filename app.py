@@ -162,6 +162,8 @@ TIER_CONFIG = {
 # Popup image optimization settings
 POPUP_MAX_DIMENSION = 2560  # Max pixels on longest side
 POPUP_JPEG_QUALITY = 90
+SCROLL_MAX_DIMENSION = 1280  # Max pixels for exhibit scroll track images
+SCROLL_JPEG_QUALITY = 85
 
 # Tile size ordering for qualified_floor model
 SIZE_ORDER = {'s': 0, 'm': 1, 'lg': 2, 'xl': 3}
@@ -380,6 +382,36 @@ def _allowed_ext(filename: str):
     return ext in (".jpg", ".jpeg", ".png", ".webp")
 
 
+def _make_scroll_image(img_path):
+    """Generate a scroll-track-sized JPEG from an existing gallery image.
+
+    Returns:
+        BytesIO buffer containing the optimized JPEG, or None on failure.
+    """
+    try:
+        img = Image.open(img_path)
+        img = ImageOps.exif_transpose(img) or img
+        if img.mode != 'RGB':
+            if img.mode in ('RGBA', 'LA', 'P'):
+                bg = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                bg.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                img = bg
+            else:
+                img = img.convert('RGB')
+        w, h = img.size
+        if max(w, h) > SCROLL_MAX_DIMENSION:
+            ratio = SCROLL_MAX_DIMENSION / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=SCROLL_JPEG_QUALITY, optimize=True)
+        buf.seek(0)
+        return buf
+    except Exception:
+        return None
+
+
 def _make_center_thumb(img_path, size=256):
     """Generate a center-cropped square JPEG thumbnail from an existing image file.
 
@@ -503,6 +535,12 @@ def _save_optimized_popup(fs, asset_id: str):
     return filename
 
 
+EMAIL_LOGO_HTML = (
+    f'<img src="{BASE_URL}/static/images/logo_email.png" alt="The Last Gallery" '
+    'width="150" height="148" style="display:block; margin-bottom:16px;" />'
+)
+
+
 def send_edit_code(email, code, artwork_title=""):
     """Send edit code to artist via Resend API (HTML + plain-text fallback)."""
     api_key = os.environ.get("RESEND_API_KEY")
@@ -524,6 +562,7 @@ def send_edit_code(email, code, artwork_title=""):
 
     html_body = (
         '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
+        f'{EMAIL_LOGO_HTML}'
         f'{artwork_line_html}'
         f'<p style="font-size:18px;"><strong>Your Edit Code:</strong> {html_mod.escape(code)}</p>'
         "<p>If you need to edit your artwork's information, copy and paste your Edit Code into the link below.</p>"
@@ -587,6 +626,7 @@ def send_upgrade_notification(email, artwork_title, new_size, tier_price_cents, 
 
     html_body = (
         '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
+        f'{EMAIL_LOGO_HTML}'
         f'<h2 style="color:#D4A843;">Your artwork landed in a {display_name} tile!</h2>'
         f'<p style="font-size:18px;"><strong>{safe_title}</strong> has been shuffled into a <strong>{display_name}</strong> tile.</p>'
         f'<p>You can upgrade to this size for <strong>{price_str}</strong> — '
@@ -649,6 +689,7 @@ def send_deadline_notification(email, artwork_title, asset_id, access_code=''):
 
     html_body = (
         '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
+        f'{EMAIL_LOGO_HTML}'
         f'<h2 style="color:#D4A843;">Your artwork is live — 24 hours to unlock</h2>'
         f'<p style="font-size:18px;"><strong>{safe_title}</strong> has been placed on the gallery wall.</p>'
         '<p>Since you already have a free tile, this upload must be unlocked within '
@@ -2752,6 +2793,16 @@ def upload_exhibit_image(exhibit_id):
 
     image_url = f'/uploads/exhibits/{exhibit_id}/{filename}'
 
+    # Generate scroll-track-sized image
+    scroll_filename = f"scroll_{uuid.uuid4().hex[:12]}.jpg"
+    scroll_filepath = os.path.join(exhibit_dir, scroll_filename)
+    scroll_url = ''
+    scroll_buf = _make_scroll_image(filepath)
+    if scroll_buf:
+        with open(scroll_filepath, 'wb') as f:
+            f.write(scroll_buf.getvalue())
+        scroll_url = f'/uploads/exhibits/{exhibit_id}/{scroll_filename}'
+
     # Generate center-cropped square thumbnail
     thumb_filename = f"thumb_{uuid.uuid4().hex[:12]}.jpg"
     thumb_filepath = os.path.join(exhibit_dir, thumb_filename)
@@ -2772,14 +2823,14 @@ def upload_exhibit_image(exhibit_id):
     artist_name = artist_row["artist_name"] if artist_row else ""
 
     cursor.execute("""
-        INSERT INTO exhibit_images (exhibit_id, image_url, display_order, artist_name, thumb_url)
-        VALUES (?, ?, ?, ?, ?)
-    """, (exhibit_id, image_url, next_order, artist_name, thumb_url))
+        INSERT INTO exhibit_images (exhibit_id, image_url, display_order, artist_name, thumb_url, scroll_url)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (exhibit_id, image_url, next_order, artist_name, thumb_url, scroll_url))
     image_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    return jsonify({"ok": True, "image_id": image_id, "image_url": image_url, "thumb_url": thumb_url, "display_order": next_order})
+    return jsonify({"ok": True, "image_id": image_id, "image_url": image_url, "thumb_url": thumb_url, "scroll_url": scroll_url, "display_order": next_order})
 
 
 @app.route("/api/exhibit/<int:exhibit_id>/image/<int:image_id>/metadata", methods=["POST"])
