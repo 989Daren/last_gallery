@@ -49,6 +49,8 @@
   var _dragLastX = 0;
   var _dragLastTime = 0;
   var _dragVelocity = 0;        // px/ms, smoothed
+  var _dragMoveBound = null;    // stored reference for cleanup
+  var _dragEndBound = null;
 
   // ===== Helpers =====
   var escapeHtml = window.escapeHtml;
@@ -114,9 +116,61 @@
       ? '<div class="exhibit-intro-location">' + escapeHtml(exhibit.artist_location) + '</div>'
       : '';
 
-    var bioHtml = exhibit.artist_bio
-      ? '<div class="exhibit-intro-bio">' + escapeHtml(exhibit.artist_bio).replace(/\n/g, '<br>') + '</div>'
-      : '<div class="exhibit-intro-bio exhibit-intro-bio-empty">This artist hasn\'t added a bio yet.</div>';
+    // Medium/techniques one-liner
+    var mediumHtml = exhibit.medium_techniques
+      ? '<div class="exhibit-intro-medium">' + escapeHtml(exhibit.medium_techniques) + '</div>'
+      : '';
+
+    // Bio
+    var bioText = exhibit.artist_bio
+      ? escapeHtml(exhibit.artist_bio).replace(/\n/g, '<br>')
+      : '';
+    var bioEmpty = !exhibit.artist_bio;
+
+    // Determine expandable content
+    var hasExtraFields = !!(exhibit.artistic_focus || exhibit.background_education || exhibit.professional_highlights);
+    var longBio = !bioEmpty && exhibit.artist_bio.length > 200;
+    var hasExpand = hasExtraFields || longBio;
+
+    var bioHtml;
+    if (bioEmpty) {
+      bioHtml = '<div class="exhibit-intro-bio-wrap">' +
+        '<div class="exhibit-intro-bio exhibit-intro-bio-empty">This artist hasn\'t added a bio yet.</div>' +
+        '</div>';
+    } else {
+      bioHtml = '<div class="exhibit-intro-bio-wrap' + (longBio ? ' exhibit-intro-truncated' : '') + '">' +
+        '<div class="exhibit-intro-bio">' + bioText + '</div>' +
+        '</div>';
+    }
+
+    // Expanded details
+    var expandedHtml = '';
+    if (hasExpand) {
+      expandedHtml = '<div class="exhibit-intro-details hidden">';
+      if (exhibit.artistic_focus) {
+        expandedHtml +=
+          '<div class="exhibit-intro-detail">' +
+            '<div class="exhibit-intro-detail-label">Artistic Focus</div>' +
+            '<div class="exhibit-intro-detail-text">' + escapeHtml(exhibit.artistic_focus).replace(/\n/g, '<br>') + '</div>' +
+          '</div>';
+      }
+      if (exhibit.background_education) {
+        expandedHtml +=
+          '<div class="exhibit-intro-detail">' +
+            '<div class="exhibit-intro-detail-label">Background &amp; Education</div>' +
+            '<div class="exhibit-intro-detail-text">' + escapeHtml(exhibit.background_education).replace(/\n/g, '<br>') + '</div>' +
+          '</div>';
+      }
+      if (exhibit.professional_highlights) {
+        expandedHtml +=
+          '<div class="exhibit-intro-detail">' +
+            '<div class="exhibit-intro-detail-label">Professional Highlights</div>' +
+            '<div class="exhibit-intro-detail-text">' + escapeHtml(exhibit.professional_highlights).replace(/\n/g, '<br>') + '</div>' +
+          '</div>';
+      }
+      expandedHtml += '</div>';
+      expandedHtml += '<a class="exhibit-intro-more-link" href="javascript:void(0)">More about this artist</a>';
+    }
 
     _overlay.innerHTML =
       '<div class="exhibit-intro-container">' +
@@ -133,7 +187,9 @@
               locationHtml +
             '</div>' +
           '</div>' +
+          mediumHtml +
           bioHtml +
+          expandedHtml +
           '<div class="exhibit-intro-actions">' +
             '<button class="exhibit-intro-cancel">Cancel</button>' +
             '<button class="exhibit-intro-enter">Enter Exhibit</button>' +
@@ -151,6 +207,30 @@
     enterBtn.addEventListener('click', function() {
       openScrollingGallery();
     });
+
+    // Wire expand/collapse toggle
+    var moreLink = _overlay.querySelector('.exhibit-intro-more-link');
+    if (moreLink) {
+      moreLink.addEventListener('click', function() {
+        var card = _overlay.querySelector('.exhibit-intro-card');
+        var bioWrap = _overlay.querySelector('.exhibit-intro-bio-wrap');
+        var details = _overlay.querySelector('.exhibit-intro-details');
+        var isExpanded = !details.classList.contains('hidden');
+
+        if (isExpanded) {
+          details.classList.add('hidden');
+          if (longBio && bioWrap) bioWrap.classList.add('exhibit-intro-truncated');
+          card.classList.remove('exhibit-intro-expanded-card');
+          moreLink.textContent = 'More about this artist';
+          card.scrollTop = 0;
+        } else {
+          details.classList.remove('hidden');
+          if (bioWrap) bioWrap.classList.remove('exhibit-intro-truncated');
+          card.classList.add('exhibit-intro-expanded-card');
+          moreLink.textContent = 'Less';
+        }
+      });
+    }
 
     // Owner edit button — absolute bottom-left of intro card
     var ownedInfo = typeof window.getOwnedAssetInfo === 'function'
@@ -611,8 +691,22 @@
   function wireDragEvents(container) {
     container.addEventListener('mousedown', onDragStart);
     // Bind move/up to document so drag continues even if pointer leaves the container
-    document.addEventListener('mousemove', onDragMove);
-    document.addEventListener('mouseup', onDragEnd);
+    _dragMoveBound = onDragMove;
+    _dragEndBound = onDragEnd;
+    document.addEventListener('mousemove', _dragMoveBound);
+    document.addEventListener('mouseup', _dragEndBound);
+  }
+
+  function cleanupDragEvents() {
+    if (_dragMoveBound) {
+      document.removeEventListener('mousemove', _dragMoveBound);
+      _dragMoveBound = null;
+    }
+    if (_dragEndBound) {
+      document.removeEventListener('mouseup', _dragEndBound);
+      _dragEndBound = null;
+    }
+    _dragging = false;
   }
 
   function onDragStart(e) {
@@ -763,6 +857,7 @@
   // ===== Close =====
   function closeExhibit(silent) {
     stopScroll();
+    cleanupDragEvents();
     _currentState = 'closed';
     _currentExhibit = null;
     _centeredIndex = -1;

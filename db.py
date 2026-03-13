@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 16
 
 
 def get_db():
@@ -374,6 +374,21 @@ def init_db():
 
         _set_schema_version(cursor, 14)
         print("Migration 14 complete: Tile sizes renamed")
+
+    if current_version < 15:
+        print("Applying migration 15: Add thumb_url to exhibit_images...")
+        cursor.execute("ALTER TABLE exhibit_images ADD COLUMN thumb_url TEXT NOT NULL DEFAULT ''")
+        _set_schema_version(cursor, 15)
+        print("Migration 15 complete: exhibit_images.thumb_url added")
+
+    if current_version < 16:
+        print("Applying migration 16: Add exhibit_title to exhibits...")
+        cursor.execute("PRAGMA table_info(exhibits)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'exhibit_title' not in columns:
+            cursor.execute("ALTER TABLE exhibits ADD COLUMN exhibit_title TEXT NOT NULL DEFAULT ''")
+        _set_schema_version(cursor, 16)
+        print("Migration 16 complete: exhibits.exhibit_title added")
 
     conn.commit()
     conn.close()

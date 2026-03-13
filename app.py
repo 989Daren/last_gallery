@@ -380,6 +380,37 @@ def _allowed_ext(filename: str):
     return ext in (".jpg", ".jpeg", ".png", ".webp")
 
 
+def _make_center_thumb(img_path, size=256):
+    """Generate a center-cropped square JPEG thumbnail from an existing image file.
+
+    Returns:
+        BytesIO buffer containing the thumbnail JPEG, or None on failure.
+    """
+    try:
+        img = Image.open(img_path)
+        if img.mode not in ('RGB',):
+            if img.mode in ('RGBA', 'LA', 'P'):
+                bg = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                bg.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                img = bg
+            else:
+                img = img.convert('RGB')
+        w, h = img.size
+        side = min(w, h)
+        left = (w - side) // 2
+        top = (h - side) // 2
+        img = img.crop((left, top, left + side, top + side))
+        img = img.resize((size, size), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=85, optimize=True)
+        buf.seek(0)
+        return buf
+    except Exception:
+        return None
+
+
 def _optimize_image(file_storage, max_dimension=POPUP_MAX_DIMENSION, quality=POPUP_JPEG_QUALITY):
     """Resize image if needed and convert to optimized JPEG.
 
@@ -2541,16 +2572,30 @@ def stripe_webhook():
                 )
                 src = cursor.fetchone()
                 if src:
+                    # Generate thumbnail for the seeded image
+                    seed_thumb_url = ''
+                    popup_path = src["popup_url"].lstrip('/')
+                    full_popup_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), popup_path)
+                    if os.path.isfile(full_popup_path):
+                        ex_dir = os.path.join(UPLOAD_DIR, 'exhibits', str(exhibit_id))
+                        os.makedirs(ex_dir, exist_ok=True)
+                        seed_thumb_name = f"thumb_{uuid.uuid4().hex[:12]}.jpg"
+                        seed_thumb_buf = _make_center_thumb(full_popup_path)
+                        if seed_thumb_buf:
+                            with open(os.path.join(ex_dir, seed_thumb_name), 'wb') as tf:
+                                tf.write(seed_thumb_buf.getvalue())
+                            seed_thumb_url = f'/uploads/exhibits/{exhibit_id}/{seed_thumb_name}'
                     cursor.execute("""
                         INSERT INTO exhibit_images (exhibit_id, image_url, source_asset_id, display_order,
                             artwork_title, artist_name, year_created, medium, dimensions, edition_info,
-                            for_sale, sale_type, contact1_type, contact1_value, contact2_type, contact2_value)
-                        VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            for_sale, sale_type, contact1_type, contact1_value, contact2_type, contact2_value, thumb_url)
+                        VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (exhibit_id, src["popup_url"], int(asset_id),
                           src["artwork_title"], src["artist_name"], src["year_created"],
                           src["medium"], src["dimensions"], src["edition_info"],
                           src["for_sale"], src["sale_type"], src["contact1_type"],
-                          src["contact1_value"], src["contact2_type"], src["contact2_value"]))
+                          src["contact1_value"], src["contact2_type"], src["contact2_value"],
+                          seed_thumb_url))
             elif cfg:
                 floor_value = cfg['floor']
                 cursor.execute(
@@ -2596,62 +2641,6 @@ def stripe_webhook():
 # ========================================
 # Exhibit API Endpoints
 # ========================================
-
-@app.route("/api/exhibit/<int:asset_id>", methods=["GET"])
-def get_exhibit(asset_id):
-    """Get exhibit data + images for an asset. Requires edit code via query param."""
-    code = (request.args.get("code") or "").strip()
-    if not code:
-        return jsonify({"ok": False, "error": "Missing edit code."}), 400
-
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Verify code → email → ownership
-    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-    code_row = cursor.fetchone()
-    if not code_row:
-        conn.close()
-        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-
-    email = code_row["email"].lower()
-    cursor.execute(
-        "SELECT asset_id, asset_type FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
-        (asset_id, email)
-    )
-    asset_row = cursor.fetchone()
-    if not asset_row:
-        conn.close()
-        return jsonify({"ok": False, "error": "Not found or not owned."}), 404
-    if asset_row["asset_type"] != 'exhibit':
-        conn.close()
-        return jsonify({"ok": False, "error": "This artwork is not an exhibit."}), 400
-
-    cursor.execute("SELECT * FROM exhibits WHERE asset_id = ?", (asset_id,))
-    exhibit = cursor.fetchone()
-    if not exhibit:
-        conn.close()
-        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
-
-    cursor.execute(
-        "SELECT * FROM exhibit_images WHERE exhibit_id = ? ORDER BY display_order",
-        (exhibit["exhibit_id"],)
-    )
-    images = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-
-    return jsonify({
-        "ok": True,
-        "exhibit": {
-            "exhibit_id": exhibit["exhibit_id"],
-            "asset_id": exhibit["asset_id"],
-            "artist_bio": exhibit["artist_bio"],
-            "artist_photo_url": exhibit["artist_photo_url"],
-            "artist_location": exhibit["artist_location"],
-        },
-        "images": images,
-    })
-
 
 @app.route("/api/exhibit/<int:exhibit_id>/upload_image", methods=["POST"])
 def upload_exhibit_image(exhibit_id):
@@ -2714,6 +2703,16 @@ def upload_exhibit_image(exhibit_id):
 
     image_url = f'/uploads/exhibits/{exhibit_id}/{filename}'
 
+    # Generate center-cropped square thumbnail
+    thumb_filename = f"thumb_{uuid.uuid4().hex[:12]}.jpg"
+    thumb_filepath = os.path.join(exhibit_dir, thumb_filename)
+    thumb_url = ''
+    thumb_buf = _make_center_thumb(filepath)
+    if thumb_buf:
+        with open(thumb_filepath, 'wb') as f:
+            f.write(thumb_buf.getvalue())
+        thumb_url = f'/uploads/exhibits/{exhibit_id}/{thumb_filename}'
+
     # Get next display_order
     cursor.execute("SELECT COALESCE(MAX(display_order), 0) + 1 FROM exhibit_images WHERE exhibit_id = ?", (exhibit_id,))
     next_order = cursor.fetchone()[0]
@@ -2724,14 +2723,14 @@ def upload_exhibit_image(exhibit_id):
     artist_name = artist_row["artist_name"] if artist_row else ""
 
     cursor.execute("""
-        INSERT INTO exhibit_images (exhibit_id, image_url, display_order, artist_name)
-        VALUES (?, ?, ?, ?)
-    """, (exhibit_id, image_url, next_order, artist_name))
+        INSERT INTO exhibit_images (exhibit_id, image_url, display_order, artist_name, thumb_url)
+        VALUES (?, ?, ?, ?, ?)
+    """, (exhibit_id, image_url, next_order, artist_name, thumb_url))
     image_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    return jsonify({"ok": True, "image_id": image_id, "image_url": image_url, "display_order": next_order})
+    return jsonify({"ok": True, "image_id": image_id, "image_url": image_url, "thumb_url": thumb_url, "display_order": next_order})
 
 
 @app.route("/api/exhibit/<int:exhibit_id>/image/<int:image_id>/metadata", methods=["POST"])
@@ -2835,7 +2834,7 @@ def delete_exhibit_image(exhibit_id, image_id):
 
     # Get image details
     cursor.execute(
-        "SELECT image_id, image_url, source_asset_id FROM exhibit_images WHERE image_id = ? AND exhibit_id = ?",
+        "SELECT image_id, image_url, thumb_url, source_asset_id FROM exhibit_images WHERE image_id = ? AND exhibit_id = ?",
         (image_id, exhibit_id)
     )
     img_row = cursor.fetchone()
@@ -2848,14 +2847,15 @@ def delete_exhibit_image(exhibit_id, image_id):
         conn.close()
         return jsonify({"ok": False, "error": "Cannot remove the tile's original artwork from the exhibit."}), 400
 
-    # Delete the file if it's an exhibit-only upload (not a source_asset_id reference)
+    # Delete files if it's an exhibit-only upload (not a source_asset_id reference)
     if not img_row["source_asset_id"]:
-        rel_path = img_row["image_url"]
-        if rel_path.startswith('/uploads/'):
-            rel_path = rel_path[len('/uploads/'):]
-        file_path = os.path.join(UPLOAD_DIR, rel_path)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        for url_col in ("image_url", "thumb_url"):
+            rel_path = img_row[url_col] or ""
+            if rel_path.startswith('/uploads/'):
+                rel_path = rel_path[len('/uploads/'):]
+                file_path = os.path.join(UPLOAD_DIR, rel_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
 
     cursor.execute("DELETE FROM exhibit_images WHERE image_id = ?", (image_id,))
 
@@ -3040,6 +3040,70 @@ def update_exhibit_profile(asset_id):
         if 'conn' in locals():
             conn.close()
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/exhibit/<int:asset_id>/photo", methods=["POST"])
+def upload_exhibit_photo(asset_id):
+    """Upload or replace the artist headshot for an exhibit."""
+    code = (request.form.get("code") or "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "Missing edit code."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    email = _verify_exhibit_code(cursor, asset_id, code)
+    if not email:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 403
+
+    cursor.execute("SELECT exhibit_id, artist_photo_url FROM exhibits WHERE asset_id = ?", (asset_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        conn.close()
+        return jsonify({"ok": False, "error": "Exhibit not found."}), 404
+
+    if 'photo' not in request.files:
+        conn.close()
+        return jsonify({"ok": False, "error": "No photo file provided."}), 400
+
+    file = request.files['photo']
+    if not file or not file.filename:
+        conn.close()
+        return jsonify({"ok": False, "error": "Empty file."}), 400
+
+    exhibit_id = exhibit["exhibit_id"]
+    exhibit_dir = os.path.join(UPLOAD_DIR, 'exhibits', str(exhibit_id))
+    os.makedirs(exhibit_dir, exist_ok=True)
+
+    # Delete old photo file if it exists
+    old_url = exhibit["artist_photo_url"] or ""
+    if old_url.startswith('/uploads/'):
+        old_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), old_url.lstrip('/'))
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+    # Generate center-cropped square photo (512×512 for retina quality at 80×80 display)
+    filename = f"headshot_{uuid.uuid4().hex[:12]}.jpg"
+    filepath = os.path.join(exhibit_dir, filename)
+
+    optimized = _optimize_image(file)
+    with open(filepath, 'wb') as tmp:
+        tmp.write(optimized.getvalue())
+
+    thumb_buf = _make_center_thumb(filepath, size=512)
+    if thumb_buf:
+        with open(filepath, 'wb') as f:
+            f.write(thumb_buf.getvalue())
+
+    photo_url = f'/uploads/exhibits/{exhibit_id}/{filename}'
+
+    cursor.execute("UPDATE exhibits SET artist_photo_url = ?, updated_at = datetime('now') WHERE exhibit_id = ?",
+                   (photo_url, exhibit_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"ok": True, "photo_url": photo_url})
 
 
 @app.route("/api/exhibit/public/<int:asset_id>", methods=["GET"])

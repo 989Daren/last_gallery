@@ -4095,8 +4095,8 @@ label {
 }
 
 .exhibit-intro-hero {
-  width: 80px;
-  height: 80px;
+  width: 88px;
+  height: 88px;
   border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
@@ -4125,6 +4125,75 @@ label {
 .exhibit-intro-bio-empty {
   color: #666;
   font-style: italic;
+}
+
+.exhibit-intro-medium {
+  padding: 0 24px 8px;
+  color: #999;
+  font-size: 0.85rem;
+}
+
+.exhibit-intro-bio-wrap {
+  position: relative;
+}
+
+.exhibit-intro-bio-wrap.exhibit-intro-truncated {
+  max-height: 7.5rem;
+  overflow: hidden;
+}
+
+.exhibit-intro-bio-wrap.exhibit-intro-truncated::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2.5rem;
+  background: linear-gradient(transparent, #111);
+  pointer-events: none;
+}
+
+.exhibit-intro-details {
+  padding: 0 24px 8px;
+}
+.exhibit-intro-details.hidden {
+  display: none;
+}
+
+.exhibit-intro-detail {
+  margin-bottom: 14px;
+}
+
+.exhibit-intro-detail-label {
+  font-size: 0.72rem;
+  color: #D4A843;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+
+.exhibit-intro-detail-text {
+  color: #ccc;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.exhibit-intro-more-link {
+  display: block;
+  padding: 2px 24px 24px;
+  color: #D4A843;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+.exhibit-intro-more-link:hover {
+  color: #ffd700;
+}
+
+.exhibit-intro-card.exhibit-intro-expanded-card {
+  overflow-y: auto;
+  max-height: 85vh;
 }
 
 .exhibit-intro-actions {
@@ -4300,12 +4369,24 @@ label {
   }
 
   .exhibit-intro-hero {
-    width: 64px;
-    height: 64px;
+    width: 70px;
+    height: 70px;
   }
 
   .exhibit-intro-bio {
     padding: 0 18px 12px;
+  }
+
+  .exhibit-intro-medium {
+    padding: 0 18px 6px;
+  }
+
+  .exhibit-intro-details {
+    padding: 0 18px 6px;
+  }
+
+  .exhibit-intro-more-link {
+    padding: 2px 18px 22px;
   }
 
   .exhibit-intro-actions {
@@ -4387,6 +4468,72 @@ label {
   letter-spacing: 0.06em;
   margin: 0 0 12px;
   font-weight: 600;
+}
+
+.exdash-collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+.exdash-collapsible:hover {
+  color: #ffd700;
+}
+
+.exdash-chevron {
+  display: inline-block;
+  font-size: 1rem;
+}
+
+.exdash-profile-collapsed .exdash-image-list {
+  max-height: calc(90vh - 200px);
+}
+
+/* ===== Artist Photo ===== */
+.exdash-photo-field {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.exdash-photo-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1a1a1a;
+  border: 2px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.exdash-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.exdash-photo-placeholder {
+  font-size: 1.6rem;
+  opacity: 0.3;
+}
+
+.exdash-photo-btn {
+  background: none;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #D4A843;
+  font-size: 0.8rem;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.exdash-photo-btn:hover {
+  border-color: #D4A843;
+}
+.exdash-photo-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* ===== Form Fields ===== */
@@ -4533,6 +4680,58 @@ label {
   text-overflow: ellipsis;
 }
 
+.exdash-back {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1.8rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.exdash-back:hover { color: #fff; }
+
+.exdash-meta-thumb-wrap {
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.exdash-meta-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.exdash-contact-row {
+  display: flex;
+  gap: 8px;
+}
+
+.exdash-contact-type {
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.exdash-contact-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.exdash-delete-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 2px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.exdash-delete-btn:hover {
+  color: #e55;
+}
+
 .exdash-drag-handle {
   color: rgba(255, 255, 255, 0.25);
   font-size: 1.2rem;
@@ -4543,6 +4742,13 @@ label {
 }
 .exdash-drag-handle:hover {
   color: rgba(255, 255, 255, 0.5);
+}
+
+.exdash-row-dragging {
+  background: #2a2a2a;
+  box-shadow: 0 2px 12px rgba(212, 168, 67, 0.25);
+  z-index: 10;
+  position: relative;
 }
 
 /* ===== Bottom Bar ===== */
@@ -4597,5 +4803,9 @@ label {
 
   .exdash-image-list {
     max-height: 260px;
+  }
+
+  .exdash-profile-collapsed .exdash-image-list {
+    max-height: calc(95vh - 200px);
   }
 }
