@@ -1088,7 +1088,11 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           closeEditBanner();
-          openMetaModalForEdit(tileId);
+          if (result.asset_type === 'exhibit' && typeof window.openExhibitDashboard === 'function') {
+            window.openExhibitDashboard(result.asset_id, '', pin);
+          } else {
+            openMetaModalForEdit(tileId);
+          }
         } catch (err) {
           console.error(`${LOG_PREFIX} Admin tile lookup error:`, err);
           if (editCodeError) {

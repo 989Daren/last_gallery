@@ -48,17 +48,30 @@
   }
 
   // ===== Open Dashboard =====
-  function openDashboard(assetId, editCode) {
+  var _adminPin = '';
+
+  function _headers(extra) {
+    var h = {};
+    if (_adminPin) h['X-Admin-Pin'] = _adminPin;
+    if (extra) { for (var k in extra) h[k] = extra[k]; }
+    return h;
+  }
+
+  function openDashboard(assetId, editCode, adminPin) {
     ensureModal();
     _assetId = assetId;
-    _editCode = editCode;
+    _editCode = editCode || '';
+    _adminPin = adminPin || '';
     _dirty = false;
 
     _modal.classList.remove('hidden');
     _modal.setAttribute('aria-hidden', 'false');
     _modal.innerHTML = '<div class="exdash-loading">Loading dashboard...</div>';
 
-    fetch('/api/exhibit/' + assetId + '/dashboard?code=' + encodeURIComponent(editCode))
+    var headers = {};
+    if (_adminPin) headers['X-Admin-Pin'] = _adminPin;
+
+    fetch('/api/exhibit/' + assetId + '/dashboard?code=' + encodeURIComponent(_editCode), { headers: headers })
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (!data.ok) {
@@ -263,7 +276,7 @@
 
     fetch('/api/exhibit/' + _assetId + '/profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _headers({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
     })
       .then(function(res) { return res.json(); })
@@ -324,6 +337,7 @@
 
     fetch('/api/exhibit/' + _assetId + '/photo', {
       method: 'POST',
+      headers: _headers(),
       body: formData
     })
       .then(function(res) { return res.json(); })
@@ -383,6 +397,7 @@
 
     fetch('/api/exhibit/' + exhibitId + '/upload_image', {
       method: 'POST',
+      headers: _headers(),
       body: formData
     })
       .then(function(res) { return res.json(); })
@@ -420,7 +435,7 @@
 
     fetch('/api/exhibit/' + exhibitId + '/image/' + imageId, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _headers({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ code: _editCode })
     })
       .then(function(res) { return res.json(); })
@@ -529,7 +544,7 @@
 
     fetch('/api/exhibit/' + exhibitId + '/reorder', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _headers({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ code: _editCode, order: order })
     })
       .then(function(res) { return res.json(); })
@@ -696,7 +711,7 @@
 
     fetch('/api/exhibit/' + exhibitId + '/image/' + imageId + '/metadata', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _headers({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
     })
       .then(function(res) { return res.json(); })
@@ -740,9 +755,9 @@
   }
 
   function refreshImageList() {
-    if (!_assetId || !_editCode) return;
+    if (!_assetId || (!_editCode && !_adminPin)) return;
 
-    fetch('/api/exhibit/' + _assetId + '/dashboard?code=' + encodeURIComponent(_editCode))
+    fetch('/api/exhibit/' + _assetId + '/dashboard?code=' + encodeURIComponent(_editCode), { headers: _headers() })
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (!data.ok) return;

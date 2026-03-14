@@ -1531,7 +1531,8 @@ def admin_tile_info():
         cursor = conn.cursor()
         cursor.execute("""
             SELECT t.tile_id, a.asset_id, a.artist_name, a.artwork_title,
-                   a.tile_url, a.popup_url, a.unlocked, a.qualified_floor
+                   a.tile_url, a.popup_url, a.unlocked, a.qualified_floor,
+                   a.asset_type
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
             WHERE t.tile_id = ?
@@ -1550,7 +1551,8 @@ def admin_tile_info():
                 "tile_url": row["tile_url"] or "",
                 "popup_url": row["popup_url"] or "",
                 "unlocked": row["unlocked"] or 0,
-                "qualified_floor": row["qualified_floor"] or "s"
+                "qualified_floor": row["qualified_floor"] or "s",
+                "asset_type": row["asset_type"] or "artwork"
             })
 
         return jsonify({
@@ -2736,7 +2738,10 @@ def stripe_webhook():
 def upload_exhibit_image(exhibit_id):
     """Upload a new image to an exhibit."""
     code = (request.form.get("code") or "").strip()
-    if not code:
+    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
+    is_admin = admin_pin == ADMIN_PIN
+
+    if not code and not is_admin:
         return jsonify({"ok": False, "error": "Missing edit code."}), 400
 
     conn = get_db()
@@ -2749,12 +2754,15 @@ def upload_exhibit_image(exhibit_id):
         conn.close()
         return jsonify({"ok": False, "error": "Exhibit not found."}), 404
 
-    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-    code_row = cursor.fetchone()
-    if not code_row:
-        conn.close()
-        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-    email = code_row["email"].lower()
+    if is_admin:
+        email = "admin"
+    else:
+        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+        email = code_row["email"].lower()
 
     cursor.execute(
         "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
@@ -2838,7 +2846,10 @@ def update_exhibit_image_metadata(exhibit_id, image_id):
     """Update metadata for an exhibit image."""
     data = request.get_json() or {}
     code = data.get("code", "").strip()
-    if not code:
+    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
+    is_admin = admin_pin == ADMIN_PIN
+
+    if not code and not is_admin:
         return jsonify({"ok": False, "error": "Missing edit code."}), 400
 
     conn = get_db()
@@ -2851,20 +2862,21 @@ def update_exhibit_image_metadata(exhibit_id, image_id):
         conn.close()
         return jsonify({"ok": False, "error": "Exhibit not found."}), 404
 
-    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-    code_row = cursor.fetchone()
-    if not code_row:
-        conn.close()
-        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-    email = code_row["email"].lower()
+    if not is_admin:
+        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+        email = code_row["email"].lower()
 
-    cursor.execute(
-        "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
-        (exhibit["asset_id"], email)
-    )
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({"ok": False, "error": "Not authorized."}), 403
+        cursor.execute(
+            "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+            (exhibit["asset_id"], email)
+        )
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({"ok": False, "error": "Not authorized."}), 403
 
     # Verify image belongs to this exhibit
     cursor.execute("SELECT image_id FROM exhibit_images WHERE image_id = ? AND exhibit_id = ?", (image_id, exhibit_id))
@@ -2904,7 +2916,10 @@ def delete_exhibit_image(exhibit_id, image_id):
     """Remove an image from an exhibit."""
     data = request.get_json() or {}
     code = data.get("code", "").strip()
-    if not code:
+    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
+    is_admin = admin_pin == ADMIN_PIN
+
+    if not code and not is_admin:
         return jsonify({"ok": False, "error": "Missing edit code."}), 400
 
     conn = get_db()
@@ -2917,20 +2932,21 @@ def delete_exhibit_image(exhibit_id, image_id):
         conn.close()
         return jsonify({"ok": False, "error": "Exhibit not found."}), 404
 
-    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-    code_row = cursor.fetchone()
-    if not code_row:
-        conn.close()
-        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-    email = code_row["email"].lower()
+    if not is_admin:
+        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+        email = code_row["email"].lower()
 
-    cursor.execute(
-        "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
-        (exhibit["asset_id"], email)
-    )
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({"ok": False, "error": "Not authorized."}), 403
+        cursor.execute(
+            "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+            (exhibit["asset_id"], email)
+        )
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({"ok": False, "error": "Not authorized."}), 403
 
     # Get image details
     cursor.execute(
@@ -2979,8 +2995,10 @@ def reorder_exhibit_images(exhibit_id):
     data = request.get_json() or {}
     code = data.get("code", "").strip()
     order = data.get("order", [])
+    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
+    is_admin = admin_pin == ADMIN_PIN
 
-    if not code:
+    if not code and not is_admin:
         return jsonify({"ok": False, "error": "Missing edit code."}), 400
     if not order or not isinstance(order, list):
         return jsonify({"ok": False, "error": "Missing order array."}), 400
@@ -2995,20 +3013,21 @@ def reorder_exhibit_images(exhibit_id):
         conn.close()
         return jsonify({"ok": False, "error": "Exhibit not found."}), 404
 
-    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-    code_row = cursor.fetchone()
-    if not code_row:
-        conn.close()
-        return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-    email = code_row["email"].lower()
+    if not is_admin:
+        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            conn.close()
+            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
+        email = code_row["email"].lower()
 
-    cursor.execute(
-        "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
-        (exhibit["asset_id"], email)
-    )
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({"ok": False, "error": "Not authorized."}), 403
+        cursor.execute(
+            "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
+            (exhibit["asset_id"], email)
+        )
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({"ok": False, "error": "Not authorized."}), 403
 
     for idx, image_id in enumerate(order, 1):
         cursor.execute(
@@ -3023,7 +3042,11 @@ def reorder_exhibit_images(exhibit_id):
 
 
 def _verify_exhibit_code(cursor, asset_id, code):
-    """Verify an edit code owns the given asset. Returns email or None."""
+    """Verify an edit code owns the given asset, or admin PIN in headers. Returns email or None."""
+    # Admin PIN bypass
+    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
+    if admin_pin == ADMIN_PIN:
+        return "admin"
     if not code:
         return None
     cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
@@ -3146,8 +3169,6 @@ def update_exhibit_profile(asset_id):
 def upload_exhibit_photo(asset_id):
     """Upload or replace the artist headshot for an exhibit."""
     code = (request.form.get("code") or "").strip()
-    if not code:
-        return jsonify({"ok": False, "error": "Missing edit code."}), 400
 
     conn = get_db()
     cursor = conn.cursor()
