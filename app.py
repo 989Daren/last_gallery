@@ -55,6 +55,16 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
 
+def _delete_upload_files(*urls):
+    """Delete uploaded files by their URL paths (e.g. '/uploads/...'). Silently skips missing files."""
+    for url in urls:
+        if url and url.startswith('/uploads/'):
+            try:
+                os.remove(os.path.join(UPLOAD_DIR, url[len('/uploads/'):]))
+            except OSError:
+                pass
+
+
 # ---- Generate info tile image if missing ----
 def _generate_info_tile_image():
     """Create a 512x512 info tile image: black bg, gold circle, dark 'i'."""
@@ -138,6 +148,46 @@ def _seed_info_tiles():
 # Minimal admin pin (only used if you later re-enable admin routes)
 ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "REDACTED_PIN")
 
+# Rate limiting for failed admin PIN attempts: {ip: (fail_count, first_fail_time)}
+_pin_failures = {}
+PIN_MAX_ATTEMPTS = 5
+PIN_LOCKOUT_SECONDS = 900  # 15 minutes
+
+
+def _check_pin_rate_limit():
+    """Check if the requester's IP is locked out. Returns True if allowed, False if locked out."""
+    ip = request.remote_addr or "unknown"
+    entry = _pin_failures.get(ip)
+    if not entry:
+        return True
+    count, first_fail = entry
+    if time.time() - first_fail > PIN_LOCKOUT_SECONDS:
+        # Lockout expired, clear
+        _pin_failures.pop(ip, None)
+        return True
+    return count < PIN_MAX_ATTEMPTS
+
+
+def _record_pin_failure():
+    """Record a failed PIN attempt for rate limiting."""
+    ip = request.remote_addr or "unknown"
+    entry = _pin_failures.get(ip)
+    now = time.time()
+    if entry:
+        count, first_fail = entry
+        if now - first_fail > PIN_LOCKOUT_SECONDS:
+            _pin_failures[ip] = (1, now)
+        else:
+            _pin_failures[ip] = (count + 1, first_fail)
+    else:
+        _pin_failures[ip] = (1, now)
+
+
+def _clear_pin_failures():
+    """Clear rate limit on successful auth."""
+    ip = request.remote_addr or "unknown"
+    _pin_failures.pop(ip, None)
+
 # Upload limit: max artworks per email address
 UPLOAD_LIMIT = 4
 
@@ -193,10 +243,14 @@ def save_grid_color(color: str):
 
 
 def check_admin_pin():
-    """Check if request has valid X-Admin-Pin header."""
+    """Check if request has valid X-Admin-Pin header. Rate-limited."""
+    if not _check_pin_rate_limit():
+        return False, (jsonify({"ok": False, "error": "Too many attempts. Try again later."}), 429)
     pin = request.headers.get("X-Admin-Pin")
     if pin != ADMIN_PIN:
+        _record_pin_failure()
         return False, (jsonify({"ok": False, "error": "Unauthorized"}), 401)
+    _clear_pin_failures()
     return True, None
 
 
@@ -537,7 +591,7 @@ def _save_optimized_popup(fs, asset_id: str):
 
 EMAIL_LOGO_HTML = (
     f'<img src="{BASE_URL}/static/images/logo_email.png" alt="The Last Gallery" '
-    'width="150" height="148" style="display:block; margin-bottom:16px;" />'
+    'width="112" height="111" style="display:block; margin:0 0 20px 0;" />'
 )
 
 
@@ -1179,14 +1233,7 @@ def abandon_upload():
             return jsonify({"ok": False, "error": "cannot abandon a completed upload"}), 400
 
         # Delete uploaded files
-        for url_field in ("tile_url", "popup_url"):
-            url = asset[url_field] or ""
-            if url.startswith("/uploads/"):
-                filepath = os.path.join(UPLOAD_DIR, url[len("/uploads/"):])
-                try:
-                    os.remove(filepath)
-                except OSError:
-                    pass
+        _delete_upload_files(asset["tile_url"], asset["popup_url"])
 
         # Clear tile assignment
         cursor.execute(
@@ -1942,8 +1989,12 @@ def shuffle_tiles():
     data = request.get_json() or {}
     pin = data.get("pin", "")
 
+    if not _check_pin_rate_limit():
+        return jsonify({"ok": False, "error": "Too many attempts. Try again later."}), 429
     if pin != ADMIN_PIN:
+        _record_pin_failure()
         return jsonify({"ok": False, "error": "Unauthorized"}), 403
+    _clear_pin_failures()
 
     try:
         ok, message = _run_shuffle()
@@ -2738,37 +2789,15 @@ def stripe_webhook():
 def upload_exhibit_image(exhibit_id):
     """Upload a new image to an exhibit."""
     code = (request.form.get("code") or "").strip()
-    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
-    is_admin = admin_pin == ADMIN_PIN
-
-    if not code and not is_admin:
-        return jsonify({"ok": False, "error": "Missing edit code."}), 400
 
     conn = get_db()
     cursor = conn.cursor()
 
-    # Verify ownership via exhibit → asset → email
-    cursor.execute("SELECT e.exhibit_id, e.asset_id FROM exhibits e WHERE e.exhibit_id = ?", (exhibit_id,))
-    exhibit = cursor.fetchone()
+    email, exhibit = _verify_exhibit_code_by_exhibit_id(cursor, exhibit_id, code)
     if not exhibit:
         conn.close()
         return jsonify({"ok": False, "error": "Exhibit not found."}), 404
-
-    if is_admin:
-        email = "admin"
-    else:
-        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-        code_row = cursor.fetchone()
-        if not code_row:
-            conn.close()
-            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-        email = code_row["email"].lower()
-
-    cursor.execute(
-        "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
-        (exhibit["asset_id"], email)
-    )
-    if not cursor.fetchone():
+    if not email:
         conn.close()
         return jsonify({"ok": False, "error": "Not authorized."}), 403
 
@@ -2846,37 +2875,17 @@ def update_exhibit_image_metadata(exhibit_id, image_id):
     """Update metadata for an exhibit image."""
     data = request.get_json() or {}
     code = data.get("code", "").strip()
-    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
-    is_admin = admin_pin == ADMIN_PIN
-
-    if not code and not is_admin:
-        return jsonify({"ok": False, "error": "Missing edit code."}), 400
 
     conn = get_db()
     cursor = conn.cursor()
 
-    # Verify ownership
-    cursor.execute("SELECT asset_id FROM exhibits WHERE exhibit_id = ?", (exhibit_id,))
-    exhibit = cursor.fetchone()
+    email, exhibit = _verify_exhibit_code_by_exhibit_id(cursor, exhibit_id, code)
     if not exhibit:
         conn.close()
         return jsonify({"ok": False, "error": "Exhibit not found."}), 404
-
-    if not is_admin:
-        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-        code_row = cursor.fetchone()
-        if not code_row:
-            conn.close()
-            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-        email = code_row["email"].lower()
-
-        cursor.execute(
-            "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
-            (exhibit["asset_id"], email)
-        )
-        if not cursor.fetchone():
-            conn.close()
-            return jsonify({"ok": False, "error": "Not authorized."}), 403
+    if not email:
+        conn.close()
+        return jsonify({"ok": False, "error": "Not authorized."}), 403
 
     # Verify image belongs to this exhibit
     cursor.execute("SELECT image_id FROM exhibit_images WHERE image_id = ? AND exhibit_id = ?", (image_id, exhibit_id))
@@ -2916,41 +2925,21 @@ def delete_exhibit_image(exhibit_id, image_id):
     """Remove an image from an exhibit."""
     data = request.get_json() or {}
     code = data.get("code", "").strip()
-    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
-    is_admin = admin_pin == ADMIN_PIN
-
-    if not code and not is_admin:
-        return jsonify({"ok": False, "error": "Missing edit code."}), 400
 
     conn = get_db()
     cursor = conn.cursor()
 
-    # Verify ownership
-    cursor.execute("SELECT asset_id FROM exhibits WHERE exhibit_id = ?", (exhibit_id,))
-    exhibit = cursor.fetchone()
+    email, exhibit = _verify_exhibit_code_by_exhibit_id(cursor, exhibit_id, code)
     if not exhibit:
         conn.close()
         return jsonify({"ok": False, "error": "Exhibit not found."}), 404
-
-    if not is_admin:
-        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-        code_row = cursor.fetchone()
-        if not code_row:
-            conn.close()
-            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-        email = code_row["email"].lower()
-
-        cursor.execute(
-            "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
-            (exhibit["asset_id"], email)
-        )
-        if not cursor.fetchone():
-            conn.close()
-            return jsonify({"ok": False, "error": "Not authorized."}), 403
+    if not email:
+        conn.close()
+        return jsonify({"ok": False, "error": "Not authorized."}), 403
 
     # Get image details
     cursor.execute(
-        "SELECT image_id, image_url, thumb_url, source_asset_id FROM exhibit_images WHERE image_id = ? AND exhibit_id = ?",
+        "SELECT image_id, image_url, thumb_url, scroll_url, source_asset_id FROM exhibit_images WHERE image_id = ? AND exhibit_id = ?",
         (image_id, exhibit_id)
     )
     img_row = cursor.fetchone()
@@ -2965,13 +2954,7 @@ def delete_exhibit_image(exhibit_id, image_id):
 
     # Delete files if it's an exhibit-only upload (not a source_asset_id reference)
     if not img_row["source_asset_id"]:
-        for url_col in ("image_url", "thumb_url"):
-            rel_path = img_row[url_col] or ""
-            if rel_path.startswith('/uploads/'):
-                rel_path = rel_path[len('/uploads/'):]
-                file_path = os.path.join(UPLOAD_DIR, rel_path)
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+        _delete_upload_files(img_row["image_url"], img_row["thumb_url"], img_row["scroll_url"])
 
     cursor.execute("DELETE FROM exhibit_images WHERE image_id = ?", (image_id,))
 
@@ -2995,39 +2978,20 @@ def reorder_exhibit_images(exhibit_id):
     data = request.get_json() or {}
     code = data.get("code", "").strip()
     order = data.get("order", [])
-    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
-    is_admin = admin_pin == ADMIN_PIN
 
-    if not code and not is_admin:
-        return jsonify({"ok": False, "error": "Missing edit code."}), 400
     if not order or not isinstance(order, list):
         return jsonify({"ok": False, "error": "Missing order array."}), 400
 
     conn = get_db()
     cursor = conn.cursor()
 
-    # Verify ownership
-    cursor.execute("SELECT asset_id FROM exhibits WHERE exhibit_id = ?", (exhibit_id,))
-    exhibit = cursor.fetchone()
+    email, exhibit = _verify_exhibit_code_by_exhibit_id(cursor, exhibit_id, code)
     if not exhibit:
         conn.close()
         return jsonify({"ok": False, "error": "Exhibit not found."}), 404
-
-    if not is_admin:
-        cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
-        code_row = cursor.fetchone()
-        if not code_row:
-            conn.close()
-            return jsonify({"ok": False, "error": "Invalid edit code."}), 400
-        email = code_row["email"].lower()
-
-        cursor.execute(
-            "SELECT asset_id FROM assets WHERE asset_id = ? AND LOWER(contact1_value) = ?",
-            (exhibit["asset_id"], email)
-        )
-        if not cursor.fetchone():
-            conn.close()
-            return jsonify({"ok": False, "error": "Not authorized."}), 403
+    if not email:
+        conn.close()
+        return jsonify({"ok": False, "error": "Not authorized."}), 403
 
     for idx, image_id in enumerate(order, 1):
         cursor.execute(
@@ -3043,10 +3007,16 @@ def reorder_exhibit_images(exhibit_id):
 
 def _verify_exhibit_code(cursor, asset_id, code):
     """Verify an edit code owns the given asset, or admin PIN in headers. Returns email or None."""
-    # Admin PIN bypass
+    # Admin PIN bypass (rate-limited)
     admin_pin = request.headers.get("X-Admin-Pin", "").strip()
-    if admin_pin == ADMIN_PIN:
-        return "admin"
+    if admin_pin:
+        if not _check_pin_rate_limit():
+            return None
+        if admin_pin == ADMIN_PIN:
+            _clear_pin_failures()
+            return "admin"
+        _record_pin_failure()
+        return None
     if not code:
         return None
     cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
@@ -3061,6 +3031,18 @@ def _verify_exhibit_code(cursor, asset_id, code):
     if not cursor.fetchone():
         return None
     return email
+
+
+def _verify_exhibit_code_by_exhibit_id(cursor, exhibit_id, code):
+    """Look up exhibit by exhibit_id, then verify ownership via _verify_exhibit_code.
+    Returns (email, exhibit_row).  If exhibit doesn't exist: (None, None).
+    If exhibit exists but auth fails: (None, exhibit_row)."""
+    cursor.execute("SELECT exhibit_id, asset_id FROM exhibits WHERE exhibit_id = ?", (exhibit_id,))
+    exhibit = cursor.fetchone()
+    if not exhibit:
+        return None, None
+    email = _verify_exhibit_code(cursor, exhibit["asset_id"], code)
+    return email, exhibit
 
 
 @app.route("/api/exhibit/<int:asset_id>/dashboard", methods=["GET"])
@@ -3198,11 +3180,7 @@ def upload_exhibit_photo(asset_id):
     os.makedirs(exhibit_dir, exist_ok=True)
 
     # Delete old photo file if it exists
-    old_url = exhibit["artist_photo_url"] or ""
-    if old_url.startswith('/uploads/'):
-        old_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), old_url.lstrip('/'))
-        if os.path.exists(old_path):
-            os.remove(old_path)
+    _delete_upload_files(exhibit["artist_photo_url"])
 
     # Generate center-cropped square photo (512×512 for retina quality at 80×80 display)
     filename = f"headshot_{uuid.uuid4().hex[:12]}.jpg"

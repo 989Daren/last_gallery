@@ -68,10 +68,7 @@
     _modal.setAttribute('aria-hidden', 'false');
     _modal.innerHTML = '<div class="exdash-loading">Loading dashboard...</div>';
 
-    var headers = {};
-    if (_adminPin) headers['X-Admin-Pin'] = _adminPin;
-
-    fetch('/api/exhibit/' + assetId + '/dashboard?code=' + encodeURIComponent(_editCode), { headers: headers })
+    fetch('/api/exhibit/' + assetId + '/dashboard?code=' + encodeURIComponent(_editCode), { headers: _headers() })
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (!data.ok) {
@@ -807,6 +804,7 @@
     _currentData = null;
     _assetId = null;
     _editCode = '';
+    _adminPin = '';
     _dirty = false;
 
     if (_modal) {

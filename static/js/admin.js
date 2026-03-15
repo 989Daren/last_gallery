@@ -310,8 +310,8 @@
     async function tryUnlockAdmin() {
       const typedPin = (adminPinInput?.value || "").trim();
 
-      if (!/^\d{4}$/.test(typedPin)) {
-        showPinError("Enter 4 digits");
+      if (!/^\d{5}$/.test(typedPin)) {
+        showPinError("Enter 5 digits");
         return;
       }
 
@@ -341,11 +341,11 @@
             }
             fetchHistoryStatus();
           }, 0);
+        } else if (response.status === 429) {
+          showPinError("Too many attempts. Try again later.");
         } else if (response.status === 401 || response.status === 403) {
-          // Invalid PIN
           showPinError("Incorrect PIN");
         } else {
-          // Unexpected error
           showPinError("Server error - try again");
         }
       } catch (err) {
