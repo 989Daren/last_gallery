@@ -22,7 +22,7 @@ wallState hydrated: 60 tiles (or whatever count)
 ### 2. Admin Login
 **Steps:**
 1. Click "Admin" button
-2. Enter PIN: `REDACTED_PIN`
+2. Enter PIN: `<admin_pin>`
 3. Click "Unlock"
 
 **Expected:** Admin panel opens, no errors

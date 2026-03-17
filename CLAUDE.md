@@ -175,7 +175,7 @@ Tiles are classified by size and numbered sequentially:
 | `/api/verify_edit_code` | POST | Verify artwork title + edit code, returns matching tile_id |
 | `/api/resend_edit_code` | POST | Resend edit code to email (privacy-safe: same response regardless) |
 
-### Admin (requires `X-Admin-Pin: REDACTED_PIN` header)
+### Admin (requires `X-Admin-Pin` header with valid PIN)
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/admin/tile_info` | GET | Get info about a specific tile |
@@ -187,7 +187,7 @@ Tiles are classified by size and numbered sequentially:
 | `/api/admin/force_unlock` | POST | Set unlocked to 0 or 1 explicitly (body: `{asset_id, unlocked: 0\|1}`) |
 | `/api/admin/set_qualified_floor` | POST | Set qualified floor for artwork (body: `{asset_id, qualified_floor: "s"\|"m"\|"lg"\|"xl"}`) |
 | `/api/admin/countdown` | POST | Control countdown timer (actions: set_active, set_scheduled, clear) |
-| `/shuffle` | POST | Randomly redistribute all images (body: `{pin: "REDACTED_PIN"}`) |
+| `/shuffle` | POST | Randomly redistribute all images (body: `{pin: "<admin_pin>"}`) |
 
 ### Stripe / Upgrade
 | Endpoint | Method | Purpose |
@@ -294,15 +294,15 @@ Focal-point zoom for touch devices — content under fingers stays anchored duri
 - **Performance**: DOM elements (`_wrapper`, `_zoomWrapper`) and viewport metrics (`_vw`, `_vh`) cached in `zoomState`; refreshed only on resize/orientation change. `clampTransform` writes to a reusable `_clampResult` object (zero per-frame allocation). Touch distance and midpoint inlined in hot path.
 
 ## Admin PIN
-- Default: `REDACTED_PIN`
-- Can be overridden via environment variable `TLG_ADMIN_PIN`
+- 5-digit PIN, set via environment variable `TLG_ADMIN_PIN` in `.env` (required, no hardcoded default)
 - **Security**: PIN is validated server-side only; never exposed to client-side JavaScript
+- **Rate limiting**: 5 failed attempts per IP → 15-minute lockout (HTTP 429)
 - PIN stored in IIFE closure scope after successful server validation, persists until page refresh
 
 ## Environment Variables
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `TLG_ADMIN_PIN` | `REDACTED_PIN` | Admin PIN for admin endpoints |
+| `TLG_ADMIN_PIN` | *(required)* | 5-digit admin PIN for admin endpoints |
 | `TLG_BASE_URL` | `https://thelastgallery.com` | Base URL used in email links (`/edit`, `/creator-of-the-month`) |
 | `RESEND_API_KEY` | *(none)* | Resend API key for sending edit code emails |
 | `STRIPE_SECRET_KEY` | *(none)* | Stripe secret key for payment processing |
@@ -373,8 +373,8 @@ Menu items in order:
 ## Upgrade Modal (unlock_modal.js)
 Three-step purchase flow using edit codes for identity ("lock what you landed on" model):
 - **Step 1: Identification** — Enter edit code → calls `POST /api/my_artworks` to get artworks. "Forgot your code?" inline resend form.
-- **Step 2: Artwork Selection** — Shows all artworks for that email with status badges (Locked/Unlocked/Floor: M/LG/XL). Auto-skipped if only 1 artwork.
-- **Step 3: Upgrade Options** — Shows "Currently in a [Size] tile" subtitle. Fetches `GET /api/upgrade_options/<asset_id>` for tiers. Only the tier matching the artwork's current tile size is available (gold CTA → Stripe). Other floor tiers show "Your artwork must be in a [Size] tile". "Coming Soon: Exhibit Tile" teaser at bottom.
+- **Step 2: Artwork Selection** — Shows all artworks for that email with status badges (Locked/Unlocked/Exhibit/Floor: M/LG/XL). Auto-skipped if only 1 artwork.
+- **Step 3: Upgrade Options** — Shows "Currently in a [Size] tile" subtitle. Fetches `GET /api/upgrade_options/<asset_id>` for tiers. Only the tier matching the artwork's current tile size is available (gold CTA → Stripe). Other floor tiers show "Your artwork must be in a [Size] tile". Exhibit tier ($199.99) available for unlocked artwork in M/LG/XL tiles.
 - **Tile-size validation**: `/api/stripe/checkout` re-verifies tile size before creating session, preventing race conditions with shuffle.
 - **Navigation**: Same `#unlock` ConicalNav hash for all steps. `openUnlockModal(assetId)` auto-selects artwork after identification.
 - **Purchase success**: Stripe redirects back with `?purchase_success=1&type={tier}&asset_id={id}`. `handleStripeReturn()` in main.js cleans URL, skips welcome, shows success banner.
@@ -396,7 +396,7 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **Unlocked** (`unlocked = 1`, `qualified_floor = 's'`): Any tile size — least constrained, placed last. Weighted random: more tiles in a size = higher probability.
 - **`qualified_floor`** column (values: s, m, lg, xl): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment.
 - **"Lock what you landed on"**: Artists can only purchase the floor tier matching their artwork's current tile size. Creates urgency around the weekly shuffle cycle — land in a bigger tile, lock it in before the next shuffle.
-- **Stripe integration**: `/api/stripe/checkout` creates a Stripe Checkout Session for a tier purchase. Webhook (`/api/stripe/webhook`) applies the upgrade on `checkout.session.completed`. Tiers: `unlock_s` ($9.99), `floor_m` ($24.99), `floor_lg` ($59.99), `floor_xl` ($99.99). Defined in `TIER_CONFIG` dict in `app.py`. Uses inline `price_data` (no pre-created Stripe Price IDs). Fulfillment is idempotent via `purchase_history` table.
+- **Stripe integration**: `/api/stripe/checkout` creates a Stripe Checkout Session for a tier purchase. Webhook (`/api/stripe/webhook`) applies the upgrade on `checkout.session.completed`. Tiers: `unlock_s` ($9.99), `floor_m` ($24.99), `floor_lg` ($59.99), `floor_xl` ($99.99), `exhibit` ($199.99). Defined in `TIER_CONFIG` dict in `app.py`. Uses inline `price_data` (no pre-created Stripe Price IDs). Fulfillment is idempotent via `purchase_history` table.
 - **Post-shuffle notifications**: After each shuffle, `_run_shuffle()` emails artists whose unlocked artwork landed in a tile above their current floor. Email includes artwork title, new tile size, price to upgrade, access code (edit code, called "access code" in this context), and CTA link (`/?upgrade=1&asset_id=X`). Uses `send_upgrade_notification()`. Wrapped in try/except — failures never break the shuffle.
 - **`/api/lock_tile`**: Admin/direct-use endpoint, sets `qualified_floor` to artwork's current tile size + `unlocked=1`. Rejects S locks.
 - **Derangement rule**: Every artwork must change position during a shuffle — no artwork may remain in its previous tile. The algorithm excludes each artwork's original tile from candidates; if the original tile is the last remaining in its pool, a swap with a previously-assigned artwork resolves it.
@@ -410,8 +410,8 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **Limit checks on email change**: Upload limits (4-tile max + free tile limit) also apply when editing an artwork and changing its email to a new address.
 - **Cleanup**: `cleanup_expired.py` removes expired artwork (`payment_deadline < now AND unlocked = 0`), deletes image files, clears tile assignments, and cleans up orphaned edit codes. Runs via systemd timer (`cleanup-expired.timer`) every 12 hours at midnight and noon ET.
 
-## Planned: Exhibit Tiles
-Top-tier artist feature. An exhibit tile is an easily identifiable tile that, when clicked, opens an introduction modal covering the artist. A "Continue" button leads to a horizontally scrolling presentation of all the artist's works — full (scaled) images with padding, layered on a transparent dark background, centered at roughly 1/4 to 1/3 screen height, auto-scrolling left to right with viewer scroll controls. This will require linking multiple artworks to a single artist and a new tile designation or size class.
+## Exhibit Tiles
+Top-tier artist feature ($199.99). An exhibit tile is an easily identifiable tile (gold badge overlay + shimmer animation) that, when clicked, opens an introduction modal covering the artist. A "Continue" button leads to a horizontally scrolling presentation of all the artist's works — full (scaled) images with padding, layered on a transparent dark background, auto-scrolling left to right with viewer scroll/swipe controls. Requires unlocked artwork in an M/LG/XL tile. On purchase, `asset_type` is set to `'exhibit'`, an `exhibits` row is created, and the artwork is seeded as the first exhibit image. Artists manage their exhibit via the exhibit dashboard (up to 20 images, profile editing, image reorder). Frontend modules: `exhibit.js` (scrolling gallery + intro modal), `exhibit_dashboard.js` (artist self-management).
 
 ## Visual Theme
 - **Gold accent system**: All modals (upload, metadata, confirmation, countdown info) share a consistent gold gradient accent bar (`#b8860b → #ffd700`) at the top, gold gradient primary buttons, and outlined secondary buttons

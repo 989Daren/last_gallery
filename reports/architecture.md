@@ -203,7 +203,7 @@ last_gallery/
 
 ### Admin Authentication
 
-**Mechanism:** `X-Admin-Pin` header (value: `"REDACTED_PIN"`)  
+**Mechanism:** `X-Admin-Pin` header (value: `"<admin_pin>"`)  
 **Checked by:** `check_admin_pin()` helper  
 **Returns:** 401 Unauthorized if PIN missing or incorrect
 
@@ -328,7 +328,7 @@ last_gallery/
 
 **Called by:** `main.js` (admin controls)
 
-**Headers:** `X-Admin-Pin: REDACTED_PIN`
+**Headers:** `X-Admin-Pin: <admin_pin>`
 
 **Request:** `application/json`
 ```json
@@ -356,7 +356,7 @@ last_gallery/
 
 **Called by:** `main.js` (admin controls)
 
-**Headers:** `X-Admin-Pin: REDACTED_PIN`
+**Headers:** `X-Admin-Pin: <admin_pin>`
 
 **Request:** None
 
@@ -488,7 +488,7 @@ last_gallery/
 
 ### Admin PIN
 
-**Value:** `"REDACTED_PIN"`  
+**Value:** `"<admin_pin>"`  
 **Location:** `app.py:ADMIN_PIN`, `main.js:ADMIN_PIN`  
 **Must match:** Frontend sends in `X-Admin-Pin` header, backend validates
 
@@ -648,7 +648,7 @@ DOM tile elements with .occupied class
    - Upload modal depends on this contract
 
 3. **Admin Authentication:**
-   - `X-Admin-Pin: REDACTED_PIN` header required
+   - `X-Admin-Pin: <admin_pin>` header required
    - 401 response if missing/incorrect
    - All admin routes enforce this
 

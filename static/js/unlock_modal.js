@@ -24,6 +24,7 @@
     'floor_m':   'Your artwork will never drop below a Medium tile during shuffles.',
     'floor_lg':  'Your artwork will never drop below a Large tile during shuffles.',
     'floor_xl':  'Your artwork will never drop below an Extra Large tile during shuffles.',
+    'exhibit':   'A dedicated exhibit space to showcase your portfolio with a scrolling gallery of your works.',
   };
 
   function maskEmail(email) {
@@ -41,6 +42,7 @@
   }
 
   function statusBadgeText(artwork) {
+    if (artwork.asset_type === 'exhibit') return 'Exhibit';
     if (!artwork.unlocked) return 'Locked';
     var floor = (artwork.qualified_floor || 's').toUpperCase();
     if (floor === 'S') return 'Unlocked';
@@ -99,13 +101,6 @@
             '<h2 class="unlock-modal-headline">Eligible Upgrade:</h2>' +
             '<div class="unlock-tier-current-size" id="unlockCurrentSize"></div>' +
             '<div class="unlock-tier-list" id="unlockTierList"></div>' +
-            '<div class="unlock-tier-coming-soon">' +
-              '<div class="unlock-tier-coming-soon-label">Coming Soon</div>' +
-              '<div class="unlock-tier-coming-soon-title">Exhibit Tile</div>' +
-              '<div class="unlock-tier-coming-soon-price">$199.99</div>' +
-              '<div class="unlock-tier-onetime" style="text-align:left;margin-top:2px;">One-time payment</div>' +
-              '<div class="unlock-tier-coming-soon-desc">A dedicated exhibit space to showcase your portfolio.</div>' +
-            '</div>' +
             '<div class="unlock-tier-note">Use the same email for all uploads to qualify for future upgrade tiers.</div>' +
             '<div class="unlock-modal-back-link" id="unlockStep3Back">Back</div>' +
           '</div>' +
@@ -430,7 +425,6 @@
       }
 
       data.tiers.forEach(function(tier) {
-        if (tier.status === 'coming_soon') return; // handled separately
 
         var card = document.createElement("div");
         card.className = "unlock-tier-card";

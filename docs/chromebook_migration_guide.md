@@ -90,7 +90,7 @@ How I currently run the website:
 - Local URL: http://127.0.0.1:5000
 - Network URL: http://192.168.1.XXX:5000 (fill in your IP)
 
-Admin PIN: REDACTED_PIN (or whatever yours is)
+Admin PIN: <admin_pin> (or whatever yours is)
 
 Python version on PC: (open Command Prompt/Terminal, type: python --version)
 
@@ -395,7 +395,7 @@ nano .env
 
 Type this (replace with your actual values):
 ```
-TLG_ADMIN_PIN=REDACTED_PIN
+TLG_ADMIN_PIN=<admin_pin>
 ```
 
 If you have email API keys, add them:

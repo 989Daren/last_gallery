@@ -145,8 +145,8 @@ def _seed_info_tiles():
 # _seed_info_tiles() called after get_tile_size_map() is defined (see below)
 
 
-# Minimal admin pin (only used if you later re-enable admin routes)
-ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN", "REDACTED_PIN")
+# Admin PIN — required, set via TLG_ADMIN_PIN in .env (no hardcoded default)
+ADMIN_PIN = os.environ.get("TLG_ADMIN_PIN")
 
 # Rate limiting for failed admin PIN attempts: {ip: (fail_count, first_fail_time)}
 _pin_failures = {}

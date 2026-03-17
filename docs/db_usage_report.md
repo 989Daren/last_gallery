@@ -62,7 +62,7 @@ USE_SQLITE_ASSETS = True        # Toggle SQLite vs JSON for assets metadata
 DEBUG_DB_TRACE = True           # Log all DB operations to console
 GALLERY_DB = "data/gallery.db"  # Database file path
 MAX_HISTORY_DEPTH = 10          # Max undo snapshots to retain
-ADMIN_PIN = "REDACTED_PIN"              # Admin operation gate
+ADMIN_PIN = "<admin_pin>"              # Admin operation gate
 ```
 
 ---
@@ -295,7 +295,7 @@ CREATE TABLE placement_snapshots (
 
 ### Route: `POST /api/admin/clear_tile`
 **Handler:** `admin_clear_tile()` (lines 1034-1072)  
-**Auth:** `X-Admin-Pin: REDACTED_PIN` header required  
+**Auth:** `X-Admin-Pin: <admin_pin>` header required  
 **Request Body:**
 ```json
 {
@@ -323,7 +323,7 @@ CREATE TABLE placement_snapshots (
 
 ### Route: `POST /api/admin/clear_all_tiles`
 **Handler:** `admin_clear_all_tiles()` (lines 1074-1104)  
-**Auth:** `X-Admin-Pin: REDACTED_PIN` header required  
+**Auth:** `X-Admin-Pin: <admin_pin>` header required  
 **Request Body:** Empty
 
 **DB Ops:**
@@ -346,7 +346,7 @@ CREATE TABLE placement_snapshots (
 
 ### Route: `POST /api/admin/undo`
 **Handler:** `admin_undo()` (lines 1106-1148)  
-**Auth:** `X-Admin-Pin: REDACTED_PIN` header required  
+**Auth:** `X-Admin-Pin: <admin_pin>` header required  
 **Request Body (optional):**
 ```json
 {
@@ -381,7 +381,7 @@ CREATE TABLE placement_snapshots (
 
 ### Route: `GET /api/admin/history_status`
 **Handler:** `admin_history_status()` (lines 1150-1175)  
-**Auth:** `X-Admin-Pin: REDACTED_PIN` header required  
+**Auth:** `X-Admin-Pin: <admin_pin>` header required  
 **DB Reads:** `get_snapshot_counts()` → Queries `placement_snapshots`
 
 **Response:**
@@ -406,7 +406,7 @@ CREATE TABLE placement_snapshots (
 
 ### Route: `GET /api/admin/tile_info`
 **Handler:** `admin_tile_info()` (lines 1177-1232)  
-**Auth:** `X-Admin-Pin: REDACTED_PIN` header required  
+**Auth:** `X-Admin-Pin: <admin_pin>` header required  
 **Query Params:** `?tile_id=X99`
 
 **DB Reads:**
@@ -442,7 +442,7 @@ CREATE TABLE placement_snapshots (
 
 ### Route: `POST /api/admin/move_tile_asset`
 **Handler:** `admin_move_tile_asset()` (lines 1234-1289)  
-**Auth:** `X-Admin-Pin: REDACTED_PIN` header required  
+**Auth:** `X-Admin-Pin: <admin_pin>` header required  
 **Request Body:**
 ```json
 {
@@ -478,7 +478,7 @@ CREATE TABLE placement_snapshots (
 
 ### Route: `POST /shuffle`
 **Handler:** `shuffle_placement()` (lines 1291-1343)  
-**Auth:** PIN in request body (`{"pin": "REDACTED_PIN"}`)  
+**Auth:** PIN in request body (`{"pin": "<admin_pin>"}`)  
 **DB Ops:**
 1. `load_wall_state()` → Get current placements
 2. `push_snapshot("shuffle", wall_state)` → Save pre-shuffle state
@@ -695,7 +695,7 @@ commitWallStateChange('boot hydration');
 
 ### Operation: Shuffle
 **Trigger:** Admin modal → "Shuffle" button (PIN required)  
-**API:** `POST /shuffle` with `{"pin": "REDACTED_PIN"}`
+**API:** `POST /shuffle` with `{"pin": "<admin_pin>"}`
 
 **DB Impact:**
 1. **Before:** `push_snapshot("shuffle", current_state)`
@@ -1242,7 +1242,7 @@ Van Gogh
 **Request:**
 ```json
 {
-  "pin": "REDACTED_PIN"
+  "pin": "<admin_pin>"
 }
 ```
 
