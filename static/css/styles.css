@@ -241,6 +241,20 @@ label {
   outline-offset: -2px;
 }
 
+#hamburger-menu .menu-link {
+  display: block;
+  padding: 10px 16px;
+  color: rgba(255,255,255,0.9);
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+#hamburger-menu .menu-link:hover {
+  background: rgba(255,255,255,0.1);
+}
+
 /* "Add Your Artwork" header button — gold accent */
 #addArtworkBtn {
   flex: 0 0 auto;
@@ -3878,6 +3892,7 @@ label {
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
 }
 
 .pricing-col-req {

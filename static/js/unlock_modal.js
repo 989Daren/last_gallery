@@ -72,7 +72,7 @@
             '<h2 class="unlock-modal-headline">Upgrade Your Artwork</h2>' +
             '<p class="unlock-modal-subtitle">Enter the edit code that was sent to<br>your email when you uploaded your artwork.</p>' +
             '<div class="unlock-modal-input-group">' +
-              '<label class="unlock-modal-label">Edit Code</label>' +
+              '<label class="unlock-modal-label">Upgrade / Edit Code</label>' +
               '<input type="text" class="unlock-modal-input" id="unlockCodeInput" maxlength="8" placeholder="8-character code" autocomplete="off" />' +
               '<div class="unlock-modal-inline-error hidden" id="unlockCodeError"></div>' +
             '</div>' +

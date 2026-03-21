@@ -3,7 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The Last Gallery</title>
+  <title>The Last Gallery - Add Your Art for Free, Make History!</title>
+
+  <!-- SEO & social sharing -->
+  <meta name="description" content="A shuffling art gallery, giving every artist fair exposure. When the gallery is full, all artwork freezes in place — becoming a time capsule of artwork.">
+  <link rel="canonical" href="https://thelastgallery.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The Last Gallery">
+  <meta property="og:description" content="A shuffling art gallery, giving every artist fair exposure. When the gallery is full, all artwork freezes in place — becoming a time capsule of artwork.">
+  <meta property="og:url" content="https://thelastgallery.com/">
+  <meta property="og:image" content="https://thelastgallery.com/static/images/og_share_image.png">
+  <meta property="og:image:alt" content="The Last Gallery — a shuffling art gallery and time capsule of artwork">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The Last Gallery">
+  <meta name="twitter:description" content="A shuffling art gallery, giving every artist fair exposure. When the gallery is full, all artwork freezes in place — becoming a time capsule of artwork.">
+  <meta name="twitter:image" content="https://thelastgallery.com/static/images/og_share_image.png">
+
+  <!-- Favicon -->
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="any">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 
   <!-- Main stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') | cachebust }}">
@@ -61,6 +79,9 @@
           </li>
           <li role="none">
             <button id="menu-item-admin" role="menuitem">Admin</button>
+          </li>
+          <li role="none">
+            <a href="/privacy" role="menuitem" class="menu-link">Your Privacy</a>
           </li>
         </ul>
       </div>
@@ -304,7 +325,7 @@
             type="password"
             inputmode="numeric"
             autocomplete="one-time-code"
-            maxlength="4"
+            maxlength="5"
             aria-label="Admin PIN"
           >
           <button id="adminPinSubmit" type="button">Unlock</button>
@@ -440,7 +461,7 @@
         <div class="countdown-info-graphic"><img id="humanCentricGraphic" src="{{ url_for('static', filename='images/artist_group.png') }}" alt="A Human Centric Gallery"></div>
         <p>Whether it's painting, drawing, photography, collage, digital (Procreate, Krita, etc.), or mixed media, The Last Gallery honors human touch in the creative process. A brushstroke, a blended pixel, a carefully framed photograph&mdash;these are the marks of an artist at work.</p>
         <p>We believe AI can be used as a tool. You might use it in a collage, or as a reference&mdash;just as artists have long used photographs. That's fine. What matters is that a human is physically involved in shaping the final image.</p>
-        <p>The Last Gallery reserves the right to remove raw, unedited AI-generated images, or any other content deemed inappropriate from the gallery wall.</p>
+        <p>The Last Gallery reserves the right to remove raw, unedited AI-generated images, or any other content deemed inappropriate or low-effort, from the gallery wall.</p>
       </div>
     </div>
   </div>
@@ -526,8 +547,8 @@
               </div>
             </div>
             <div class="pricing-col">
-              <div class="pricing-col-header">Exhibit</div>
-              <div class="pricing-col-req">Must be unlocked **</div>
+              <div class="pricing-col-header">Exhibit Tile</div>
+              <div class="pricing-col-req">Existing Medium or larger ***</div>
               <div class="pricing-col-desc">A dedicated space to showcase your portfolio</div>
               <div class="pricing-col-price-wrap">
                 <div class="pricing-col-price">$199.99</div>
@@ -539,6 +560,7 @@
         <div class="pricing-footnotes">
           <p>* Smaller size categories contain more tiles, giving higher odds of landing in them.</p>
           <p>** Artwork must be unlocked and currently occupying the larger tile size (after a shuffle) to purchase that upgrade. After landing in a larger tile, you only have 1 week (until the next shuffle) to decide to upgrade.</p>
+          <p>*** Exhibits are created from an existing Medium or larger tile. They showcase the artist and up to 20 pieces of artwork. Although the exhibit tile image itself is not removable, all other exhibit images are.</p>
         </div>
         <div class="pricing-policies">
           <p>All purchases are one-time payments. Prices may increase as the gallery fills.</p>
@@ -603,16 +625,16 @@
   <div id="adminDebugFooter" class="admin-debug-footer" style="display: none;"></div>
 
   <!-- JS -->
-  <script src="{{ url_for('static', filename='js/main.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/admin.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/countdown.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/unlock_modal.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/success_banner.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/deadline_banner.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/exhibit.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/exhibit_dashboard.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/owner_edit.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') | cachebust }}"></script>
-  <script src="{{ url_for('static', filename='js/upload_modal.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/main.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/admin.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/countdown.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/unlock_modal.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/success_banner.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/deadline_banner.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/exhibit.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/exhibit_dashboard.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/owner_edit.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/upload_modal.js') | cachebust }}"></script>
 </body>
 </html>

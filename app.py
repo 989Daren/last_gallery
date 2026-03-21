@@ -19,6 +19,7 @@ from db import init_db, get_db
 load_dotenv()
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1-year cache for static files (cachebust ?v= handles invalidation)
 
 
 @app.template_filter('cachebust')
@@ -77,13 +78,13 @@ def _generate_info_tile_image():
     # Gold circle centered with padding
     pad = 50
     draw.ellipse([pad, pad, size - pad, size - pad], fill="#D4A843")
-    # Draw "i" in center — try serif bold italic, fall back gracefully
+    # Draw "i" in center — Georgia italic to match countdown info icon
     font_size = 280
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf", font_size)
+        font = ImageFont.truetype("/usr/share/fonts/chromeos/monotype/georgiaz.ttf", font_size)
     except (OSError, IOError):
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", font_size)
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf", font_size)
         except (OSError, IOError):
             font = ImageFont.load_default()
     bbox = draw.textbbox((0, 0), "i", font=font)
@@ -776,6 +777,24 @@ def send_deadline_notification(email, artwork_title, asset_id, access_code=''):
         app.logger.info("[DEADLINE NOTIFY] Email sent to %s for asset %s", email, asset_id)
     except Exception:
         app.logger.exception("[DEADLINE NOTIFY] Failed to send email to %s for asset %s", email, asset_id)
+
+
+# ---- Static root files (SEO) ----
+@app.route("/robots.txt")
+def robots_txt():
+    return send_from_directory(app.static_folder, "robots.txt")
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    return send_from_directory(app.static_folder, "sitemap.xml")
+
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(app.static_folder, "favicon.ico")
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
 
 
 # ---- Routes ----
