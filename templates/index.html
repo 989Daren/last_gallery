@@ -485,6 +485,28 @@
     </div>
   </div>
 
+  <!-- About Exhibits Modal -->
+  <div id="aboutExhibitsOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
+    <div class="countdown-info-card">
+      <div class="countdown-info-accent"></div>
+      <div class="countdown-info-body">
+        <button id="aboutExhibitsCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
+        <h3>About Exhibits</h3>
+        <div class="countdown-info-graphic">
+          <img src="{{ url_for('static', filename='images/exhibit_popup_image.png') }}" alt="About Exhibits">
+        </div>
+        <ul class="about-exhibits-list">
+          <li>All exhibit tiles have special formatting that makes them easy to identify &mdash; a vertical <strong>&ldquo;Exhibit&rdquo;</strong> banner overlay and an animated sheen effect.</li>
+          <li>Exhibits are created using an artist's existing <strong>Medium</strong>, <strong>Large</strong>, or <strong>X-Large</strong> tile.</li>
+          <li>They highlight the artist and showcase up to <strong>20 artwork images</strong> in a scrolling presentation.</li>
+          <li>The artwork on the tile you upgrade to an exhibit (visible on the gallery wall) is permanent and cannot be removed, but the other images in your exhibit are fully removable and replaceable.</li>
+          <li>An artist may have a maximum of <strong>4 tile images</strong> on the gallery wall &mdash; an exhibit tile counts as one of those 4.</li>
+          <li>Exhibit tiles shuffle weekly, just like all other tiles, potentially landing them in even larger tiles.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Upgrade Pricing Modal -->
   <div id="pricingOverlay" class="countdown-info-overlay hidden" role="dialog" aria-modal="true">
     <div class="countdown-info-card pricing-card">

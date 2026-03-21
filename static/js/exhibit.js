@@ -52,6 +52,9 @@
   var _dragMoveBound = null;    // stored reference for cleanup
   var _dragEndBound = null;
 
+  // About Exhibits popup handle
+  var _aboutExhibitsPopup = null;
+
   // ===== Helpers =====
   var escapeHtml = window.escapeHtml;
 
@@ -307,6 +310,7 @@
         '<div class="exhibit-ribbon-area">' +
           '<button class="exhibit-gallery-close" aria-label="Exit exhibit">&times;</button>' +
           '<div class="exhibit-ribbon-wrapper">' +
+            '<a class="exhibit-about-link" id="exhibitAboutLink">About Exhibits</a>' +
             '<div class="exhibit-gold-line exhibit-gold-line-top"></div>' +
             '<div class="exhibit-ribbon" id="exhibitRibbon"></div>' +
             '<div class="exhibit-gold-line exhibit-gold-line-bottom"></div>' +
@@ -321,6 +325,13 @@
     // Wire events
     _overlay.querySelector('.exhibit-gallery-close')
       .addEventListener('click', closeExhibit);
+    var aboutLink = document.getElementById('exhibitAboutLink');
+    if (aboutLink) {
+      aboutLink.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (_aboutExhibitsPopup) _aboutExhibitsPopup.open();
+      });
+    }
     var galleryContainer = _overlay.querySelector('.exhibit-gallery-container');
     galleryContainer.addEventListener('click', handleGalleryTap);
     wireSwipeEvents(galleryContainer);
@@ -887,6 +898,13 @@
     if (_currentState === 'popup') {
       startScroll();
     }
+  }
+
+  // ===== Register About Exhibits popup =====
+  if (typeof window.registerDismissible === 'function') {
+    _aboutExhibitsPopup = window.registerDismissible(
+      "aboutExhibitsOverlay", "aboutExhibitsCloseBtn", "aboutexhibits"
+    );
   }
 
   // ===== Public API =====

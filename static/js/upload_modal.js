@@ -259,10 +259,8 @@ document.addEventListener("DOMContentLoaded", () => {
       currentUploadAssetId = (result.asset && result.asset.asset_id) || null;
       metaSavedSuccessfully = false;
 
-      // Refresh wall immediately so new image appears before metadata modal
-      await refreshWall();
-
       // Store tile_id and open Tier-2 metadata modal
+      // (wall refresh deferred until metadata is saved — prevents incomplete tiles on wall)
       if (result && result.tile_id) {
         currentUploadTileId = result.tile_id;
         openMetaModal(result.tile_id);

@@ -450,6 +450,40 @@ label {
   margin-bottom: 0;
 }
 
+.about-exhibits-list {
+  margin: 0;
+  padding: 0 0 0 20px;
+  list-style: none;
+}
+.about-exhibits-list li {
+  position: relative;
+  margin-bottom: 14px;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.72);
+  padding-left: 8px;
+}
+.about-exhibits-list li::before {
+  content: "\2022";
+  position: absolute;
+  left: -16px;
+  color: #D4A843;
+  font-size: 1.4em;
+}
+.about-exhibits-list li:last-child {
+  margin-bottom: 0;
+}
+@media (max-width: 600px) {
+  .about-exhibits-list {
+    padding-left: 16px;
+  }
+  .about-exhibits-list li {
+    font-size: 0.82rem;
+    margin-bottom: 12px;
+    padding-left: 6px;
+  }
+}
+
 .countdown-info-close {
   position: absolute;
   top: 4px;
@@ -4315,6 +4349,30 @@ label {
   width: 100%;
   height: 2px;
   background: linear-gradient(90deg, transparent, #D4A843 20%, #ffd700 50%, #D4A843 80%, transparent);
+}
+
+.exhibit-about-link {
+  display: block;
+  align-self: stretch;
+  text-align: left;
+  padding: 10px 0 6px 20px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1rem;
+  font-style: italic;
+  letter-spacing: 0.5px;
+  color: #D4A843;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.exhibit-about-link:hover {
+  color: #ffd700;
+}
+@media (max-width: 600px) {
+  .exhibit-about-link {
+    font-size: 0.88rem;
+    padding: 8px 0 4px 14px;
+  }
 }
 
 .exhibit-ribbon {
