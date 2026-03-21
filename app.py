@@ -859,7 +859,7 @@ def wall_state():
                    a.unlocked, a.qualified_floor, a.asset_type
             FROM tiles t
             JOIN assets a ON a.asset_id = t.asset_id
-            WHERE a.artist_name != ''
+            WHERE a.artist_name != '' OR a.asset_type = 'info'
             ORDER BY t.tile_id
         """)
         assignments = []
