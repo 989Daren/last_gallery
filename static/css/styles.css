@@ -473,6 +473,39 @@ label {
 .about-exhibits-list li:last-child {
   margin-bottom: 0;
 }
+
+.about-exhibits-footer {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+.about-exhibits-btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.2s, border-color 0.2s, color 0.2s;
+}
+.about-exhibits-btn-primary {
+  border: none;
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+}
+.about-exhibits-btn-primary:hover {
+  filter: brightness(1.1);
+}
+.about-exhibits-btn-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+}
+.about-exhibits-btn-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.85);
+}
+
 @media (max-width: 600px) {
   .about-exhibits-list {
     padding-left: 16px;

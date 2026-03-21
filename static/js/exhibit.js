@@ -907,6 +907,30 @@
     );
   }
 
+  // Wire About Exhibits footer buttons
+  // Note: Can't use _aboutExhibitsPopup.close() before opening pricing —
+  // its async history.back() would clobber the pricing overlay.
+  // Instead, hide DOM + replace hash directly (same pattern as admin.js pricing → unlock).
+  var pricingBtn = document.getElementById('aboutExhibitsPricingBtn');
+  if (pricingBtn) {
+    pricingBtn.addEventListener('click', function() {
+      var aboutOverlay = document.getElementById('aboutExhibitsOverlay');
+      if (aboutOverlay) aboutOverlay.classList.add('hidden');
+      history.replaceState(null, '', location.pathname);
+      var pricingOverlay = document.getElementById('pricingOverlay');
+      if (pricingOverlay) {
+        pricingOverlay.classList.remove('hidden');
+        window.ConicalNav && window.ConicalNav.pushToMatchUi();
+      }
+    });
+  }
+  var closeFooterBtn = document.getElementById('aboutExhibitsCloseFooterBtn');
+  if (closeFooterBtn) {
+    closeFooterBtn.addEventListener('click', function() {
+      if (_aboutExhibitsPopup) _aboutExhibitsPopup.close();
+    });
+  }
+
   // ===== Public API =====
   window.openExhibitIntro = openIntro;
   window.closeExhibit = closeExhibit;
