@@ -1740,8 +1740,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const tileEl = document.querySelector('.tile[data-asset-id="' + artAssetId + '"]');
             if (!tileEl) return;
 
-            scrollToTile(tileEl.dataset.id);
-
             // Exhibit tiles → open exhibit intro
             if (tileEl.dataset.assetType === 'exhibit') {
               if (typeof window.openExhibitIntro === 'function') {
