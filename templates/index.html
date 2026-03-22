@@ -9,15 +9,15 @@
   <meta name="description" content="A shuffling art gallery, giving every artist fair exposure. When the gallery is full, all artwork freezes in place — becoming a time capsule of artwork.">
   <link rel="canonical" href="https://thelastgallery.com/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="The Last Gallery">
+  <meta property="og:title" content="{{ og.title if og else 'The Last Gallery' }}">
   <meta property="og:description" content="A shuffling art gallery, giving every artist fair exposure. When the gallery is full, all artwork freezes in place — becoming a time capsule of artwork.">
-  <meta property="og:url" content="https://thelastgallery.com/">
-  <meta property="og:image" content="https://thelastgallery.com/static/images/og_share_image.png">
-  <meta property="og:image:alt" content="The Last Gallery — a shuffling art gallery and time capsule of artwork">
+  <meta property="og:url" content="{{ og.url if og else 'https://thelastgallery.com/' }}">
+  <meta property="og:image" content="{{ og.image if og else 'https://thelastgallery.com/static/images/og_share_image.png' }}">
+  <meta property="og:image:alt" content="{{ og.title if og else 'The Last Gallery — a shuffling art gallery and time capsule of artwork' }}">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="The Last Gallery">
+  <meta name="twitter:title" content="{{ og.title if og else 'The Last Gallery' }}">
   <meta name="twitter:description" content="A shuffling art gallery, giving every artist fair exposure. When the gallery is full, all artwork freezes in place — becoming a time capsule of artwork.">
-  <meta name="twitter:image" content="https://thelastgallery.com/static/images/og_share_image.png">
+  <meta name="twitter:image" content="{{ og.image if og else 'https://thelastgallery.com/static/images/og_share_image.png' }}">
 
   <!-- Favicon -->
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="any">

@@ -2597,6 +2597,43 @@ label {
   color: rgba(220, 240, 255, 1);
 }
 
+/* Popup share button - above image, appears when ribbon text appears */
+.popup-share-btn {
+  position: absolute;
+  top: -40px;
+  right: 37px;
+  width: 29px;
+  height: 29px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.2s, opacity 0.3s;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Show share button when ribbon text is visible */
+.popup-overlay.is-open.stage-info-text .popup-share-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.popup-share-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+/* Hide share button for exhibit image popups (no asset_id to share) */
+.popup-overlay.no-share .popup-share-btn {
+  display: none;
+}
+
 /* Popup close button (X) - above image, appears after ribbon is dismissed */
 .popup-close-btn {
   position: absolute;
@@ -2629,6 +2666,28 @@ label {
 
 .popup-close-btn:hover {
   background: rgba(0, 0, 0, 0.9);
+}
+
+/* Share toast notification */
+.share-toast {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 100000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.share-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* Ribbon close button (X) - hidden by default */
@@ -4301,6 +4360,26 @@ label {
 .exhibit-intro-edit-btn:hover {
   background: rgba(0, 0, 0, 0.9);
   color: #ffd700;
+}
+
+.exhibit-intro-share-btn {
+  position: absolute;
+  width: 27px;
+  height: 27px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 2;
+  transition: background 0.2s;
+}
+.exhibit-intro-share-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
 }
 
 .exhibit-intro-cancel {

@@ -384,11 +384,14 @@
     window.openHowItWorksModal = howItWorks.open;
 
     // "Upgrade Now" CTA in pricing modal → close pricing, open unlock modal
-    // Note: Can't use pricing.close() here — its async history.back() would
-    // clobber the unlock modal. Instead, hide DOM + replace hash directly.
+    // Silent closes avoid async history.back() that would clobber the unlock modal.
+    // Also dismiss About Exhibits and exhibit if open (exhibit → about → pricing flow).
     $("pricingUpgradeBtn")?.addEventListener("click", () => {
-      const overlay = $("pricingOverlay");
-      if (overlay) overlay.classList.add("hidden");
+      pricing.close(true);
+      if (typeof window.closeAboutExhibits === "function") window.closeAboutExhibits(true);
+      if (typeof window.closeExhibit === "function" && typeof window.isExhibitOpen === "function" && window.isExhibitOpen()) {
+        window.closeExhibit(true);
+      }
       history.replaceState(null, '', location.pathname);
       if (typeof window.openUnlockModal === "function") {
         window.openUnlockModal(null, null);

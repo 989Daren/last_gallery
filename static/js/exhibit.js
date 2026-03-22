@@ -235,11 +235,12 @@
       });
     }
 
-    // Owner edit button — absolute bottom-left of intro card
+    // Owner edit button — absolute above intro card top-right
     var ownedInfo = typeof window.getOwnedAssetInfo === 'function'
       ? window.getOwnedAssetInfo(exhibit.asset_id) : null;
+    var editBtn = null;
     if (ownedInfo) {
-      var editBtn = document.createElement('button');
+      editBtn = document.createElement('button');
       editBtn.className = 'exhibit-intro-edit-btn';
       editBtn.type = 'button';
       editBtn.textContent = 'edit';
@@ -251,16 +252,48 @@
           window.openExhibitDashboard(ownedInfo.asset_id, code);
         }
       });
-      var cardEl = _overlay.querySelector('.exhibit-intro-card');
-      var containerEl = _overlay.querySelector('.exhibit-intro-container');
-      if (cardEl && containerEl) {
-        containerEl.appendChild(editBtn);
-        // Position just above the card's top-right corner
-        requestAnimationFrame(function() {
-          editBtn.style.top = (cardEl.offsetTop - editBtn.offsetHeight - 6) + 'px';
-          editBtn.style.right = (containerEl.offsetWidth - cardEl.offsetLeft - cardEl.offsetWidth) + 'px';
-        });
+    }
+
+    // Share button — absolute above intro card, to the left of edit (if present)
+    var shareBtn = document.createElement('button');
+    shareBtn.className = 'exhibit-intro-share-btn';
+    shareBtn.type = 'button';
+    shareBtn.setAttribute('aria-label', 'Share exhibit');
+    shareBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>'
+      + '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>'
+      + '</svg>';
+    shareBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var url = window.location.origin + '/?art=' + exhibit.asset_id;
+      if (navigator.share) {
+        navigator.share({ title: 'The Last Gallery', url: url }).catch(function() {});
+      } else {
+        navigator.clipboard.writeText(url).then(function() {
+          if (typeof window.showShareToast === 'function') window.showShareToast();
+        }).catch(function() {});
       }
+    });
+
+    var cardEl = _overlay.querySelector('.exhibit-intro-card');
+    var containerEl = _overlay.querySelector('.exhibit-intro-container');
+    if (cardEl && containerEl) {
+      containerEl.appendChild(shareBtn);
+      if (editBtn) containerEl.appendChild(editBtn);
+      // Position both buttons above the card's top-right corner
+      requestAnimationFrame(function() {
+        var baseRight = containerEl.offsetWidth - cardEl.offsetLeft - cardEl.offsetWidth;
+        var rowTop = cardEl.offsetTop - 6;
+        if (editBtn) {
+          editBtn.style.top = (rowTop - editBtn.offsetHeight) + 'px';
+          editBtn.style.right = baseRight + 'px';
+          shareBtn.style.top = (rowTop - shareBtn.offsetHeight) + 'px';
+          shareBtn.style.right = (baseRight + editBtn.offsetWidth + 6) + 'px';
+        } else {
+          shareBtn.style.top = (rowTop - shareBtn.offsetHeight) + 'px';
+          shareBtn.style.right = baseRight + 'px';
+        }
+      });
     }
 
     // Close on backdrop click (wired once on overlay, not per renderIntro call)
@@ -329,7 +362,8 @@
     if (aboutLink) {
       aboutLink.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (_aboutExhibitsPopup) _aboutExhibitsPopup.open();
+        // Open without hash push so #exhibitview stays intact
+        if (_aboutExhibitsPopup) _aboutExhibitsPopup.open(true);
       });
     }
     var galleryContainer = _overlay.querySelector('.exhibit-gallery-container');
@@ -908,20 +942,13 @@
   }
 
   // Wire About Exhibits footer buttons
-  // Note: Can't use _aboutExhibitsPopup.close() before opening pricing —
-  // its async history.back() would clobber the pricing overlay.
-  // Instead, hide DOM + replace hash directly (same pattern as admin.js pricing → unlock).
+  // Open pricing as a sub-overlay without hiding About Exhibits or pushing hash —
+  // so dismissing pricing reveals About Exhibits still underneath.
   var pricingBtn = document.getElementById('aboutExhibitsPricingBtn');
   if (pricingBtn) {
     pricingBtn.addEventListener('click', function() {
-      var aboutOverlay = document.getElementById('aboutExhibitsOverlay');
-      if (aboutOverlay) aboutOverlay.classList.add('hidden');
-      history.replaceState(null, '', location.pathname);
       var pricingOverlay = document.getElementById('pricingOverlay');
-      if (pricingOverlay) {
-        pricingOverlay.classList.remove('hidden');
-        window.ConicalNav && window.ConicalNav.pushToMatchUi();
-      }
+      if (pricingOverlay) pricingOverlay.classList.remove('hidden');
     });
   }
   var closeFooterBtn = document.getElementById('aboutExhibitsCloseFooterBtn');
@@ -935,6 +962,7 @@
   window.openExhibitIntro = openIntro;
   window.closeExhibit = closeExhibit;
   window.isExhibitOpen = function() { return _currentState !== 'closed'; };
+  window.closeAboutExhibits = function(silent) { if (_aboutExhibitsPopup) _aboutExhibitsPopup.close(silent); };
   window._onExhibitPopupClosed = onPopupClosed;
 
 })();

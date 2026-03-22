@@ -539,10 +539,12 @@ window.registerDismissible = function(overlayId, closeBtnId, hashName) {
     if (!silent && shouldPop) window.ConicalNav && window.ConicalNav.popFromUiClose();
   }
 
-  function open() {
+  function open(silent) {
     overlay.classList.remove("hidden");
-    _pushedHash = true;
-    window.ConicalNav && window.ConicalNav.pushToMatchUi();
+    if (!silent) {
+      _pushedHash = true;
+      window.ConicalNav && window.ConicalNav.pushToMatchUi();
+    }
   }
 
   if (closeBtn) closeBtn.addEventListener("click", () => close());
@@ -782,6 +784,12 @@ function ensurePopupDom() {
       </div>
 
       <div class="popup-media">
+        <button class="popup-share-btn" id="popupShareBtn" aria-label="Share artwork">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+        </button>
         <button class="popup-close-btn" id="popupCloseBtn" aria-label="Close image">&times;</button>
         <img class="popup-img" id="popupImg" alt="">
         <div class="popup-info">
@@ -816,8 +824,19 @@ function ensurePopupDom() {
     });
   }
 
+  // Wire up share button
+  const shareBtn = overlay.querySelector("#popupShareBtn");
+  if (shareBtn) {
+    shareBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      shareCurrentArtwork();
+    });
+  }
+
   return overlay;
 }
+
+let _currentPopupAssetId = null;
 
 let popupTimers = [];
 
@@ -838,7 +857,39 @@ function isArtworkPopupOpen() {
 }
 window.isArtworkPopupOpen = isArtworkPopupOpen;
 
+function shareCurrentArtwork() {
+  if (!_currentPopupAssetId) return;
+  const url = window.location.origin + "/?art=" + _currentPopupAssetId;
+  const title = "The Last Gallery";
+
+  if (navigator.share) {
+    navigator.share({ title: title, url: url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url).then(() => {
+      showShareToast();
+    }).catch(() => {});
+  }
+}
+
+function showShareToast() {
+  let toast = document.getElementById("shareToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "shareToast";
+    toast.className = "share-toast";
+    toast.textContent = "Link copied";
+    document.body.appendChild(toast);
+  }
+  toast.classList.remove("show");
+  void toast.offsetWidth;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2500);
+}
+
+window.showShareToast = showShareToast;
+
 function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value, unlocked, assetId, tileId }) {
+  _currentPopupAssetId = assetId || null;
   const overlay = ensurePopupDom();
 
   const titleEl  = $(IDS.popupTitle);
@@ -974,7 +1025,8 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
   }
 
   // Reset state
-  overlay.classList.remove("show-title", "stage-info-bg", "stage-info-text", "hide-info");
+  overlay.classList.remove("show-title", "stage-info-bg", "stage-info-text", "hide-info", "no-share");
+  if (!_currentPopupAssetId) overlay.classList.add("no-share");
   overlay.classList.add("is-open");
   overlay.setAttribute("aria-hidden", "false");
 
@@ -999,6 +1051,7 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
 }
 
 function closeArtworkPopup(silent) {
+  _currentPopupAssetId = null;
   const overlay = $(IDS.popupOverlay);
   if (!overlay) return;
 
@@ -1679,6 +1732,48 @@ document.addEventListener("DOMContentLoaded", () => {
           requestAnimationFrame(() => openUnlockModal(upgradeAssetId));
         }
 
+        // Art share deep link handler (?art=<asset_id>)
+        if (window.PAGE_MODE === "art") {
+          const artAssetId = window._artDeepLinkAssetId;
+          delete window._artDeepLinkAssetId;
+          requestAnimationFrame(() => {
+            const tileEl = document.querySelector('.tile[data-asset-id="' + artAssetId + '"]');
+            if (!tileEl) return;
+
+            scrollToTile(tileEl.dataset.id);
+
+            // Exhibit tiles → open exhibit intro
+            if (tileEl.dataset.assetType === 'exhibit') {
+              if (typeof window.openExhibitIntro === 'function') {
+                window.openExhibitIntro(parseInt(artAssetId));
+              }
+              return;
+            }
+
+            // Regular artwork tiles → open popup
+            if (tileEl.dataset.popupUrl) {
+              openArtworkPopup({
+                imgSrc: tileEl.dataset.popupUrl,
+                title: tileEl.dataset.artworkName || "",
+                artist: tileEl.dataset.artistName || "",
+                yearCreated: tileEl.dataset.yearCreated || "",
+                medium: tileEl.dataset.medium || "",
+                dimensions: tileEl.dataset.dimensions || "",
+                editionInfo: tileEl.dataset.editionInfo || "",
+                forSale: tileEl.dataset.forSale || "",
+                saleType: tileEl.dataset.saleType || "",
+                contact1Type: tileEl.dataset.contact1Type || "",
+                contact1Value: tileEl.dataset.contact1Value || "",
+                contact2Type: tileEl.dataset.contact2Type || "",
+                contact2Value: tileEl.dataset.contact2Value || "",
+                unlocked: tileEl.dataset.unlocked || "0",
+                assetId: tileEl.dataset.assetId || "",
+                tileId: tileEl.dataset.id || ""
+              });
+            }
+          });
+        }
+
         // Creator of the Month banner handler
         if (window.PAGE_MODE === "creator-of-the-month") {
           const creatorOverlay = document.getElementById("creatorBannerOverlay");
@@ -1912,9 +2007,26 @@ document.addEventListener("DOMContentLoaded", () => {
     window._upgradeDeepLinkAssetId = parseInt(assetId);
   }
 
-  // Run stripe return check before boot (sets PAGE_MODE to skip welcome)
+  // ========================================
+  // Art Share Deep Link Handler (?art=<asset_id>)
+  // ========================================
+  function handleArtDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    const artId = params.get("art");
+    if (!artId) return;
+
+    // Clean URL params
+    const cleanUrl = window.location.pathname + window.location.hash;
+    history.replaceState(null, "", cleanUrl);
+
+    window.PAGE_MODE = "art";
+    window._artDeepLinkAssetId = artId;
+  }
+
+  // Run deep-link checks before boot (sets PAGE_MODE to skip welcome)
   handleStripeReturn();
   handleUpgradeDeepLink();
+  handleArtDeepLink();
 
   boot();
 });

@@ -806,7 +806,36 @@ def index():
     except Exception:
         grid_color = DEFAULT_GRID_COLOR
 
-    return render_template("index.html", grid_color=grid_color)
+    # Per-artwork OG tags for share links (?art=<asset_id>)
+    og = None
+    art_id = request.args.get("art")
+    if art_id:
+        try:
+            db = get_db()
+            row = db.execute(
+                "SELECT artwork_title, artist_name, popup_url, tile_url, asset_type "
+                "FROM assets WHERE asset_id = ?",
+                (art_id,)
+            ).fetchone()
+            if row:
+                if row["asset_type"] == "exhibit":
+                    # Exhibit: use tile image (the artwork on the wall) as preview
+                    img_url = row["tile_url"] or row["popup_url"]
+                    og = {
+                        "title": f"{row['artwork_title']} by {row['artist_name']}" if row["artist_name"] else row["artwork_title"],
+                        "image": f"{BASE_URL}{img_url}",
+                        "url": f"{BASE_URL}/?art={art_id}",
+                    }
+                elif row["popup_url"]:
+                    og = {
+                        "title": f"{row['artwork_title']} by {row['artist_name']}" if row["artist_name"] else row["artwork_title"],
+                        "image": f"{BASE_URL}{row['popup_url']}",
+                        "url": f"{BASE_URL}/?art={art_id}",
+                    }
+        except Exception:
+            pass
+
+    return render_template("index.html", grid_color=grid_color, og=og)
 
 
 @app.route("/edit")
