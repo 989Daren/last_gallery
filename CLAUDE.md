@@ -160,7 +160,7 @@ Tiles are classified by size and numbered sequentially:
 ### Public
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/` | GET | Main gallery page |
+| `/` | GET | Main gallery page (supports `?art=<asset_id>` deep link for shared artwork) |
 | `/edit` | GET | Gallery page in edit mode — auto-opens edit banner, skips welcome |
 | `/creator-of-the-month` | GET | Gallery page with Creator of the Month coming-soon banner |
 | `/privacy` | GET | Privacy policy page |
@@ -267,7 +267,8 @@ Tiles are classified by size and numbered sequentially:
 ## Popup Overlay
 - **Animation sequence**: image appears → title fades in → black ribbon slides from left → text reveals
 - **Close behavior**: First click hides ribbon, second click closes popup
-- **Popup close button**: X button above top-right corner of image (always visible when popup is open)
+- **Share button**: Android-style three-dot icon (inline SVG), 29px circle, positioned to the left of the close X (8px gap). Appears when ribbon text appears (`stage-info-text`), stays visible after ribbon dismiss. Uses `navigator.share()` on mobile, clipboard copy + "Link copied" toast on desktop. Hidden for exhibit scrolling gallery image popups (`no-share` class when no `assetId`).
+- **Popup close button**: X button above top-right corner of image (appears after ribbon is dismissed)
 - **Ribbon close button**: X button in top-right corner of ribbon (visible only when ribbon is shown)
 - **Contact links**: Clickable (email opens mail client, web links open in new tab)
 
@@ -326,18 +327,22 @@ window.getAdminPin()              // Get admin PIN for cross-module requests (fr
 window.initZoom()                 // Initialize pinch-to-zoom
 window.resetZoom()                // Reset zoom to 1.0x
 window.highlightNewTile(tileId)   // Scroll to tile + sheen animation
-window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "purchase_success" | "upgrade" | "" (set by server via template or Stripe/email return)
+window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "purchase_success" | "upgrade" | "art" | "" (set by server via template or Stripe/email/share return)
+window.showShareToast()           // Show "Link copied" toast notification
 window.refreshCountdown()         // Re-fetch and apply countdown state (from countdown.js)
 window.openUnlockModal(assetId, tileId)  // Open unlock modal (from unlock_modal.js)
 window.closeUnlockModal()         // Close unlock modal (from unlock_modal.js)
 window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_modal.js)
-window.registerDismissible(overlayId, closeBtnId, hashName)  // Register overlay for unified dismiss behavior
+window.registerDismissible(overlayId, closeBtnId, hashName)  // Register overlay for unified dismiss behavior; returns {open(silent), close(silent), ...}
+window.closeAboutExhibits(silent)  // Close About Exhibits overlay (from exhibit.js)
 window.showDeadlineBanner(opts)    // Show 24-hour deadline banner (from deadline_banner.js)
 window.dismissDeadlineBanner()     // Dismiss deadline banner (from deadline_banner.js)
 ```
 
 ### Dismissible Overlay Registry (main.js)
-- **`registerDismissible()`** registers an overlay for unified close behavior: close button, tap anywhere (except interactive elements), Escape key, and back button
+- **`registerDismissible()`** registers an overlay for unified close behavior: close button, tap anywhere (except interactive elements), Escape key, and back button. Returns `{open(silent), close(silent), overlay, hashName, isOpen}`.
+- **`open(silent)`**: Shows overlay. If `silent`, skips hash push (useful for sub-overlays that shouldn't add to the nav stack).
+- **`close(silent)`**: Hides overlay. If `silent`, skips hash pop (useful when the caller manages hash state directly).
 - **Tap-anywhere dismiss**: Clicks on the overlay backdrop or card content close the overlay; clicks on `<a>`, `<button>`, `<input>`, `<textarea>`, `<select>` elements are ignored
 - **Hash tracking**: `_pushedHash` flag tracks whether `open()` pushed a ConicalNav hash. On `close()`, only pops hash if one was pushed. This allows sub-overlays (e.g., Human Centric opened from upload modal) to close without popping the parent's hash.
 - **Registered overlays**: countdownInfo, humanCentric, howItWorks, pricing, unlockInfo
@@ -383,6 +388,14 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **Purchase success**: Stripe redirects back with `?purchase_success=1&type={tier}&asset_id={id}`. `handleStripeReturn()` in main.js cleans URL, skips welcome, shows success banner.
 - **Upgrade deep link**: `/?upgrade=1&asset_id=X` (from post-shuffle notification emails). `handleUpgradeDeepLink()` cleans URL, sets `PAGE_MODE = "upgrade"`, skips welcome, opens unlock modal with artwork pre-selected.
 
+## Share Links
+- **Share URL format**: `/?art=<asset_id>` — identifies artwork by permanent asset_id (survives tile shuffles)
+- **Share icon on artwork popup**: Android-style three-dot SVG icon, 29px white circle, 8px left of the close X. Appears with ribbon text (`stage-info-text`). Uses `navigator.share()` on mobile (native share sheet), falls back to clipboard copy + "Link copied" toast on desktop.
+- **Share icon on exhibit intro**: 27px circle, positioned above intro card top-right, accounts for optional edit button
+- **Deep link handler**: `handleArtDeepLink()` parses `?art=` before boot, sets `PAGE_MODE = "art"`, cleans URL via `replaceState`. After boot: finds tile by `data-asset-id`, scrolls to it, opens artwork popup (or exhibit intro for exhibit tiles).
+- **OG tags**: Server-side in `index()` route — queries asset by id, serves dynamic `og:title` ("Title by Artist"), `og:image` (popup image for artwork, tile image for exhibits), `og:url`. Falls back to site defaults when no `?art=` param or asset not found.
+- **Edge case**: If shared artwork has been removed (expired, cleared), the deep link loads the gallery normally (no error, no popup).
+
 ## Human Centric Gallery Modal
 - **Trigger**: Hamburger menu → "A Human Centric Gallery", or "Submission Guidelines" link in upload modal
 - **Structure**: Reuses `countdown-info-card` pattern (gold accent bar, body wrapper, absolute-positioned close button)
@@ -415,6 +428,8 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 
 ## Exhibit Tiles
 Top-tier artist feature ($199.99). An exhibit tile is an easily identifiable tile (gold badge overlay + shimmer animation) that, when clicked, opens an introduction modal covering the artist. A "Continue" button leads to a horizontally scrolling presentation of all the artist's works — full (scaled) images with padding, layered on a transparent dark background, auto-scrolling left to right with viewer scroll/swipe controls. Requires unlocked artwork in an M/LG/XL tile. On purchase, `asset_type` is set to `'exhibit'`, an `exhibits` row is created, and the artwork is seeded as the first exhibit image. Artists manage their exhibit via the exhibit dashboard (up to 20 images, profile editing, image reorder). Frontend modules: `exhibit.js` (scrolling gallery + intro modal), `exhibit_dashboard.js` (artist self-management).
+- **Intro popup share button**: 27px circle with three-dot share icon, positioned above the intro card's top-right corner. Sits to the left of the edit button (6px gap) when present, or at the right edge otherwise. Shares `?art=<asset_id>` — deep link opens the exhibit intro.
+- **Exhibit image popups**: Images in the scrolling gallery reuse `openArtworkPopup()` but do not pass `assetId`, so the share button is hidden (`no-share` class).
 
 ## Visual Theme
 - **Gold accent system**: All modals (upload, metadata, confirmation, countdown info) share a consistent gold gradient accent bar (`#b8860b → #ffd700`) at the top, gold gradient primary buttons, and outlined secondary buttons
@@ -423,7 +438,8 @@ Top-tier artist feature ($199.99). An exhibit tile is an easily identifiable til
 
 ## SEO & Metadata
 - **Meta description**: Present in `<head>` of `index.html` — also used for Open Graph and Twitter card tags
-- **Open Graph image**: `static/images/og_share_image.png` (1200x630, logo + title on black background) — controls link previews on social media, iMessage, Discord, etc.
+- **Open Graph image**: `static/images/og_share_image.png` (1200x630, logo + title on black background) — default for link previews on social media, iMessage, Discord, etc.
+- **Per-artwork OG tags**: `/?art=<asset_id>` serves dynamic `og:title`, `og:image`, and `og:url` from the database. Artwork uses popup image; exhibits use tile image. Falls back to defaults when asset not found.
 - **Favicon**: `static/favicon.ico` (multi-size: 16/32/48px), `static/apple-touch-icon.png` (180px), `static/icon-192.png`, `static/icon-512.png`
 - **robots.txt**: Served at `/robots.txt` — allows crawling, blocks `/api/` and `/uploads/`
 - **sitemap.xml**: Served at `/sitemap.xml` — single entry for homepage
@@ -526,7 +542,7 @@ systemctl --user status cleanup-expired.timer
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
 - `CLAUDE_URL.txt` in project root contains a raw GitHub URL pinned to the latest commit hash that changed `CLAUDE.md` — auto-generated by the post-commit hook
-- Last reviewed: 2026-03-19
+- Last reviewed: 2026-03-22
 
 ---
 
