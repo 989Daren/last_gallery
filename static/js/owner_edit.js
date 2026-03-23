@@ -47,7 +47,12 @@
           _ownedAssets.push({
             asset_id: a.asset_id,
             tile_id: a.tile_id || null,
-            asset_type: a.asset_type || 'artwork'
+            asset_type: a.asset_type || 'artwork',
+            artwork_title: a.artwork_title || '',
+            artist_name: a.artist_name || '',
+            tile_url: a.tile_url || '',
+            unlocked: a.unlocked || 0,
+            qualified_floor: a.qualified_floor || 's'
           });
         }
         callback(_ownedAssets);

@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 
 def get_db():
@@ -189,7 +189,7 @@ def init_db():
         columns = [row[1] for row in cursor.fetchall()]
 
         if 'qualified_floor' not in columns:
-            cursor.execute("ALTER TABLE assets ADD COLUMN qualified_floor TEXT NOT NULL DEFAULT 'xs'")
+            cursor.execute("ALTER TABLE assets ADD COLUMN qualified_floor TEXT NOT NULL DEFAULT 's'")
         if 'stripe_payment_id' not in columns:
             cursor.execute("ALTER TABLE assets ADD COLUMN stripe_payment_id TEXT")
 
@@ -395,6 +395,55 @@ def init_db():
         cursor.execute("ALTER TABLE exhibit_images ADD COLUMN scroll_url TEXT NOT NULL DEFAULT ''")
         _set_schema_version(cursor, 17)
         print("Migration 17 complete: exhibit_images.scroll_url added")
+
+    if current_version < 18:
+        print("Applying migration 18: Fix qualified_floor column default (xs → s)...")
+        # SQLite can't ALTER COLUMN defaults, so recreate the table.
+        # Disable foreign keys to prevent ON DELETE SET NULL from clearing tiles.asset_id
+        # when the old assets table is dropped.
+        cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute("""
+            CREATE TABLE assets_new (
+                asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                artist_name TEXT NOT NULL DEFAULT '',
+                artwork_title TEXT NOT NULL DEFAULT '',
+                tile_url TEXT NOT NULL DEFAULT '',
+                popup_url TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                year_created TEXT NOT NULL DEFAULT '',
+                medium TEXT NOT NULL DEFAULT '',
+                dimensions TEXT NOT NULL DEFAULT '',
+                edition_info TEXT NOT NULL DEFAULT '',
+                for_sale TEXT NOT NULL DEFAULT '',
+                sale_type TEXT NOT NULL DEFAULT '',
+                artist_contact TEXT NOT NULL DEFAULT '',
+                contact1_type TEXT NOT NULL DEFAULT '',
+                contact1_value TEXT NOT NULL DEFAULT '',
+                contact2_type TEXT NOT NULL DEFAULT '',
+                contact2_value TEXT NOT NULL DEFAULT '',
+                unlocked INTEGER NOT NULL DEFAULT 0,
+                qualified_floor TEXT NOT NULL DEFAULT 's',
+                stripe_payment_id TEXT,
+                asset_type TEXT NOT NULL DEFAULT 'artwork',
+                payment_deadline TEXT
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO assets_new
+            SELECT asset_id, artist_name, artwork_title, tile_url, popup_url,
+                   created_at, year_created, medium, dimensions, edition_info,
+                   for_sale, sale_type, artist_contact,
+                   contact1_type, contact1_value, contact2_type, contact2_value,
+                   unlocked,
+                   CASE WHEN qualified_floor = 'xs' THEN 's' ELSE qualified_floor END,
+                   stripe_payment_id, asset_type, payment_deadline
+            FROM assets
+        """)
+        cursor.execute("DROP TABLE assets")
+        cursor.execute("ALTER TABLE assets_new RENAME TO assets")
+        cursor.execute("PRAGMA foreign_keys = ON")
+        _set_schema_version(cursor, 18)
+        print("Migration 18 complete: qualified_floor default fixed to 's'")
 
     conn.commit()
     conn.close()

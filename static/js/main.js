@@ -575,7 +575,7 @@ document.addEventListener("keydown", (e) => {
 // Hash encodes layer stack: "", "#art", "#art/ribbon", "#upload".
 // ==============================
 const ConicalNav = {
-  ignoreNextHashChange: false,
+  _ignoreHashCount: 0,
 
   // ---- Checks for non-registry UI layers ----
   isRibbonOpen() {
@@ -626,7 +626,7 @@ const ConicalNav = {
   // UI close should POP the current hash step
   popFromUiClose() {
     // Avoid double-close when hashchange fires from history.back()
-    this.ignoreNextHashChange = true;
+    this._ignoreHashCount++;
     history.back();
   },
 
@@ -690,8 +690,8 @@ const ConicalNav = {
   },
 
   onHashChange() {
-    if (this.ignoreNextHashChange) {
-      this.ignoreNextHashChange = false;
+    if (this._ignoreHashCount > 0) {
+      this._ignoreHashCount--;
       return;
     }
     this.syncUiToHash();
@@ -888,7 +888,7 @@ function showShareToast() {
 
 window.showShareToast = showShareToast;
 
-function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value, unlocked, assetId, tileId }) {
+function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value, unlocked, assetId, tileId, isExhibit, upgradable }) {
   _currentPopupAssetId = assetId || null;
   const overlay = ensurePopupDom();
 
@@ -1020,13 +1020,32 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
         }
       });
       editDiv.appendChild(editButton);
+
+      // Upgradable button — to the right of edit, only if artwork qualifies
+      if (upgradable && typeof window.openFloorUpgrade === 'function') {
+        const upgradeButton = document.createElement("button");
+        upgradeButton.className = "ribbon-upgrade-btn";
+        upgradeButton.type = "button";
+        upgradeButton.textContent = "upgradable";
+        upgradeButton.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const code = typeof window.getStoredEditCode === 'function' ? window.getStoredEditCode() : '';
+          closeArtworkPopup();
+          setTimeout(() => {
+            window.openFloorUpgrade(ownedInfo, code);
+          }, 120);
+        });
+        editDiv.appendChild(upgradeButton);
+      }
+
       popupInfo.appendChild(editDiv);
     }
   }
 
   // Reset state
-  overlay.classList.remove("show-title", "stage-info-bg", "stage-info-text", "hide-info", "no-share");
+  overlay.classList.remove("show-title", "stage-info-bg", "stage-info-text", "hide-info", "no-share", "exhibit-popup");
   if (!_currentPopupAssetId) overlay.classList.add("no-share");
+  if (isExhibit) overlay.classList.add("exhibit-popup");
   overlay.classList.add("is-open");
   overlay.setAttribute("aria-hidden", "false");
 
@@ -1055,6 +1074,9 @@ function closeArtworkPopup(silent) {
   const overlay = $(IDS.popupOverlay);
   if (!overlay) return;
 
+  // Detect whether ribbon was open (two hash entries) before clearing classes
+  const hadRibbon = ribbonVisible(overlay);
+
   clearPopupTimers();
   overlay.classList.remove("is-open", "show-title", "stage-info-bg", "stage-info-text", "hide-info");
   overlay.setAttribute("aria-hidden", "true");
@@ -1062,9 +1084,11 @@ function closeArtworkPopup(silent) {
   const imgEl = $(IDS.popupImg);
   if (imgEl) imgEl.src = "";
 
-  // ConicalNav: Pop history on UI close (unless called from hashchange)
-  if (!silent) {
-    window.ConicalNav && window.ConicalNav.popFromUiClose();
+  // ConicalNav: Pop all hash entries this popup pushed
+  // Ribbon adds #art/ribbon on top of #art — pop both if ribbon was open
+  if (!silent && window.ConicalNav) {
+    window.ConicalNav.popFromUiClose();
+    if (hadRibbon) window.ConicalNav.popFromUiClose();
   }
 
   // Notify exhibit module so it can resume scrolling
@@ -1330,7 +1354,8 @@ function hydrateWallStateFromExistingData(layoutTiles, assignments = []) {
         contact2_type: assignment.contact2_type || "",
         contact2_value: assignment.contact2_value || "",
         unlocked: assignment.unlocked || 0,
-        asset_type: assignment.asset_type || "artwork"
+        asset_type: assignment.asset_type || "artwork",
+        upgradable: assignment.upgradable || false
       };
     }
   });
@@ -1494,6 +1519,7 @@ function renderWallFromState() {
       // 5. Set metadata
       if (tileData.assetId) el.dataset.assetId = tileData.assetId;
       el.dataset.unlocked = tileData.asset.unlocked || 0;
+      if (tileData.asset.upgradable) el.dataset.upgradable = "1";
 
       if (tileData.asset.asset_type === 'exhibit') {
         // Exhibit tiles: full artwork (no muting) + identity overlay + gold shimmer
@@ -1766,7 +1792,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 contact2Value: tileEl.dataset.contact2Value || "",
                 unlocked: tileEl.dataset.unlocked || "0",
                 assetId: tileEl.dataset.assetId || "",
-                tileId: tileEl.dataset.id || ""
+                tileId: tileEl.dataset.id || "",
+                upgradable: tileEl.dataset.upgradable === "1"
               });
             }
           });
@@ -1842,7 +1869,8 @@ document.addEventListener("DOMContentLoaded", () => {
           contact2Value: tileEl.dataset.contact2Value || "",
           unlocked: tileEl.dataset.unlocked || "0",
           assetId: tileEl.dataset.assetId || "",
-          tileId: tileEl.dataset.id || ""
+          tileId: tileEl.dataset.id || "",
+          upgradable: tileEl.dataset.upgradable === "1"
         });
       });
 

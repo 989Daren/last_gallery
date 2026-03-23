@@ -124,7 +124,7 @@ CREATE TABLE purchase_history (
 );
 ```
 
-Current schema version: **14**
+Current schema version: **18**
 
 ## Tile Registration
 
@@ -266,8 +266,9 @@ Tiles are classified by size and numbered sequentially:
 
 ## Popup Overlay
 - **Animation sequence**: image appears → title fades in → black ribbon slides from left → text reveals
-- **Close behavior**: First click hides ribbon, second click closes popup
+- **Close behavior**: First click hides ribbon, second click closes popup. `closeArtworkPopup()` detects whether the ribbon was open and pops both ConicalNav hash entries (`#art/ribbon` and `#art`) in one call.
 - **Share button**: Android-style three-dot icon (inline SVG), 29px circle, positioned to the left of the close X (8px gap). Appears when ribbon text appears (`stage-info-text`), stays visible after ribbon dismiss. Uses `navigator.share()` on mobile, clipboard copy + "Link copied" toast on desktop. Hidden for exhibit scrolling gallery image popups (`no-share` class when no `assetId`).
+- **Upgradable button**: Gold gradient button on the ribbon (next to "edit"), shown when artwork's current tile is above its qualified floor and the viewer owns the artwork (via localStorage edit code). Closes popup, then opens `openFloorUpgrade()` directly to tier selection.
 - **Popup close button**: X button above top-right corner of image (appears after ribbon is dismissed)
 - **Ribbon close button**: X button in top-right corner of ribbon (visible only when ribbon is shown)
 - **Contact links**: Clickable (email opens mail client, web links open in new tab)
@@ -331,6 +332,7 @@ window.PAGE_MODE      // Deep-link mode: "edit" | "creator-of-the-month" | "purc
 window.showShareToast()           // Show "Link copied" toast notification
 window.refreshCountdown()         // Re-fetch and apply countdown state (from countdown.js)
 window.openUnlockModal(assetId, tileId)  // Open unlock modal (from unlock_modal.js)
+window.openFloorUpgrade(artwork, editCode)  // Direct floor upgrade — skip to tier selection (from unlock_modal.js)
 window.closeUnlockModal()         // Close unlock modal (from unlock_modal.js)
 window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_modal.js)
 window.registerDismissible(overlayId, closeBtnId, hashName)  // Register overlay for unified dismiss behavior; returns {open(silent), close(silent), ...}
@@ -382,9 +384,10 @@ Menu items in order:
 Three-step purchase flow using edit codes for identity ("lock what you landed on" model):
 - **Step 1: Identification** — Enter edit code → calls `POST /api/my_artworks` to get artworks. "Forgot your code?" inline resend form.
 - **Step 2: Artwork Selection** — Shows all artworks for that email with status badges (Locked/Unlocked/Exhibit/Floor: M/LG/XL). Auto-skipped if only 1 artwork.
-- **Step 3: Upgrade Options** — Shows "Currently in a [Size] tile" subtitle. Fetches `GET /api/upgrade_options/<asset_id>` for tiers. Only the tier matching the artwork's current tile size is available (gold CTA → Stripe). Other floor tiers show "Your artwork must be in a [Size] tile". Exhibit tier ($199.99) available for unlocked artwork in M/LG/XL tiles.
+- **Step 3: Upgrade Options** — Shows "Currently in a [Size] tile" subtitle. Fetches `GET /api/upgrade_options/<asset_id>` for tiers. Only the tier matching the artwork's current tile size is available (gold CTA → Stripe). Other floor tiers show "Your artwork must be in a [Size] tile". Exhibit tier requires floor upgrade first if artwork is in a tile above its current floor.
 - **Tile-size validation**: `/api/stripe/checkout` re-verifies tile size before creating session, preventing race conditions with shuffle.
 - **Navigation**: Same `#unlock` ConicalNav hash for all steps. `openUnlockModal(assetId)` auto-selects artwork after identification.
+- **Direct floor upgrade**: `openFloorUpgrade(artwork, editCode)` — called from the "upgradable" ribbon button. Skips steps 1-2, opens directly on step 3 with artwork summary and Back button hidden. Uses `_floorUpgradeOnly` flag to control section visibility.
 - **Purchase success**: Stripe redirects back with `?purchase_success=1&type={tier}&asset_id={id}`. `handleStripeReturn()` in main.js cleans URL, skips welcome, shows success banner.
 - **Upgrade deep link**: `/?upgrade=1&asset_id=X` (from post-shuffle notification emails). `handleUpgradeDeepLink()` cleans URL, sets `PAGE_MODE = "upgrade"`, skips welcome, opens unlock modal with artwork pre-selected.
 
@@ -412,7 +415,8 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **Unlocked** (`unlocked = 1`, `qualified_floor = 's'`): Any tile size — least constrained, placed last. Weighted random: more tiles in a size = higher probability.
 - **`qualified_floor`** column (values: s, m, lg, xl): Artwork never drops below this size during shuffle. Set via admin override (`/api/admin/set_qualified_floor`) or Stripe payment.
 - **"Lock what you landed on"**: Artists can only purchase the floor tier matching their artwork's current tile size. Creates urgency around the weekly shuffle cycle — land in a bigger tile, lock it in before the next shuffle.
-- **Stripe integration**: `/api/stripe/checkout` creates a Stripe Checkout Session for a tier purchase. Webhook (`/api/stripe/webhook`) applies the upgrade on `checkout.session.completed`. Tiers: `unlock_s` ($9.99), `floor_m` ($24.99), `floor_lg` ($59.99), `floor_xl` ($99.99), `exhibit` ($199.99). Defined in `TIER_CONFIG` dict in `app.py`. Uses inline `price_data` (no pre-created Stripe Price IDs). Fulfillment is idempotent via `purchase_history` table.
+- **Stripe integration**: `/api/stripe/checkout` creates a Stripe Checkout Session for a tier purchase. Webhook (`/api/stripe/webhook`) applies the upgrade on `checkout.session.completed`. Tiers: `unlock_s` ($9.99), `floor_m` ($24.99), `floor_lg` ($59.99), `floor_xl` ($99.99), `exhibit` ($99.99). Defined in `TIER_CONFIG` dict in `app.py` (includes `original_cents` for discount display). Uses inline `price_data` (no pre-created Stripe Price IDs). Fulfillment is idempotent via `purchase_history` table.
+- **Exhibit tier prerequisite**: `/api/upgrade_options` blocks the exhibit tier when artwork's current tile size is above its qualified floor (pending floor upgrade). Artist must purchase the floor upgrade first. Enforced server-side.
 - **Post-shuffle notifications**: After each shuffle, `_run_shuffle()` emails artists whose unlocked artwork landed in a tile above their current floor. Email includes artwork title, new tile size, price to upgrade, access code (edit code, called "access code" in this context), and CTA link (`/?upgrade=1&asset_id=X`). Uses `send_upgrade_notification()`. Wrapped in try/except — failures never break the shuffle.
 - **`/api/lock_tile`**: Admin/direct-use endpoint, sets `qualified_floor` to artwork's current tile size + `unlocked=1`. Rejects S locks.
 - **Derangement rule**: Every artwork must change position during a shuffle — no artwork may remain in its previous tile. The algorithm excludes each artwork's original tile from candidates; if the original tile is the last remaining in its pool, a swap with a previously-assigned artwork resolves it.
@@ -542,7 +546,7 @@ systemctl --user status cleanup-expired.timer
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
 - `CLAUDE_URL.txt` in project root contains a raw GitHub URL pinned to the latest commit hash that changed `CLAUDE.md` — auto-generated by the post-commit hook
-- Last reviewed: 2026-03-22
+- Last reviewed: 2026-03-23
 
 ---
 

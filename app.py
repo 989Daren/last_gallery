@@ -203,11 +203,11 @@ if STRIPE_SECRET_KEY:
 
 # Upgrade tier configuration: tier_name -> (price_cents, floor_value, label)
 TIER_CONFIG = {
-    'unlock_s':  {'price_cents': 999, 'floor': 's', 'label': 'Unlock (S)'},
-    'floor_m':   {'price_cents': 2499, 'floor': 'm', 'label': 'Medium Floor'},
-    'floor_lg':  {'price_cents': 5999, 'floor': 'lg', 'label': 'Large Floor'},
-    'floor_xl':  {'price_cents': 9999, 'floor': 'xl', 'label': 'Extra Large Floor'},
-    'exhibit':   {'price_cents': 19999, 'floor': None, 'label': 'Exhibit Tile'},
+    'unlock_s':  {'price_cents': 999, 'original_cents': 1999, 'floor': 's', 'label': 'Unlock (S)'},
+    'floor_m':   {'price_cents': 2499, 'original_cents': 3999, 'floor': 'm', 'label': 'Medium Floor'},
+    'floor_lg':  {'price_cents': 5999, 'original_cents': None, 'floor': 'lg', 'label': 'Large Floor'},
+    'floor_xl':  {'price_cents': 9999, 'original_cents': None, 'floor': 'xl', 'label': 'Extra Large Floor'},
+    'exhibit':   {'price_cents': 9999, 'original_cents': 19999, 'floor': None, 'label': 'Exhibit Tile'},
 }
 
 # Popup image optimization settings
@@ -835,7 +835,7 @@ def index():
         except Exception:
             pass
 
-    return render_template("index.html", grid_color=grid_color, og=og)
+    return render_template("index.html", grid_color=grid_color, og=og, tier_config_json=json.dumps(TIER_CONFIG))
 
 
 @app.route("/edit")
@@ -845,7 +845,7 @@ def edit_page():
         grid_color = load_grid_color()
     except Exception:
         grid_color = DEFAULT_GRID_COLOR
-    return render_template("index.html", grid_color=grid_color, page_mode="edit")
+    return render_template("index.html", grid_color=grid_color, page_mode="edit", tier_config_json=json.dumps(TIER_CONFIG))
 
 
 @app.route("/creator-of-the-month")
@@ -855,7 +855,7 @@ def artist_of_the_month():
         grid_color = load_grid_color()
     except Exception:
         grid_color = DEFAULT_GRID_COLOR
-    return render_template("index.html", grid_color=grid_color, page_mode="creator-of-the-month")
+    return render_template("index.html", grid_color=grid_color, page_mode="creator-of-the-month", tier_config_json=json.dumps(TIER_CONFIG))
 
 
 @app.route("/api/grid-color", methods=["POST"])
@@ -891,10 +891,21 @@ def wall_state():
             WHERE a.artist_name != '' OR a.asset_type = 'info'
             ORDER BY t.tile_id
         """)
+        tile_size_map = get_tile_size_map()
         assignments = []
         for row in cursor.fetchall():
+            unlocked = row["unlocked"] or 0
+            qualified_floor = row["qualified_floor"] or "s"
+            asset_type = row["asset_type"] or "artwork"
+            tile_id = row["tile_id"]
+            # Compute upgradable: unlocked, not exhibit, current tile > qualified_floor
+            upgradable = False
+            if unlocked and asset_type != 'exhibit':
+                current_size = tile_size_map.get(tile_id, 's')
+                if SIZE_ORDER.get(current_size, 0) > SIZE_ORDER.get(qualified_floor, 0):
+                    upgradable = True
             assignments.append({
-                "tile_id": row["tile_id"],
+                "tile_id": tile_id,
                 "asset_id": row["asset_id"],
                 "tile_url": row["tile_url"],
                 "popup_url": row["popup_url"],
@@ -910,9 +921,10 @@ def wall_state():
                 "contact1_value": row["contact1_value"] or "",
                 "contact2_type": row["contact2_type"] or "",
                 "contact2_value": row["contact2_value"] or "",
-                "unlocked": row["unlocked"] or 0,
-                "qualified_floor": row["qualified_floor"] or "s",
-                "asset_type": row["asset_type"] or "artwork",
+                "unlocked": unlocked,
+                "qualified_floor": qualified_floor,
+                "asset_type": asset_type,
+                "upgradable": upgradable,
             })
         conn.close()
         return jsonify({"ok": True, "assignments": assignments})
@@ -2503,19 +2515,25 @@ def upgrade_options(asset_id):
 
             tiers.append(tier_info)
 
-        # Exhibit tier — available for unlocked S/M/LG artworks not already exhibits
+        # Exhibit tier — available for unlocked M/LG/XL artworks not already exhibits,
+        # only when the artwork's floor matches its current tile (no pending floor upgrade)
         exhibit_tier = {
             'tier': 'exhibit',
             'label': 'Exhibit Tile',
             'price_cents': TIER_CONFIG['exhibit']['price_cents'],
             'floor': None,
         }
+        current_tile_order = SIZE_ORDER.get(current_tile_size, 0) if current_tile_size else 0
+        has_pending_floor_upgrade = current_tile_order > current_floor_order
         if asset_row["asset_type"] == 'exhibit':
             exhibit_tier['status'] = 'completed'
             exhibit_tier['reason'] = 'Already an Exhibit'
         elif not unlocked:
             exhibit_tier['status'] = 'locked'
             exhibit_tier['reason'] = 'Requires Unlock first'
+        elif has_pending_floor_upgrade:
+            exhibit_tier['status'] = 'locked'
+            exhibit_tier['reason'] = 'Purchase the floor upgrade first'
         elif current_tile_size and current_tile_size in ('m', 'lg', 'xl'):
             exhibit_tier['status'] = 'available'
         else:

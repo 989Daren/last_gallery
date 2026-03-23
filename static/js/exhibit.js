@@ -897,7 +897,8 @@
         contact1Type: imgData.contact1_type || '',
         contact1Value: imgData.contact1_value || '',
         contact2Type: imgData.contact2_type || '',
-        contact2Value: imgData.contact2_value || ''
+        contact2Value: imgData.contact2_value || '',
+        isExhibit: true
       });
     }
   }

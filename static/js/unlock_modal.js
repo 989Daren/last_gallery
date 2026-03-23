@@ -16,6 +16,7 @@
   let _artworks = [];
   let _selectedArtwork = null;
   let _autoSelectAssetId = null;
+  let _floorUpgradeOnly = false;
 
   const LOCK_OPEN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
 
@@ -385,20 +386,30 @@
   async function renderTierOptions() {
     if (!_selectedArtwork) return;
 
-    // Render selected artwork summary
+    // Render selected artwork summary (skip in floor-upgrade mode — user already knows which artwork)
     var summaryEl = _overlay.querySelector("#unlockSelectedArtwork");
-    var thumbUrl = _selectedArtwork.tile_url || '';
-    var thumbHtml = thumbUrl
-      ? '<img class="unlock-artwork-thumb" src="' + thumbUrl + '" alt="" />'
-      : '<div class="unlock-artwork-thumb unlock-artwork-thumb-empty"></div>';
+    if (_floorUpgradeOnly) {
+      summaryEl.innerHTML = '';
+      summaryEl.classList.add("hidden");
+    } else {
+      summaryEl.classList.remove("hidden");
+      var thumbUrl = _selectedArtwork.tile_url || '';
+      var thumbHtml = thumbUrl
+        ? '<img class="unlock-artwork-thumb" src="' + thumbUrl + '" alt="" />'
+        : '<div class="unlock-artwork-thumb unlock-artwork-thumb-empty"></div>';
 
-    summaryEl.innerHTML =
-      thumbHtml +
-      '<div class="unlock-artwork-info">' +
-        '<div class="unlock-artwork-title">' + escapeHtml(_selectedArtwork.artwork_title || 'Untitled') + '</div>' +
-        '<div class="unlock-artwork-artist">' + escapeHtml(_selectedArtwork.artist_name || '') + '</div>' +
-      '</div>' +
-      '<div class="unlock-artwork-status ' + statusBadgeClass(_selectedArtwork) + '">' + statusBadgeText(_selectedArtwork) + '</div>';
+      summaryEl.innerHTML =
+        thumbHtml +
+        '<div class="unlock-artwork-info">' +
+          '<div class="unlock-artwork-title">' + escapeHtml(_selectedArtwork.artwork_title || 'Untitled') + '</div>' +
+          '<div class="unlock-artwork-artist">' + escapeHtml(_selectedArtwork.artist_name || '') + '</div>' +
+        '</div>' +
+        '<div class="unlock-artwork-status ' + statusBadgeClass(_selectedArtwork) + '">' + statusBadgeText(_selectedArtwork) + '</div>';
+    }
+
+    // Hide Back button in floor-upgrade mode — no prior step to return to
+    var backLink = _overlay.querySelector("#unlockStep3Back");
+    if (backLink) backLink.classList.toggle("hidden", _floorUpgradeOnly);
 
     // Fetch tier options from server
     var tierList = _overlay.querySelector("#unlockTierList");
@@ -436,16 +447,14 @@
         }
 
         var priceHtml = '';
-        if (tier.tier === 'unlock_s' && tier.status === 'available') {
+        var tc = (window.TIER_CONFIG || {})[tier.tier];
+        var origCents = tc && tc.original_cents;
+        if (origCents && origCents > tier.price_cents && tier.status === 'available') {
+          var pctOff = Math.round((1 - tier.price_cents / origCents) * 100);
           priceHtml =
-            '<span class="unlock-tier-price-original">' + formatPrice(1999) + '</span> ' +
+            '<span class="unlock-tier-price-original">' + formatPrice(origCents) + '</span> ' +
             '<span class="unlock-tier-price">' + formatPrice(tier.price_cents) + '</span> ' +
-            '<span class="unlock-tier-badge">50% OFF</span>';
-        } else if (tier.tier === 'floor_m' && tier.status === 'available') {
-          priceHtml =
-            '<span class="unlock-tier-price-original">' + formatPrice(3999) + '</span> ' +
-            '<span class="unlock-tier-price">' + formatPrice(tier.price_cents) + '</span> ' +
-            '<span class="unlock-tier-badge">37% OFF</span>';
+            '<span class="unlock-tier-badge">' + pctOff + '% OFF</span>';
         } else {
           priceHtml = '<span class="unlock-tier-price">' + formatPrice(tier.price_cents) + '</span>';
         }
@@ -555,6 +564,7 @@
 
   function openUnlockModal(assetId, tileId) {
     _autoSelectAssetId = assetId ? parseInt(assetId) : null;
+    _floorUpgradeOnly = false;
     var overlay = createOverlay();
     resetState();
     overlay.classList.remove("hidden");
@@ -567,6 +577,22 @@
     }, 100);
 
     // Push hash for back-button support
+    window.ConicalNav && window.ConicalNav.pushToMatchUi();
+  }
+
+  // Direct upgrade flow: caller already knows the artwork and edit code.
+  // Opens straight to tier selection — no identification step.
+  function openFloorUpgrade(artwork, editCode) {
+    _floorUpgradeOnly = true;
+    _autoSelectAssetId = null;
+    var overlay = createOverlay();
+    resetState();
+    _editCode = editCode;
+    _artworks = [artwork];
+    _selectedArtwork = artwork;
+    overlay.classList.remove("hidden");
+    overlay.setAttribute("aria-hidden", "false");
+    goToStep(3);
     window.ConicalNav && window.ConicalNav.pushToMatchUi();
   }
 
@@ -584,6 +610,7 @@
   }
 
   window.openUnlockModal = openUnlockModal;
+  window.openFloorUpgrade = openFloorUpgrade;
   window.closeUnlockModal = closeUnlockModal;
   window.isUnlockModalOpen = isUnlockModalOpen;
 

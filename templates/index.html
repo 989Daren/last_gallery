@@ -35,6 +35,7 @@
   <script>
     window.SERVER_GRID_COLOR = "{{ grid_color|default('#b84c27') }}";
     window.PAGE_MODE = "{{ page_mode|default('') }}";
+    window.TIER_CONFIG = {{ tier_config_json|default('{}')|safe }};
   </script>
 
 </head>
@@ -532,54 +533,35 @@
                 <div class="pricing-col-note">(Limit one free tile per artist/owner.)</div>
               </div>
             </div>
-            <div class="pricing-col">
+            <div class="pricing-col" data-tier="unlock_s">
               <div class="pricing-col-header">Small Unlocked</div>
               <div class="pricing-col-req">&nbsp;</div>
               <div class="pricing-col-desc">Eligible to land in all tile sizes during weekly shuffle&nbsp;*</div>
-              <div class="pricing-col-price-wrap">
-                <div class="pricing-col-badge">50% OFF</div>
-                <div class="pricing-col-original">$19.99</div>
-                <div class="pricing-col-price">$9.99</div>
-                <div class="pricing-col-payment">One-time</div>
-              </div>
+              <div class="pricing-col-price-wrap"></div>
             </div>
-            <div class="pricing-col">
+            <div class="pricing-col" data-tier="floor_m">
               <div class="pricing-col-header">Medium</div>
               <div class="pricing-col-req">Must be unlocked **</div>
               <div class="pricing-col-desc">Never shuffles below a Medium tile</div>
-              <div class="pricing-col-price-wrap">
-                <div class="pricing-col-badge">37% OFF</div>
-                <div class="pricing-col-original">$39.99</div>
-                <div class="pricing-col-price">$24.99</div>
-                <div class="pricing-col-payment">One-time</div>
-              </div>
+              <div class="pricing-col-price-wrap"></div>
             </div>
-            <div class="pricing-col">
+            <div class="pricing-col" data-tier="floor_lg">
               <div class="pricing-col-header">Large</div>
               <div class="pricing-col-req">Must be unlocked **</div>
               <div class="pricing-col-desc">Never shuffles below a Large tile</div>
-              <div class="pricing-col-price-wrap">
-                <div class="pricing-col-price">$59.99</div>
-                <div class="pricing-col-payment">One-time</div>
-              </div>
+              <div class="pricing-col-price-wrap"></div>
             </div>
-            <div class="pricing-col">
+            <div class="pricing-col" data-tier="floor_xl">
               <div class="pricing-col-header">Extra Large</div>
               <div class="pricing-col-req">Must be unlocked **</div>
               <div class="pricing-col-desc">Never shuffles below an Extra Large tile</div>
-              <div class="pricing-col-price-wrap">
-                <div class="pricing-col-price">$99.99</div>
-                <div class="pricing-col-payment">One-time</div>
-              </div>
+              <div class="pricing-col-price-wrap"></div>
             </div>
-            <div class="pricing-col">
+            <div class="pricing-col" data-tier="exhibit">
               <div class="pricing-col-header">Exhibit Tile</div>
               <div class="pricing-col-req">Existing Medium or larger ***</div>
               <div class="pricing-col-desc">A dedicated space to showcase your portfolio</div>
-              <div class="pricing-col-price-wrap">
-                <div class="pricing-col-price">$199.99</div>
-                <div class="pricing-col-payment">One-time</div>
-              </div>
+              <div class="pricing-col-price-wrap"></div>
             </div>
           </div>
         </div>
@@ -662,5 +644,26 @@
   <script defer src="{{ url_for('static', filename='js/owner_edit.js') | cachebust }}"></script>
   <script defer src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') | cachebust }}"></script>
   <script defer src="{{ url_for('static', filename='js/upload_modal.js') | cachebust }}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var tc = window.TIER_CONFIG || {};
+      function fmt(cents) { return '$' + (cents / 100).toFixed(2); }
+      function discountPct(orig, sale) { return Math.round((1 - sale / orig) * 100); }
+      document.querySelectorAll('.pricing-col[data-tier]').forEach(function(col) {
+        var tier = tc[col.dataset.tier];
+        if (!tier) return;
+        var wrap = col.querySelector('.pricing-col-price-wrap');
+        if (!wrap) return;
+        var html = '';
+        if (tier.original_cents && tier.original_cents > tier.price_cents) {
+          html += '<div class="pricing-col-badge">' + discountPct(tier.original_cents, tier.price_cents) + '% OFF</div>';
+          html += '<div class="pricing-col-original">' + fmt(tier.original_cents) + '</div>';
+        }
+        html += '<div class="pricing-col-price">' + fmt(tier.price_cents) + '</div>';
+        html += '<div class="pricing-col-payment">One-time</div>';
+        wrap.innerHTML = html;
+      });
+    });
+  </script>
 </body>
 </html>

@@ -940,6 +940,9 @@ label {
   position: absolute;
   bottom: 10px;
   left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 180ms ease;
@@ -966,6 +969,25 @@ label {
 .ribbon-edit-btn:hover {
   background: rgba(212, 168, 67, 0.15);
   color: #ffd700;
+}
+
+.ribbon-upgrade-btn {
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  border: none;
+  color: #000;
+  font-size: 0.8rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  padding: 4px 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+  margin-left: 8px;
+  transition: filter 0.2s;
+}
+
+.ribbon-upgrade-btn:hover {
+  filter: brightness(1.15);
 }
 
 /* Defensive: hide any empty art-frame (no img) so empty tiles don't show mat/shadow */
@@ -2490,6 +2512,11 @@ label {
 .popup-overlay.stage-info-bg .popup-info-bg {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* Exhibit popup: dark gold ribbon */
+.popup-overlay.exhibit-popup .popup-info-bg {
+  background-color: rgba(25, 25, 25, 0.85);
 }
 
 /* White text pops after background arrives */
@@ -4434,7 +4461,7 @@ label {
 .exhibit-gallery-close {
   position: absolute;
   right: 10px;
-  top: -6px;
+  top: 30px;
   transform: translateY(-100%);
   background: #000;
   border: none;
