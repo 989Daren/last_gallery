@@ -177,6 +177,7 @@ const zoomState = {
   // Cached viewport metrics (refreshed on resize/orientation)
   _vw: 0,
   _vh: 0,
+  _padTop: 0,
 
   initialized: false
 };
@@ -222,6 +223,7 @@ function refreshViewportMetrics() {
   const totalFixedHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--total-fixed-height')) || 0;
   zoomState._vw = wrapper.clientWidth;
   zoomState._vh = window.innerHeight - totalFixedHeight;
+  zoomState._padTop = parseInt(getComputedStyle(wrapper).paddingTop) || 0;
 }
 
 function recalculateZoomLimits() {
@@ -260,7 +262,9 @@ function isZoomDisabled() {
 }
 
 // Writes clamped values into _clampResult (no allocation)
-function clampTransform(tx, ty, scale) {
+// isPinching: when true, skip centering on axes where content fits the viewport
+//             so the focal-point anchor isn't overridden each frame
+function clampTransform(tx, ty, scale, isPinching) {
   const vw = zoomState._vw;
   const vh = zoomState._vh;
 
@@ -272,20 +276,24 @@ function clampTransform(tx, ty, scale) {
   const sw = scale * zoomState.wallWidth;
   const sh = scale * zoomState.wallHeight;
 
-  // X-axis
-  if (sw <= vw - 2 * pad) {
+  // X-axis: center when content fits (unless pinching), edge-bound always
+  if (sw <= vw - 2 * pad && !isPinching) {
     tx = (vw - sw) / 2;
   } else {
-    if (tx > pad) tx = pad;
-    if (tx < vw - pad - sw) tx = vw - pad - sw;
+    const lo = Math.min(pad, vw - pad - sw);
+    const hi = Math.max(pad, vw - pad - sw);
+    if (tx < lo) tx = lo;
+    if (tx > hi) tx = hi;
   }
 
-  // Y-axis
-  if (sh <= vh - 2 * pad) {
+  // Y-axis: center when content fits (unless pinching), edge-bound always
+  if (sh <= vh - 2 * pad && !isPinching) {
     ty = (vh - sh) / 2;
   } else {
-    if (ty > pad) ty = pad;
-    if (ty < vh - pad - sh) ty = vh - pad - sh;
+    const lo = Math.min(pad, vh - pad - sh);
+    const hi = Math.max(pad, vh - pad - sh);
+    if (ty < lo) ty = lo;
+    if (ty > hi) ty = hi;
   }
 
   _clampResult.tx = tx;
@@ -319,10 +327,10 @@ function handleZoomTouchStart(e) {
     zoomState.initialDistance = Math.sqrt(dx * dx + dy * dy);
     zoomState.initialScale = zoomState.scale;
 
-    // Record finger midpoint in wrapper-relative coords
+    // Record finger midpoint relative to zoom-wrapper origin (wrapper rect minus padding-top)
     const rect = wrapper.getBoundingClientRect();
     zoomState.prevMidX = (t0.clientX + t1.clientX) / 2 - rect.left;
-    zoomState.prevMidY = (t0.clientY + t1.clientY) / 2 - rect.top;
+    zoomState.prevMidY = (t0.clientY + t1.clientY) / 2 - rect.top - zoomState._padTop;
 
     wrapper.classList.add('is-pinching');
   } else if (e.touches.length === 1 && zoomState.scale < 0.999) {
@@ -343,7 +351,7 @@ function handleZoomTouchMove(e) {
     const rect = zoomState._wrapper.getBoundingClientRect();
     const t0 = e.touches[0], t1 = e.touches[1];
     const mx = (t0.clientX + t1.clientX) / 2 - rect.left;
-    const my = (t0.clientY + t1.clientY) / 2 - rect.top;
+    const my = (t0.clientY + t1.clientY) / 2 - rect.top - zoomState._padTop;
 
     // Compute new scale
     const dx = t0.clientX - t1.clientX;
@@ -356,8 +364,8 @@ function handleZoomTouchMove(e) {
     const cx = (zoomState.prevMidX - zoomState.tx) / s;
     const cy = (zoomState.prevMidY - zoomState.ty) / s;
 
-    // Edge clamping
-    clampTransform(mx - newScale * cx, my - newScale * cy, newScale);
+    // Edge clamping (skip centering during pinch so focal-point anchor works)
+    clampTransform(mx - newScale * cx, my - newScale * cy, newScale, true);
     zoomState.tx = _clampResult.tx;
     zoomState.ty = _clampResult.ty;
     zoomState.scale = newScale;
