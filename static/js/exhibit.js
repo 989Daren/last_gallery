@@ -35,11 +35,17 @@
   var SPACING = 40;             // px between images
   var SPEED = 0.81;             // px per animation frame
   var BUFFER = 300;             // off-screen buffer before pruning (px)
+  var THROW_DECAY = 0.83;       // throw distance = absV * THROW_DECAY * (curItem.width + SPACING); tune to taste
+  var VELOCITY_SMOOTH = 0.3;    // weight for previous sample in exponential velocity smoothing
+  var VELOCITY_DECAY_MS = 80;   // zero velocity if pointer stationary this long before release
 
   // Swipe state (mobile browse-while-paused)
   var _touchStartX = 0;
   var _touchStartY = 0;
   var _touchStartTime = 0;
+  var _touchLastX = 0;
+  var _touchLastTime = 0;
+  var _touchVelocity = 0;   // px/ms, smoothed; positive = scrolling forward
   var _swipeAnimating = false;
 
   // Drag state (desktop browse-while-paused)
@@ -545,6 +551,11 @@
     }
   }
 
+  // ===== Track item helpers =====
+  function centerOf(item) {
+    return item.x + item.width / 2;
+  }
+
   // ===== Find nearest track item to viewport center =====
   function findNearestCenter() {
     if (_trackItems.length === 0) return null;
@@ -554,8 +565,7 @@
     var best = null;
     var bestDist = Infinity;
     for (var i = 0; i < _trackItems.length; i++) {
-      var itemCenter = _trackItems[i].x + _trackItems[i].width / 2;
-      var dist = Math.abs(itemCenter - centerInTrack);
+      var dist = Math.abs(centerOf(_trackItems[i]) - centerInTrack);
       if (dist < bestDist) {
         bestDist = dist;
         best = _trackItems[i];
@@ -639,6 +649,7 @@
   // ===== Swipe-to-Browse (paused state, mobile) =====
   function wireSwipeEvents(container) {
     container.addEventListener('touchstart', onSwipeTouchStart, { passive: true });
+    container.addEventListener('touchmove', onSwipeTouchMove, { passive: true });
     container.addEventListener('touchend', onSwipeTouchEnd, { passive: false });
   }
 
@@ -648,6 +659,22 @@
     _touchStartX = e.touches[0].clientX;
     _touchStartY = e.touches[0].clientY;
     _touchStartTime = Date.now();
+    _touchLastX = _touchStartX;
+    _touchLastTime = _touchStartTime;
+    _touchVelocity = 0;
+  }
+
+  function onSwipeTouchMove(e) {
+    if (_currentState !== 'paused') return;
+    if (e.touches.length !== 1) return;
+    var x = e.touches[0].clientX;
+    var now = Date.now();
+    var dt = Math.max(now - _touchLastTime, 1);
+    var dx = x - _touchLastX;
+    var instantV = -dx / dt; // positive = scrolling forward (left swipe)
+    _touchVelocity = _touchVelocity * VELOCITY_SMOOTH + instantV * (1 - VELOCITY_SMOOTH);
+    _touchLastX = x;
+    _touchLastTime = now;
   }
 
   function onSwipeTouchEnd(e) {
@@ -664,75 +691,73 @@
     // Prevent the tap handler from also firing
     e.preventDefault();
 
+    // Decay velocity if finger was stationary before release
+    if (Date.now() - _touchLastTime > VELOCITY_DECAY_MS) _touchVelocity = 0;
+
     var direction = dx < 0 ? 1 : -1; // swipe left = advance forward (+1)
-
-    // Velocity-proportional count: gentle flick = 1, strong swipe = many
-    var velocity = Math.abs(dx) / dt; // px/ms
-    var count = Math.max(1, Math.round(velocity * 3.5));
-    var maxCount = Math.min(origCount(), 15);
-    count = Math.min(count, maxCount);
-
-    advanceBySwipe(direction, count);
+    snapByMomentum(direction, Math.abs(_touchVelocity));
   }
 
-  function advanceBySwipe(direction, count) {
+  function snapByMomentum(direction, absV) {
     if (!_ribbonEl || _swipeAnimating) return;
 
-    var n = origCount();
-    if (count > n) count = n;
-
-    // Find current centered item in the track array
     var curItem = findNearestCenter();
     if (!curItem) return;
     var curIdx = _trackItems.indexOf(curItem);
-    var targetIdx = curIdx + direction * count;
 
-    // Ensure enough items exist in the target direction.
-    // Cannot use feedRight/prependOne helpers here — they use viewport-based
-    // conditions tied to _scrollPos, which hasn't moved yet. Instead, directly
-    // append/prepend until the track covers the target index.
+    // Throw distance in track-space pixels, proportional to current image size
+    var throwDist = absV * THROW_DECAY * (curItem.width + SPACING);
+    var rw = getRibbonWidth();
+    var targetCenter = _scrollPos + rw / 2 + direction * throwDist;
+
+    // Extend track until items cover the target position
     if (direction > 0) {
-      while (targetIdx >= _trackItems.length) {
+      while (centerOf(_trackItems[_trackItems.length - 1]) < targetCenter) {
         var last = _trackItems[_trackItems.length - 1];
         var nextIdx = (last.logIdx + 1) % origCount();
         var w = _imageWidths[nextIdx];
         if (!w) break;
-        var newX = last.x + last.width + SPACING;
-        var item = createTrackItem(nextIdx, newX, w);
-        item.width = w;
+        var item = createTrackItem(nextIdx, last.x + last.width + SPACING, w);
         _ribbonEl.appendChild(item.el);
         _trackItems.push(item);
       }
     } else {
-      while (targetIdx < 0) {
+      while (centerOf(_trackItems[0]) > targetCenter) {
         var first = _trackItems[0];
         var prevIdx = (first.logIdx - 1 + origCount()) % origCount();
         var w = _imageWidths[prevIdx];
         if (!w) break;
-        var newX = first.x - SPACING - w;
-        var item = createTrackItem(prevIdx, newX, w);
-        item.width = w;
+        var item = createTrackItem(prevIdx, first.x - SPACING - w, w);
         _ribbonEl.insertBefore(item.el, first.el);
         _trackItems.unshift(item);
-        targetIdx++;
-        curIdx++;
+        curIdx++; // compensate for prepend
       }
     }
 
-    // Clamp to valid range
-    targetIdx = Math.max(0, Math.min(targetIdx, _trackItems.length - 1));
+    // Find item whose center is nearest to targetCenter
+    var bestIdx = curIdx;
+    var bestDist = Infinity;
+    for (var i = 0; i < _trackItems.length; i++) {
+      var dist = Math.abs(centerOf(_trackItems[i]) - targetCenter);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
 
-    var target = _trackItems[targetIdx];
+    // Minimum advance: always move at least 1 image in the swipe direction
+    if (direction > 0 && bestIdx <= curIdx) bestIdx = Math.min(curIdx + 1, _trackItems.length - 1);
+    if (direction < 0 && bestIdx >= curIdx) bestIdx = Math.max(curIdx - 1, 0);
+
+    var target = _trackItems[bestIdx];
     _centeredIndex = target.logIdx;
     _swipeAnimating = true;
 
-    var duration = 0.25 + count * 0.07;
-    snapToCenter(target, duration, 'cubic-bezier(0.08, 0.82, 0.17, 1)');
+    // Duration scales with velocity for a natural momentum feel; ease-out starts fast
+    var duration = Math.max(0.25, Math.min(0.25 + absV * 0.15, 0.65));
+    snapToCenter(target, duration, 'cubic-bezier(0.25, 0.46, 0.45, 0.94)');
 
-    setTimeout(function() {
-      _swipeAnimating = false;
-      pruneRight();
-    }, Math.round(duration * 1000) + 50);
+    setTimeout(function() { _swipeAnimating = false; }, Math.round(duration * 1000) + 50);
   }
 
   // ===== Desktop Drag-to-Browse (paused state) =====
@@ -796,9 +821,9 @@
     if (dx < 0) feedRight();  // dragging left = need content on right
     else if (dx > 0) feedLeft(); // dragging right = need content on left
 
-    // Smooth velocity (weighted average of current and previous)
+    // Smooth velocity (exponential weighted average)
     var instantVelocity = -dx / dt; // positive = scrolling forward (left)
-    _dragVelocity = _dragVelocity * 0.3 + instantVelocity * 0.7;
+    _dragVelocity = _dragVelocity * VELOCITY_SMOOTH + instantVelocity * (1 - VELOCITY_SMOOTH);
 
     _dragLastX = e.clientX;
     _dragLastTime = now;
@@ -814,7 +839,7 @@
 
     // Decay velocity if the pointer was stationary before release
     var dt = Date.now() - _dragLastTime;
-    if (dt > 80) _dragVelocity = 0;
+    if (dt > VELOCITY_DECAY_MS) _dragVelocity = 0;
 
     var absV = Math.abs(_dragVelocity); // px/ms
 
@@ -826,12 +851,8 @@
         snapToCenter(nearest);
       }
     } else {
-      // Momentum: convert velocity to image count
       var direction = _dragVelocity > 0 ? 1 : -1;
-      var count = Math.max(1, Math.round(absV * 3.5));
-      var maxCount = Math.min(origCount(), 15);
-      count = Math.min(count, maxCount);
-      advanceBySwipe(direction, count);
+      snapByMomentum(direction, absV);
     }
   }
 

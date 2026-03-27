@@ -2514,9 +2514,34 @@ label {
   transform: translateX(0);
 }
 
-/* Exhibit popup: dark gold ribbon */
+/* Exhibit popup: light grey ribbon with black text */
 .popup-overlay.exhibit-popup .popup-info-bg {
-  background-color: rgba(25, 25, 25, 0.85);
+  background-color: rgba(220, 220, 220, 0.92);
+}
+.popup-overlay.exhibit-popup .popup-info-text { color: #000; }
+.popup-overlay.exhibit-popup .ribbon-artist { color: rgba(0, 0, 0, 0.95); }
+.popup-overlay.exhibit-popup .ribbon-title-line { color: rgba(0, 0, 0, 0.9); }
+.popup-overlay.exhibit-popup .ribbon-medium,
+.popup-overlay.exhibit-popup .ribbon-dimensions,
+.popup-overlay.exhibit-popup .ribbon-edition { color: rgba(0, 0, 0, 0.75); }
+.popup-overlay.exhibit-popup .ribbon-sale { color: rgba(0, 0, 0, 0.8); }
+.popup-overlay.exhibit-popup .ribbon-contact { color: rgba(0, 0, 0, 0.65); }
+.popup-overlay.exhibit-popup .ribbon-contact-link { color: rgba(30, 80, 180, 0.9); }
+.popup-overlay.exhibit-popup .ribbon-contact-link:hover { color: rgba(20, 60, 150, 1); }
+.popup-overlay.exhibit-popup .ribbon-edit-btn {
+  border-color: rgba(0, 0, 0, 0.4);
+  color: #333;
+}
+.popup-overlay.exhibit-popup .ribbon-edit-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #000;
+}
+.popup-overlay.exhibit-popup .ribbon-close-btn {
+  background: rgba(0, 0, 0, 0.15);
+  color: #333;
+}
+.popup-overlay.exhibit-popup .ribbon-close-btn:hover {
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* White text pops after background arrives */
@@ -4461,7 +4486,7 @@ label {
 .exhibit-gallery-close {
   position: absolute;
   right: 10px;
-  top: 30px;
+  top: 20px;
   transform: translateY(-100%);
   background: #000;
   border: none;
