@@ -252,7 +252,7 @@
       editBtn.textContent = 'edit';
       editBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        var code = typeof window.getStoredEditCode === 'function' ? window.getStoredEditCode() : '';
+        var code = typeof window.getEditCodeForAsset === 'function' ? window.getEditCodeForAsset(ownedInfo.asset_id) : '';
         closeExhibit();
         if (typeof window.openExhibitDashboard === 'function') {
           window.openExhibitDashboard(ownedInfo.asset_id, code);

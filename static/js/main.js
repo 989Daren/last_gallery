@@ -1019,7 +1019,7 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       editButton.textContent = "edit";
       editButton.addEventListener("click", (e) => {
         e.stopPropagation();
-        const code = typeof window.getStoredEditCode === 'function' ? window.getStoredEditCode() : '';
+        const code = typeof window.getEditCodeForAsset === 'function' ? window.getEditCodeForAsset(assetId) : '';
         closeArtworkPopup();
         if (ownedInfo.asset_type === 'exhibit' && typeof window.openExhibitDashboard === 'function') {
           window.openExhibitDashboard(ownedInfo.asset_id, code);
@@ -1029,21 +1029,23 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       });
       editDiv.appendChild(editButton);
 
-      // Upgradable button — to the right of edit, only if artwork qualifies
-      if (upgradable && typeof window.openFloorUpgrade === 'function') {
-        const upgradeButton = document.createElement("button");
-        upgradeButton.className = "ribbon-upgrade-btn";
-        upgradeButton.type = "button";
-        upgradeButton.textContent = "upgradable";
-        upgradeButton.addEventListener("click", (e) => {
+      // Upgrade / Unlock button — to the right of edit (mutually exclusive)
+      var actionLabel = upgradable ? 'upgrade' : !ownedInfo.unlocked ? 'unlock' : null;
+      if (actionLabel && typeof window.openFloorUpgrade === 'function') {
+        const actionBtn = document.createElement("button");
+        actionBtn.className = "ribbon-upgrade-btn";
+        actionBtn.type = "button";
+        actionBtn.textContent = actionLabel;
+        actionBtn.title = actionLabel === 'upgrade'
+          ? "Upgrade your artwork so it will never drop below this tile size. You have until the next shuffle to decide."
+          : "Unlock your artwork to land in larger tile sizes during weekly shuffles.";
+        actionBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          const code = typeof window.getStoredEditCode === 'function' ? window.getStoredEditCode() : '';
+          const code = typeof window.getEditCodeForAsset === 'function' ? window.getEditCodeForAsset(assetId) : '';
           closeArtworkPopup();
-          setTimeout(() => {
-            window.openFloorUpgrade(ownedInfo, code);
-          }, 120);
+          setTimeout(() => window.openFloorUpgrade(ownedInfo, code), 120);
         });
-        editDiv.appendChild(upgradeButton);
+        editDiv.appendChild(actionBtn);
       }
 
       popupInfo.appendChild(editDiv);

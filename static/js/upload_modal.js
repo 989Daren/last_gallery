@@ -757,6 +757,11 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log(`${LOG_PREFIX} Metadata saved successfully:`, result);
       metaSavedSuccessfully = true;
 
+      // Store edit code in localStorage for ownership detection
+      if (result.edit_code && typeof window.storeEditCode === 'function') {
+        window.storeEditCode(result.edit_code, result.contact1_value || '');
+      }
+
       // If admin changed unlock status, set it explicitly via force_unlock endpoint
       if (metaUnlockCheckbox && !metaUnlockSection.classList.contains("hidden")) {
         const currentUnlocked = metaUnlockCheckbox.checked;

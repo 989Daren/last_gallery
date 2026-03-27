@@ -1219,7 +1219,8 @@ def save_tile_metadata(tile_id):
             "contact1_value": contact1_value,
             "contact2_type": contact2_type,
             "contact2_value": contact2_value,
-            "payment_deadline": payment_deadline_value
+            "payment_deadline": payment_deadline_value,
+            "edit_code": edit_code
         })
         
     except Exception as e:
