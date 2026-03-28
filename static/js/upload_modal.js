@@ -757,8 +757,9 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log(`${LOG_PREFIX} Metadata saved successfully:`, result);
       metaSavedSuccessfully = true;
 
-      // Store edit code in localStorage for ownership detection
-      if (result.edit_code && typeof window.storeEditCode === 'function') {
+      // Store edit code in localStorage for ownership detection (skip admin edits)
+      var adminActive = typeof window.isAdminActive === 'function' && window.isAdminActive();
+      if (result.edit_code && !adminActive && typeof window.storeEditCode === 'function') {
         window.storeEditCode(result.edit_code, result.contact1_value || '');
       }
 
