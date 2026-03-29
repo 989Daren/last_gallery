@@ -758,7 +758,6 @@ document.addEventListener("DOMContentLoaded", () => {
       metaSavedSuccessfully = true;
 
       // Store edit code in localStorage for ownership detection (skip admin edits)
-      var adminActive = typeof window.isAdminActive === 'function' && window.isAdminActive();
       if (result.edit_code && !adminActive && typeof window.storeEditCode === 'function') {
         window.storeEditCode(result.edit_code, result.contact1_value || '');
       }
