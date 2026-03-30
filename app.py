@@ -207,7 +207,7 @@ TIER_CONFIG = {
     'floor_m':   {'price_cents': 2499, 'original_cents': 3999, 'floor': 'm', 'label': 'Medium Floor'},
     'floor_lg':  {'price_cents': 5999, 'original_cents': None, 'floor': 'lg', 'label': 'Large Floor'},
     'floor_xl':  {'price_cents': 9999, 'original_cents': None, 'floor': 'xl', 'label': 'Extra Large Floor'},
-    'exhibit':   {'price_cents': 9999, 'original_cents': 19999, 'floor': None, 'label': 'Exhibit Tile'},
+    'exhibit':   {'price_cents': 12999, 'original_cents': 19999, 'floor': None, 'label': 'Exhibit Tile'},
 }
 
 # Popup image optimization settings

@@ -450,28 +450,54 @@ label {
   margin-bottom: 0;
 }
 
-.about-exhibits-list {
-  margin: 0;
-  padding: 0 0 0 20px;
-  list-style: none;
+.countdown-info-card p.about-exhibits-tagline {
+  text-align: center;
+  font-size: 0.93rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0 0 16px;
+  letter-spacing: 0.02em;
 }
-.about-exhibits-list li {
-  position: relative;
-  margin-bottom: 14px;
-  font-size: 0.88rem;
-  line-height: 1.65;
-  color: rgba(255, 255, 255, 0.72);
-  padding-left: 8px;
+.about-exhibits-features {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 18px;
 }
-.about-exhibits-list li::before {
-  content: "\2022";
-  position: absolute;
-  left: -16px;
+.about-exhibits-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+.about-exhibits-feature-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.about-exhibits-feature strong {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
   color: #D4A843;
-  font-size: 1.4em;
+  margin-bottom: 3px;
 }
-.about-exhibits-list li:last-child {
-  margin-bottom: 0;
+.about-exhibits-feature span:last-child {
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.65);
+}
+.countdown-info-card p.about-exhibits-note {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  margin: 0;
+  padding-top: 2px;
 }
 
 .about-exhibits-footer {
@@ -507,13 +533,21 @@ label {
 }
 
 @media (max-width: 600px) {
-  .about-exhibits-list {
-    padding-left: 16px;
+  .countdown-info-card p.about-exhibits-tagline {
+    font-size: 0.85rem;
   }
-  .about-exhibits-list li {
-    font-size: 0.82rem;
-    margin-bottom: 12px;
-    padding-left: 6px;
+  .about-exhibits-feature {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+  .about-exhibits-feature strong {
+    font-size: 0.85rem;
+  }
+  .about-exhibits-feature span:last-child {
+    font-size: 0.8rem;
+  }
+  .about-exhibits-note {
+    font-size: 0.74rem;
   }
 }
 
@@ -2516,7 +2550,7 @@ label {
 
 /* Exhibit popup: light grey ribbon with black text */
 .popup-overlay.exhibit-popup .popup-info-bg {
-  background-color: rgba(220, 220, 220, 0.92);
+  background-color: rgba(220, 220, 220, 0.82);
 }
 .popup-overlay.exhibit-popup .popup-info-text { color: #000; }
 .popup-overlay.exhibit-popup .ribbon-artist { color: rgba(0, 0, 0, 0.95); }

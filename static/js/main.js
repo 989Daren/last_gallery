@@ -957,7 +957,12 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
 
     // Line 7: Contact info (clickable links)
     function buildContactLink(type, value) {
-      if (!type || !value) return null;
+      if (!value) return null;
+      // Infer type if missing
+      if (!type) {
+        if (value.includes("@")) type = "email";
+        else if (/^https?:\/\//i.test(value) || value.includes(".com") || value.includes(".org") || value.includes(".net")) type = "website";
+      }
       const escaped = escapeHtml(value);
       if (type === "email") {
         return `<a href="mailto:${escaped}" class="ribbon-contact-link" target="_blank" rel="noopener noreferrer">${escaped}</a>`;

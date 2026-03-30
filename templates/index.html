@@ -69,7 +69,7 @@
           <li role="none">
             <button id="menu-item-unlock" role="menuitem">
               <svg class="menu-unlock-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-              Unlock to Upgrade Your Artwork!
+              Unlock Your Artwork
             </button>
           </li>
           <li role="none">
@@ -79,10 +79,10 @@
             <button id="menu-item-edit" role="menuitem">Edit Your Artwork or Exhibit</button>
           </li>
           <li role="none">
-            <button id="menu-item-admin" role="menuitem">Admin</button>
+            <a href="/privacy" role="menuitem" class="menu-link">Your Privacy</a>
           </li>
           <li role="none">
-            <a href="/privacy" role="menuitem" class="menu-link">Your Privacy</a>
+            <button id="menu-item-admin" role="menuitem">Admin</button>
           </li>
         </ul>
       </div>
@@ -106,9 +106,31 @@
         <div class="countdown-info-graphic">
           <img src="{{ url_for('static', filename='images/shuffle_graphic.jpg') }}" alt="Artwork Shuffle">
         </div>
-        <p>The Last Gallery shuffles all artwork weekly. When the countdown reaches zero, every piece is randomly reassigned to a new tile position. Some works remain the same size, while others rise into larger, more prominent placements.</p>
-        <p>But the shuffling won't last forever. When the gallery is completely full, it stops. No new art is accepted. Every existing piece is permanently frozen in place — a time capsule of creative work.</p>
-        <p>Add your artwork today and become an enduring part of The Last Gallery!</p>
+        <p class="about-exhibits-tagline">Every week the wall comes alive!</p>
+        <div class="about-exhibits-features">
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f500;&#xFE0F;</span>
+            <div>
+              <strong>Weekly Random Shuffle</strong>
+              <span>When the countdown hits zero, every piece is randomly reassigned to a new tile. Some stay the same size &mdash; others rise into larger, more prominent positions.</span>
+            </div>
+          </div>
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f513;&#xFE0F;</span>
+            <div>
+              <strong>Unlock &amp; Rise</strong>
+              <span>Unlocked artwork is eligible to land in bigger tiles each shuffle, giving your art more visibility and impact on the wall.</span>
+            </div>
+          </div>
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f9ca;&#xFE0F;</span>
+            <div>
+              <strong>The Final Freeze</strong>
+              <span>When every tile is full, shuffling stops forever. No new art is accepted. Every piece is permanently frozen in place &mdash; a time capsule of creative work.</span>
+            </div>
+          </div>
+        </div>
+        <p class="about-exhibits-note">Space is very limited. Add your artwork today and become a permanent part of The Last Gallery.</p>
       </div>
     </div>
   </div>
@@ -460,9 +482,30 @@
         <button id="humanCentricCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
         <h3>TLG &mdash; A Human Centric Gallery</h3>
         <div class="countdown-info-graphic"><img id="humanCentricGraphic" src="{{ url_for('static', filename='images/artist_group.png') }}" alt="A Human Centric Gallery"></div>
-        <p>Whether it's painting, drawing, photography, collage, digital (Procreate, Krita, etc.), or mixed media, The Last Gallery honors human touch in the creative process. A brushstroke, a blended pixel, a carefully framed photograph&mdash;these are the marks of an artist at work.</p>
-        <p>We believe AI can be used as a tool. You might use it in a collage, or as a reference&mdash;just as artists have long used photographs. That's fine. What matters is that a human is physically involved in shaping the final image.</p>
-        <p>The Last Gallery reserves the right to remove raw, unedited AI-generated images, or any other content deemed inappropriate or low-effort, from the gallery wall.</p>
+        <p class="about-exhibits-tagline">Art made by human hands, not algorithms.</p>
+        <div class="about-exhibits-features">
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f58c;&#xFE0F;</span>
+            <div>
+              <strong>Every Medium Welcome</strong>
+              <span>Painting, drawing, photography, collage, digital (Procreate, Krita, etc.), or mixed media &mdash; what matters is a human touch in shaping the final image.</span>
+            </div>
+          </div>
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f916;&#xFE0F;</span>
+            <div>
+              <strong>AI as a Tool, Not the Artist</strong>
+              <span>Use AI in a collage or as a reference &mdash; just as artists have long used photographs. What counts is that a person is physically involved in the creative process.</span>
+            </div>
+          </div>
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f6e1;&#xFE0F;</span>
+            <div>
+              <strong>Quality Standards</strong>
+              <span>The Last Gallery reserves the right to remove raw, unedited AI-generated images or any content deemed inappropriate or low-effort.</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -477,11 +520,31 @@
         <div class="countdown-info-graphic">
           <img src="{{ url_for('static', filename='images/unlock_graphic.jpg') }}" alt="How it All Works">
         </div>
-        <p><strong>1. Upload your artwork (It's Free!)</strong> — Your art will be added at the "locked" Small tile level. It will participate in the shuffle, but needs to be unlocked by you to land in larger tile sizes.</p>
-        <p><strong>2. Unlock your artwork</strong> — This is the next step so your artwork can shuffle into larger tile sizes. The bigger the tile, the more your artwork stands out on the gallery wall.</p>
-        <p><strong>3. Every week, the gallery shuffles</strong> — All artwork is randomly reassigned to new tiles. Your unlocked artwork may find itself in a Medium, Large, or even an Extra Large tile!</p>
-        <p><strong>4. Lock in your size</strong> — If you land in a larger tile, you can choose to upgrade to that tile level, ensuring your artwork will never fall below that size during future shuffles.</p>
-        <p><strong>Important:</strong> When the gallery is completely full, no new art will be accepted and every existing piece will be permanently frozen in place. At that point, the Gallery has become a time capsule of creative work. On the day of the final random shuffle, the tile size you've upgraded to is where it stays for the life of The Last Gallery.</p>
+        <p class="about-exhibits-tagline">A living gallery that freezes into a time capsule.</p>
+        <div class="about-exhibits-features">
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f3a8;&#xFE0F;</span>
+            <div>
+              <strong>Upload Your Artwork &mdash; Free</strong>
+              <span>Your image joins a one-of-a-kind shuffling gallery. Space is very limited &mdash; once every tile is filled, uploads close forever.</span>
+            </div>
+          </div>
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f513;&#xFE0F;</span>
+            <div>
+              <strong>Unlock to Grow</strong>
+              <span>Unlocked artwork can land in larger tiles during the weekly shuffle, giving your art more wall space and more eyes on your work.</span>
+            </div>
+          </div>
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f4cf;&#xFE0F;</span>
+            <div>
+              <strong>Lock In Your Size</strong>
+              <span>Land in a bigger tile? Upgrade to set that as your floor &mdash; your artwork will never shrink below it in future shuffles.</span>
+            </div>
+          </div>
+        </div>
+        <p class="about-exhibits-note">When every tile is full, shuffling stops permanently and the gallery freezes &mdash; a time capsule of creative work. The size your artwork holds on that final day is what visitors will see for the life of The Last Gallery.</p>
       </div>
     </div>
   </div>
@@ -494,16 +557,33 @@
         <button id="aboutExhibitsCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
         <h3>About Exhibits</h3>
         <div class="countdown-info-graphic">
-          <img src="{{ url_for('static', filename='images/exhibit_popup_image.png') }}" alt="About Exhibits">
+          <img src="{{ url_for('static', filename='images/exhibit_popup_image.png') }}?v=2" alt="About Exhibits">
         </div>
-        <ul class="about-exhibits-list">
-          <li>All exhibit tiles have special formatting that makes them easy to identify &mdash; a vertical <strong>&ldquo;Exhibit&rdquo;</strong> banner overlay and an animated sheen effect.</li>
-          <li>Exhibits are created using an artist's existing <strong>Medium</strong>, <strong>Large</strong>, or <strong>X-Large</strong> tile.</li>
-          <li>They highlight the artist and showcase up to <strong>20 artwork images</strong> in a scrolling presentation.</li>
-          <li>The artwork on the tile you upgrade to an exhibit (visible on the gallery wall) is permanent and cannot be removed, but the other images in your exhibit are fully removable and replaceable.</li>
-          <li>An artist may have a maximum of <strong>4 tile images</strong> on the gallery wall &mdash; an exhibit tile counts as one of those 4.</li>
-          <li>Exhibit tiles shuffle weekly, just like all other tiles, potentially landing them in even larger tiles.</li>
-        </ul>
+        <p class="about-exhibits-tagline">Turn your tile into a showcase.</p>
+        <div class="about-exhibits-features">
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f5bc;&#xFE0F;</span>
+            <div>
+              <strong>Scrolling Showcase</strong>
+              <span>Display up to 20 artwork images in a curated scrolling presentation.</span>
+            </div>
+          </div>
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x2728;&#xFE0F;</span>
+            <div>
+              <strong>Unmistakable Presence</strong>
+              <span>Animated sheen and a vertical &ldquo;Exhibit&rdquo; banner make your tile stand out on the wall.</span>
+            </div>
+          </div>
+          <div class="about-exhibits-feature">
+            <span class="about-exhibits-feature-icon">&#x1f500;&#xFE0F;</span>
+            <div>
+              <strong>Shuffle-Ready</strong>
+              <span>Exhibits shuffle weekly alongside all tiles &mdash; and can land in even larger positions.</span>
+            </div>
+          </div>
+        </div>
+        <p class="about-exhibits-note">Exhibits are created from an existing Medium, Large, or X-Large tile. Exhibit images are fully replaceable; the image used in your exhibit tile (located on the gallery wall) is permanent.</p>
         <div class="about-exhibits-footer">
           <button id="aboutExhibitsCloseFooterBtn" class="about-exhibits-btn about-exhibits-btn-secondary" type="button">Cancel</button>
           <button id="aboutExhibitsPricingBtn" class="about-exhibits-btn about-exhibits-btn-primary" type="button">Exhibit Pricing</button>
