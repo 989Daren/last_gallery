@@ -78,6 +78,9 @@
           <li role="none">
             <button id="menu-item-edit" role="menuitem">Edit Your Artwork or Exhibit</button>
           </li>
+          <li role="none" id="cotmMenuItem" class="hidden">
+            <button id="menu-item-cotm" role="menuitem">&#9733; Creator of the Month</button>
+          </li>
           <li role="none">
             <a href="/privacy" role="menuitem" class="menu-link">Your Privacy</a>
           </li>
@@ -94,6 +97,13 @@
     <span class="countdown-label">Artwork Shuffle:</span>
     <span id="countdownText" class="countdown-unit"></span>
     <button id="countdownInfoBtn" class="countdown-info-btn" type="button" aria-label="What is the artwork shuffle?">i</button>
+  </div>
+
+  <!-- COTM action bar (below countdown bar) -->
+  <div id="cotmActionBar" class="cotm-action-bar hidden">
+    <button id="cotmActionBtn" class="cotm-action-btn" type="button">
+      &#9733; Creator of the Month
+    </button>
   </div>
 
   <!-- Countdown Info Modal -->
@@ -118,8 +128,8 @@
           <div class="about-exhibits-feature">
             <span class="about-exhibits-feature-icon">&#x1f513;&#xFE0F;</span>
             <div>
-              <strong>Unlock &amp; Rise</strong>
-              <span>Unlocked artwork is eligible to land in bigger tiles each shuffle, giving your art more visibility and impact on the wall.</span>
+              <strong>Unlocking is the Key</strong>
+              <span>After uploading your art, <b>unlock it!</b><br>This allows it to freely land in larger tiles during weekly shuffles, giving it more visibility and impact on the wall.</span>
             </div>
           </div>
           <div class="about-exhibits-feature">
@@ -320,18 +330,8 @@
     </div>
   </div>
 
-  <!-- Creator of the Month overlay (stub) -->
-  <div id="creatorBannerOverlay" class="confirm-banner-overlay hidden" aria-hidden="true">
-    <div class="confirm-banner" role="dialog" aria-modal="true">
-      <h2 class="confirm-banner-heading" style="text-align:center;">Coming soon!</h2>
-      <p class="confirm-banner-text" style="text-align:center; font-size:1.1rem;">
-        <strong>The Last Gallery's Creator of the Month!</strong>
-      </p>
-      <div class="confirm-banner-actions" style="justify-content:center;">
-        <button id="creatorBannerEnterBtn" type="button" class="primary-btn">Enter Gallery</button>
-      </div>
-    </div>
-  </div>
+  <!-- Creator of the Month overlay (rendered by cotm.js) -->
+  <div id="cotmOverlay" class="cotm-overlay hidden" aria-hidden="true"></div>
 
   <!-- Admin modal (PIN gated) -->
   <div id="adminModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="adminModalTitle">
@@ -428,6 +428,24 @@
           <button id="undoBtn" type="button" disabled>Undo</button>
         </div>
 
+        <div class="adminSection">
+          <h3 style="color:#D4A843; font-size:13px; margin:12px 0 8px; text-transform:uppercase; letter-spacing:0.05em;">Creator of the Month</h3>
+          <div id="cotmAdminCurrentStatus" style="font-size:0.82rem; padding:4px 0 8px; color:#999;"></div>
+          <div id="cotmAdminStatus" class="adminStatus" style="display:none; font-size:0.82rem; padding:4px 0; color:#ccc;"></div>
+          <div class="adminRow">
+            <input type="text" id="adminCotmArtistInput" placeholder="Artist name" maxlength="100"
+              style="flex:1; padding:6px 8px; border:1px solid #333; border-radius:4px; background:#1a1a1a; color:#ddd; font-size:0.85rem; text-transform:none; font-family:inherit;">
+          </div>
+          <div class="adminRow">
+            <input type="email" id="adminCotmEmailInput" placeholder="Artist email" maxlength="120"
+              style="flex:1; padding:6px 8px; border:1px solid #333; border-radius:4px; background:#1a1a1a; color:#ddd; font-size:0.85rem; text-transform:none; font-family:inherit;">
+          </div>
+          <div class="adminRow">
+            <button id="adminCotmSelectBtn" type="button">Select as COTM</button>
+            <button id="adminCotmEditBtn" type="button" style="display:none;">Edit COTM</button>
+          </div>
+        </div>
+
         <div class="adminRow">
           <button id="shuffleButton" type="button">Shuffle Tiles</button>
           <button id="undoShuffleBtn" type="button" disabled>Undo Shuffle</button>
@@ -520,19 +538,19 @@
         <div class="countdown-info-graphic">
           <img src="{{ url_for('static', filename='images/unlock_graphic.jpg') }}" alt="How it All Works">
         </div>
-        <p class="about-exhibits-tagline">A living gallery that freezes into a time capsule.</p>
+        <p class="about-exhibits-tagline">An art gallery shuffling into history!</p>
         <div class="about-exhibits-features">
           <div class="about-exhibits-feature">
             <span class="about-exhibits-feature-icon">&#x1f3a8;&#xFE0F;</span>
             <div>
-              <strong>Upload Your Artwork &mdash; Free</strong>
-              <span>Your image joins a one-of-a-kind shuffling gallery. Space is very limited &mdash; once every tile is filled, uploads close forever.</span>
+              <strong>Upload Your Artwork &mdash; It's Free!</strong>
+              <span>Your artwork joins a one-of-a-kind shuffling gallery. Space is very limited &mdash; once every tile is filled, uploads close forever.</span>
             </div>
           </div>
           <div class="about-exhibits-feature">
             <span class="about-exhibits-feature-icon">&#x1f513;&#xFE0F;</span>
             <div>
-              <strong>Unlock to Grow</strong>
+              <strong>Unlock for Impact!</strong>
               <span>Unlocked artwork can land in larger tiles during the weekly shuffle, giving your art more wall space and more eyes on your work.</span>
             </div>
           </div>
@@ -540,7 +558,7 @@
             <span class="about-exhibits-feature-icon">&#x1f4cf;&#xFE0F;</span>
             <div>
               <strong>Lock In Your Size</strong>
-              <span>Land in a bigger tile? Upgrade to set that as your floor &mdash; your artwork will never shrink below it in future shuffles.</span>
+              <span>If your artwork lands in a larger tile during a shuffle, you can upgrade to lock in that size &mdash; it'll never shrink below it again (but can still get larger).</span>
             </div>
           </div>
         </div>
@@ -571,7 +589,7 @@
           <div class="about-exhibits-feature">
             <span class="about-exhibits-feature-icon">&#x2728;&#xFE0F;</span>
             <div>
-              <strong>Unmistakable Presence</strong>
+              <strong>Presence that Pops! (see image above)</strong>
               <span>Animated sheen and a vertical &ldquo;Exhibit&rdquo; banner make your tile stand out on the wall.</span>
             </div>
           </div>
@@ -721,6 +739,7 @@
   <script defer src="{{ url_for('static', filename='js/deadline_banner.js') | cachebust }}"></script>
   <script defer src="{{ url_for('static', filename='js/exhibit.js') | cachebust }}"></script>
   <script defer src="{{ url_for('static', filename='js/exhibit_dashboard.js') | cachebust }}"></script>
+  <script defer src="{{ url_for('static', filename='js/cotm.js') | cachebust }}"></script>
   <script defer src="{{ url_for('static', filename='js/owner_edit.js') | cachebust }}"></script>
   <script defer src="{{ url_for('static', filename='vendor/cropper/cropper.min.js') | cachebust }}"></script>
   <script defer src="{{ url_for('static', filename='js/upload_modal.js') | cachebust }}"></script>

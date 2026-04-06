@@ -1127,6 +1127,98 @@
     initShuffleHandlers();
     initTileLabelsToggle();
     initCountdownAdmin();
+    initCotmAdmin();
+  }
+
+  // ========================================
+  // Creator of the Month Admin
+  // ========================================
+  function initCotmAdmin() {
+    const cotmSelectBtn = $("adminCotmSelectBtn");
+    const cotmEditBtn = $("adminCotmEditBtn");
+    const cotmStatus = $("cotmAdminStatus");
+    const cotmCurrentStatus = $("cotmAdminCurrentStatus");
+
+    function showCotmStatus(msg, isError) {
+      if (!cotmStatus) return;
+      cotmStatus.style.display = "block";
+      cotmStatus.textContent = msg;
+      cotmStatus.style.color = isError ? "#e74c3c" : "#D4A843";
+      if (!isError) {
+        setTimeout(() => { cotmStatus.style.display = "none"; }, 4000);
+      }
+    }
+
+    // Fetch and display current COTM status
+    function refreshCotmStatus() {
+      fetch("/api/cotm")
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok && data.active) {
+            if (cotmCurrentStatus) {
+              cotmCurrentStatus.textContent = "Current: " + data.cotm.artist_name + " (" + data.cotm.month + ")";
+              cotmCurrentStatus.style.color = "#D4A843";
+            }
+            if (cotmEditBtn) cotmEditBtn.style.display = "";
+          } else {
+            if (cotmCurrentStatus) {
+              cotmCurrentStatus.textContent = "No active COTM";
+              cotmCurrentStatus.style.color = "#666";
+            }
+            if (cotmEditBtn) cotmEditBtn.style.display = "none";
+          }
+        })
+        .catch(() => {});
+    }
+    refreshCotmStatus();
+
+    cotmSelectBtn?.addEventListener("click", async () => {
+      const artistName = ($("adminCotmArtistInput")?.value || "").trim();
+      const email = ($("adminCotmEmailInput")?.value || "").trim();
+      if (!artistName || !email) {
+        showCotmStatus("Artist name and email are required.", true);
+        return;
+      }
+      if (!_adminPin) {
+        showCotmStatus("Admin session expired. Re-enter PIN.", true);
+        return;
+      }
+      cotmSelectBtn.disabled = true;
+      try {
+        const res = await fetch("/api/admin/cotm/select", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Pin": _adminPin,
+          },
+          body: JSON.stringify({ artist_name: artistName, email: email }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showCotmStatus("COTM selected: " + data.artist_name + " (" + data.month + ")" +
+            (data.email_sent ? " — email sent" : " — no edit code found, email not sent"));
+          $("adminCotmArtistInput").value = "";
+          $("adminCotmEmailInput").value = "";
+          refreshCotmStatus();
+        } else {
+          showCotmStatus(data.error || "Failed to select COTM.", true);
+        }
+      } catch (e) {
+        showCotmStatus("Network error.", true);
+      }
+      cotmSelectBtn.disabled = false;
+    });
+
+    // Edit button — opens the COTM edit form using admin PIN auth
+    cotmEditBtn?.addEventListener("click", () => {
+      if (!_adminPin) {
+        showCotmStatus("Admin session expired. Re-enter PIN.", true);
+        return;
+      }
+      if (typeof window.openCotmEditAsAdmin === 'function') {
+        window.openCotmEditAsAdmin(_adminPin);
+      }
+    });
   }
 
   // Initialize when DOM is ready

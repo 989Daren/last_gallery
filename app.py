@@ -623,8 +623,8 @@ def send_edit_code(email, code, artwork_title=""):
         "<p>If you need to edit your artwork's information, copy and paste your Edit Code into the link below.</p>"
         f'<p><a href="{html_mod.escape(edit_link)}">{html_mod.escape(edit_link)}</a></p>'
         '<hr style="margin:24px 0;">'
-        '<p style="font-size:16px;"><strong>Coming Soon for all Unlocked Artwork!</strong><br>'
-        "The Last Gallery's Creator of the Month!</p>"
+        '<p style="font-size:16px;"><strong>Unlocked artwork is eligible for '
+        "The Last Gallery's Creator of the Month!</strong></p>"
         f'<p><a href="{html_mod.escape(cotm_link)}">{html_mod.escape(cotm_link)}</a></p>'
         '</div>'
     )
@@ -635,8 +635,7 @@ def send_edit_code(email, code, artwork_title=""):
         "If you need to edit your artwork's information, copy and paste your Edit Code into the link below.\n"
         f"{edit_link}\n\n"
         "---\n\n"
-        "Coming Soon for all Unlocked Artwork!\n"
-        "The Last Gallery's Creator of the Month!\n"
+        "Unlocked artwork is eligible for The Last Gallery's Creator of the Month!\n"
         f"{cotm_link}\n"
     )
 
@@ -779,6 +778,60 @@ def send_deadline_notification(email, artwork_title, asset_id, access_code=''):
         app.logger.exception("[DEADLINE NOTIFY] Failed to send email to %s for asset %s", email, asset_id)
 
 
+def send_cotm_congratulations_email(email, artist_name, edit_code):
+    """Send congratulations email to Creator of the Month with edit code and profile link."""
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        app.logger.warning("[COTM] RESEND_API_KEY not set — email not sent. To: %s", email)
+        return
+
+    safe_name = html_mod.escape(artist_name)
+    safe_code = html_mod.escape(edit_code)
+    profile_link = f"{BASE_URL}/creator-of-the-month?code={quote(edit_code, safe='')}"
+
+    html_body = (
+        '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
+        f'{EMAIL_LOGO_HTML}'
+        f'<h2 style="color:#D4A843;">Congratulations, {safe_name}!</h2>'
+        '<p style="font-size:18px;">You\'ve been selected as <strong>The Last Gallery\'s '
+        'Creator of the Month!</strong></p>'
+        '<p>Your artwork is now featured in a special spotlight seen by every visitor to the gallery.</p>'
+        '<p style="margin-top:16px; padding:12px; background:#1a1a1a; border:1px solid #D4A843; '
+        'border-radius:6px; text-align:center;">'
+        '<span style="color:#ffffff; font-size:15px;">Your edit code:</span> '
+        '<strong style="color:#D4A843; font-size:17px; letter-spacing:2px;">'
+        f'{safe_code}</strong></p>'
+        '<p>Personalize your Creator of the Month spotlight &mdash; add a headshot, bio, '
+        'location, and choose which artworks to feature.</p>'
+        f'<p><a href="{html_mod.escape(profile_link)}" style="display:inline-block; padding:12px 24px; '
+        'background:linear-gradient(135deg,#b8860b,#ffd700); color:#000; text-decoration:none; '
+        'border-radius:6px; font-weight:bold;">Edit Your Spotlight</a></p>'
+        '</div>'
+    )
+
+    plain_body = (
+        f"Congratulations, {artist_name}!\n\n"
+        "You've been selected as The Last Gallery's Creator of the Month!\n\n"
+        "Your artwork is now featured in a special spotlight seen by every visitor.\n\n"
+        f"Your edit code: {edit_code}\n\n"
+        "Personalize your spotlight — add a headshot, bio, location, and choose which artworks to feature.\n"
+        f"{profile_link}\n"
+    )
+
+    resend.api_key = api_key
+    try:
+        resend.Emails.send({
+            "from": "The Last Gallery <noreply@thelastgallery.com>",
+            "to": [email],
+            "subject": "You're The Last Gallery's Creator of the Month!",
+            "html": html_body,
+            "text": plain_body,
+        })
+        app.logger.info("[COTM] Congratulations email sent to %s", email)
+    except Exception:
+        app.logger.exception("[COTM] Failed to send congratulations email to %s", email)
+
+
 # ---- Static root files (SEO) ----
 @app.route("/robots.txt")
 def robots_txt():
@@ -850,7 +903,7 @@ def edit_page():
 
 @app.route("/creator-of-the-month")
 def artist_of_the_month():
-    """Stub page for Creator of the Month — shows coming-soon banner."""
+    """Creator of the Month page — opens COTM intro card (or edit form if code param present)."""
     try:
         grid_color = load_grid_color()
     except Exception:
@@ -1902,23 +1955,32 @@ def _run_shuffle():
         asset_id = o['asset_id']
         orig_tid = original_tile[asset_id]
         floor = o.get('qualified_floor', 's') or 's'
+        floor_idx = SIZE_ORDER.get(floor, 0) if o['unlocked'] else 0
 
         if not o['unlocked']:
             eligible_sizes = ['s']
         else:
-            floor_idx = SIZE_ORDER.get(floor, 0)
             eligible_sizes = [s for s in SIZE_NAMES if SIZE_ORDER[s] >= floor_idx]
 
-        # Collect available tiles across eligible sizes with weights
-        # Exclude the artwork's original tile from candidate counts
+        # Floor-biased weights: the floor size absorbs below-floor probability
+        # mass so floor artwork has the same odds of reaching larger tiles as
+        # fully unlocked artwork — the floor acts as a safety net, not an
+        # upward magnet.
         candidates = []
         weights = []
+        below_floor_count = (
+            sum(len(pools.get(s, [])) for s in SIZE_NAMES if SIZE_ORDER[s] < floor_idx)
+            if floor_idx > 0 else 0
+        )
         for sz in eligible_sizes:
             pool = pools.get(sz, [])
             available = [t for t in pool if t != orig_tid]
             if available:
                 candidates.append(sz)
-                weights.append(len(available))
+                if floor_idx > 0 and SIZE_ORDER[sz] == floor_idx:
+                    weights.append(len(available) + below_floor_count)
+                else:
+                    weights.append(len(available))
 
         if not candidates:
             # Fallback: original tile is the only one left in its pool.
@@ -3101,6 +3163,36 @@ def _verify_exhibit_code(cursor, asset_id, code):
     return email
 
 
+def _verify_cotm_code(cursor, code):
+    """Verify edit code matches the current month's COTM, or admin PIN bypass.
+    Returns (email, cotm_row) or (None, None)."""
+    month = datetime.now(timezone.utc).strftime('%Y-%m')
+    # Admin PIN bypass
+    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
+    if admin_pin:
+        if not _check_pin_rate_limit():
+            return None, None
+        if admin_pin == ADMIN_PIN:
+            _clear_pin_failures()
+            cursor.execute("SELECT * FROM creator_of_the_month WHERE month = ?", (month,))
+            cotm = cursor.fetchone()
+            return ("admin", cotm) if cotm else (None, None)
+        _record_pin_failure()
+        return None, None
+    if not code:
+        return None, None
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        return None, None
+    email = code_row["email"].lower()
+    cursor.execute("SELECT * FROM creator_of_the_month WHERE month = ? AND email = ?", (month, email))
+    cotm = cursor.fetchone()
+    if not cotm:
+        return None, None
+    return email, cotm
+
+
 def _verify_exhibit_code_by_exhibit_id(cursor, exhibit_id, code):
     """Look up exhibit by exhibit_id, then verify ownership via _verify_exhibit_code.
     Returns (email, exhibit_row).  If exhibit doesn't exist: (None, None).
@@ -3320,6 +3412,257 @@ def get_exhibit_public(asset_id):
         },
         "images": images,
     })
+
+
+# ---- Creator of the Month API ----
+
+@app.route("/api/cotm", methods=["GET"])
+def get_cotm():
+    """Public: return current month's COTM data + artworks."""
+    month = datetime.now(timezone.utc).strftime('%Y-%m')
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM creator_of_the_month WHERE month = ?", (month,))
+    cotm = cursor.fetchone()
+    if not cotm:
+        conn.close()
+        return jsonify({"ok": True, "active": False})
+
+    excluded = json.loads(cotm["excluded_asset_ids"] or "[]")
+    cursor.execute(
+        "SELECT asset_id, artist_name, artwork_title, tile_url, popup_url, "
+        "year_created, medium, dimensions, edition_info, for_sale, sale_type, "
+        "contact1_type, contact1_value, contact2_type, contact2_value "
+        "FROM assets WHERE artist_name COLLATE NOCASE = ? ORDER BY created_at DESC",
+        (cotm["artist_name"],)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    artworks = []
+    for r in rows:
+        if r["asset_id"] in excluded:
+            continue
+        artworks.append({
+            "asset_id": r["asset_id"],
+            "artist_name": r["artist_name"],
+            "artwork_title": r["artwork_title"],
+            "tile_url": r["tile_url"],
+            "popup_url": r["popup_url"],
+            "year_created": r["year_created"],
+            "medium": r["medium"],
+            "dimensions": r["dimensions"],
+            "edition_info": r["edition_info"],
+            "for_sale": r["for_sale"],
+            "sale_type": r["sale_type"],
+            "contact1_type": r["contact1_type"],
+            "contact1_value": r["contact1_value"],
+            "contact2_type": r["contact2_type"],
+            "contact2_value": r["contact2_value"],
+        })
+
+    return jsonify({
+        "ok": True,
+        "active": True,
+        "cotm": {
+            "id": cotm["id"],
+            "month": cotm["month"],
+            "artist_name": cotm["artist_name"],
+            "bio_text": cotm["bio_text"],
+            "bio_photo_url": cotm["bio_photo_url"],
+            "artist_location": cotm["artist_location"],
+            "medium_techniques": cotm["medium_techniques"],
+            "artistic_focus": cotm["artistic_focus"],
+            "background_education": cotm["background_education"],
+            "professional_highlights": cotm["professional_highlights"],
+            "selected_at": cotm["selected_at"],
+        },
+        "artworks": artworks,
+    })
+
+
+@app.route("/api/admin/cotm/select", methods=["POST"])
+def admin_cotm_select():
+    """Admin: select a creator as COTM for the current month. Sends congratulations email."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    artist_name = (data.get("artist_name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    if not artist_name or not email:
+        return jsonify({"ok": False, "error": "artist_name and email are required."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify artist has at least one unlocked artwork (case-insensitive match)
+    cursor.execute(
+        "SELECT asset_id, artist_name FROM assets WHERE artist_name COLLATE NOCASE = ? AND unlocked = 1 LIMIT 1",
+        (artist_name,)
+    )
+    match = cursor.fetchone()
+    if not match:
+        conn.close()
+        return jsonify({"ok": False, "error": f"No unlocked artwork found for '{artist_name}'."}), 404
+    # Use the canonical name from the database
+    artist_name = match["artist_name"]
+
+    month = datetime.now(timezone.utc).strftime('%Y-%m')
+    cursor.execute(
+        "INSERT INTO creator_of_the_month (month, artist_name, email, selected_at, updated_at) "
+        "VALUES (?, ?, ?, datetime('now'), datetime('now')) "
+        "ON CONFLICT(month) DO UPDATE SET artist_name=excluded.artist_name, email=excluded.email, "
+        "bio_text='', bio_photo_url=NULL, artist_location='', excluded_asset_ids='[]', "
+        "selected_at=datetime('now'), updated_at=datetime('now')",
+        (month, artist_name, email)
+    )
+    conn.commit()
+
+    # Look up existing edit code
+    cursor.execute("SELECT code FROM edit_codes WHERE email = ?", (email,))
+    code_row = cursor.fetchone()
+    edit_code = code_row["code"] if code_row else ""
+    conn.close()
+
+    if edit_code:
+        send_cotm_congratulations_email(email, artist_name, edit_code)
+
+    return jsonify({"ok": True, "month": month, "artist_name": artist_name, "email_sent": bool(edit_code)})
+
+
+@app.route("/api/cotm/edit", methods=["GET"])
+def get_cotm_edit():
+    """Authenticated: return COTM profile + all artworks with exclusion flags for editing."""
+    code = (request.args.get("code") or "").strip()
+    conn = get_db()
+    cursor = conn.cursor()
+    email, cotm = _verify_cotm_code(cursor, code)
+    if not email or not cotm:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code or no active COTM."}), 403
+
+    excluded = json.loads(cotm["excluded_asset_ids"] or "[]")
+
+    # Get all artworks by this artist
+    cursor.execute(
+        "SELECT asset_id, artist_name, artwork_title, tile_url, popup_url "
+        "FROM assets WHERE artist_name COLLATE NOCASE = ? ORDER BY created_at DESC",
+        (cotm["artist_name"],)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    artworks = []
+    for r in rows:
+        artworks.append({
+            "asset_id": r["asset_id"],
+            "artwork_title": r["artwork_title"],
+            "tile_url": r["tile_url"],
+            "popup_url": r["popup_url"],
+            "excluded": r["asset_id"] in excluded,
+        })
+
+    return jsonify({
+        "ok": True,
+        "cotm": {
+            "id": cotm["id"],
+            "month": cotm["month"],
+            "artist_name": cotm["artist_name"],
+            "bio_text": cotm["bio_text"],
+            "bio_photo_url": cotm["bio_photo_url"],
+            "artist_location": cotm["artist_location"],
+            "medium_techniques": cotm["medium_techniques"],
+            "artistic_focus": cotm["artistic_focus"],
+            "background_education": cotm["background_education"],
+            "professional_highlights": cotm["professional_highlights"],
+        },
+        "artworks": artworks,
+    })
+
+
+@app.route("/api/cotm/profile", methods=["POST"])
+def save_cotm_profile():
+    """Authenticated: save COTM profile fields and artwork exclusions."""
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip()
+    conn = get_db()
+    cursor = conn.cursor()
+    email, cotm = _verify_cotm_code(cursor, code)
+    if not email or not cotm:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code or no active COTM."}), 403
+
+    bio_text = (data.get("bio_text") or "").strip()[:500]
+    artist_location = (data.get("artist_location") or "").strip()[:100]
+    medium_techniques = (data.get("medium_techniques") or "").strip()[:200]
+    artistic_focus = (data.get("artistic_focus") or "").strip()[:1000]
+    background_education = (data.get("background_education") or "").strip()[:1000]
+    professional_highlights = (data.get("professional_highlights") or "").strip()[:1000]
+    excluded_ids = data.get("excluded_asset_ids", [])
+    if not isinstance(excluded_ids, list):
+        excluded_ids = []
+    excluded_ids = [int(x) for x in excluded_ids if isinstance(x, (int, float))]
+
+    cursor.execute(
+        "UPDATE creator_of_the_month SET bio_text = ?, artist_location = ?, "
+        "medium_techniques = ?, artistic_focus = ?, background_education = ?, "
+        "professional_highlights = ?, excluded_asset_ids = ?, updated_at = datetime('now') WHERE id = ?",
+        (bio_text, artist_location, medium_techniques, artistic_focus,
+         background_education, professional_highlights, json.dumps(excluded_ids), cotm["id"])
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/cotm/photo", methods=["POST"])
+def upload_cotm_photo():
+    """Authenticated: upload or replace COTM headshot photo."""
+    code = (request.form.get("code") or "").strip()
+    conn = get_db()
+    cursor = conn.cursor()
+    email, cotm = _verify_cotm_code(cursor, code)
+    if not email or not cotm:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code or no active COTM."}), 403
+
+    if 'photo' not in request.files:
+        conn.close()
+        return jsonify({"ok": False, "error": "No photo file provided."}), 400
+    file = request.files['photo']
+    if not file or not file.filename:
+        conn.close()
+        return jsonify({"ok": False, "error": "Empty file."}), 400
+
+    cotm_id = cotm["id"]
+    cotm_dir = os.path.join(UPLOAD_DIR, 'cotm', str(cotm_id))
+    os.makedirs(cotm_dir, exist_ok=True)
+
+    # Delete old photo
+    _delete_upload_files(cotm["bio_photo_url"])
+
+    filename = f"headshot_{uuid.uuid4().hex[:12]}.jpg"
+    filepath = os.path.join(cotm_dir, filename)
+
+    optimized = _optimize_image(file)
+    with open(filepath, 'wb') as f:
+        f.write(optimized.getvalue())
+
+    thumb_buf = _make_center_thumb(filepath, size=512)
+    if thumb_buf:
+        with open(filepath, 'wb') as f:
+            f.write(thumb_buf.getvalue())
+
+    photo_url = f'/uploads/cotm/{cotm_id}/{filename}'
+    cursor.execute(
+        "UPDATE creator_of_the_month SET bio_photo_url = ?, updated_at = datetime('now') WHERE id = ?",
+        (photo_url, cotm_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "photo_url": photo_url})
 
 
 if __name__ == "__main__":

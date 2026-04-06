@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 20
 
 
 def get_db():
@@ -444,6 +444,32 @@ def init_db():
         cursor.execute("PRAGMA foreign_keys = ON")
         _set_schema_version(cursor, 18)
         print("Migration 18 complete: qualified_floor default fixed to 's'")
+
+    if current_version < 19:
+        print("Applying migration 19: Creator of the Month table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS creator_of_the_month (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                month TEXT NOT NULL UNIQUE,
+                artist_name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                bio_text TEXT NOT NULL DEFAULT '',
+                bio_photo_url TEXT,
+                artist_location TEXT NOT NULL DEFAULT '',
+                excluded_asset_ids TEXT NOT NULL DEFAULT '[]',
+                selected_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        _set_schema_version(cursor, 19)
+        print("Migration 19 complete: Creator of the Month table created")
+
+    if current_version < 20:
+        print("Applying migration 20: COTM profile detail columns...")
+        for col in ['medium_techniques', 'artistic_focus', 'background_education', 'professional_highlights']:
+            cursor.execute(f"ALTER TABLE creator_of_the_month ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+        _set_schema_version(cursor, 20)
+        print("Migration 20 complete: COTM profile detail columns added")
 
     conn.commit()
     conn.close()

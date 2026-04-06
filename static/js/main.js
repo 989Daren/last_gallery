@@ -49,6 +49,7 @@ function centerGalleryView() {
 // Pinch Hint (Touch devices only)
 // Shows two animated dots mimicking a pinch gesture after welcome dismisses
 // ============================
+window.showPinchHint = showPinchHint;
 function showPinchHint() {
   if (!window.matchMedia('(pointer: coarse)').matches) return;
 
@@ -101,7 +102,12 @@ function initSimpleWelcomeAlways() {
   const close = () => {
     overlay.classList.add("hidden");
     document.body.style.overflow = "";
-    setTimeout(showPinchHint, 300);
+    // COTM auto-show inserts between welcome and pinch hint
+    if (typeof window.initCotmAutoShow === 'function') {
+      setTimeout(window.initCotmAutoShow, 300);
+    } else {
+      setTimeout(showPinchHint, 300);
+    }
   };
 
   // Always show on load
@@ -603,6 +609,9 @@ const ConicalNav = {
   isExhibitViewOpen() {
     return (typeof window.isExhibitOpen === "function") ? window.isExhibitOpen() : false;
   },
+  isCotmOpen() {
+    return (typeof window.isCotmCardOpen === "function") ? window.isCotmCardOpen() : false;
+  },
 
   // Choose the desired conical hash based on current UI state
   // Builds compound hash for layered states: #art/ribbon, #exhibitview/art/ribbon
@@ -614,6 +623,7 @@ const ConicalNav = {
     // Non-registry full-screen overlays
     if (this.isUnlockOpen()) return "#unlock";
     if (this.isUploadOpen()) return "#upload";
+    if (this.isCotmOpen()) return "#cotm";
 
     // Build compound hash for popup layers
     const parts = [];
@@ -686,6 +696,12 @@ const ConicalNav = {
     const wantsUnlock = stack.includes("unlock");
     if (!wantsUnlock && this.isUnlockOpen()) {
       try { window.closeUnlockModal(true); } catch (e) {}
+    }
+
+    // Close COTM card if hash no longer includes cotm
+    const wantsCotm = stack.includes("cotm");
+    if (!wantsCotm && this.isCotmOpen()) {
+      try { window.closeCotmCard(true); } catch (e) {}
     }
 
     // Close upload if hash no longer includes upload/standalone upload
@@ -895,6 +911,7 @@ function showShareToast() {
 }
 
 window.showShareToast = showShareToast;
+window.openArtworkPopup = openArtworkPopup;
 
 function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value, unlocked, assetId, tileId, isExhibit, upgradable }) {
   _currentPopupAssetId = assetId || null;
@@ -1109,6 +1126,11 @@ function closeArtworkPopup(silent) {
   // Notify exhibit module so it can resume scrolling
   if (typeof window._onExhibitPopupClosed === 'function') {
     window._onExhibitPopupClosed();
+  }
+
+  // Notify COTM module to restore card from dimmed state
+  if (typeof window._onCotmPopupClosed === 'function') {
+    window._onCotmPopupClosed();
   }
 }
 
@@ -1614,12 +1636,16 @@ document.addEventListener("DOMContentLoaded", () => {
   function setHeaderOffset() {
     const header = document.querySelector('.controls');
     const countdownBar = document.getElementById('countdownBar');
+    const cotmBar = document.getElementById('cotmActionBar');
     if (header) {
       const headerH = header.offsetHeight;
       document.documentElement.style.setProperty('--header-height', `${headerH}px`);
       let totalH = headerH;
       if (countdownBar && !countdownBar.classList.contains('hidden')) {
         totalH += countdownBar.offsetHeight;
+      }
+      if (cotmBar && !cotmBar.classList.contains('hidden')) {
+        totalH += cotmBar.offsetHeight;
       }
       document.documentElement.style.setProperty('--total-fixed-height', `${totalH}px`);
       if (DEBUG) console.log('Header offset set to:', headerH + 'px, total fixed:', totalH + 'px');
@@ -1814,25 +1840,14 @@ document.addEventListener("DOMContentLoaded", () => {
           });
         }
 
-        // Creator of the Month banner handler
+        // Creator of the Month handler (non-edit mode — edit mode handled by cotm.js DOMContentLoaded)
         if (window.PAGE_MODE === "creator-of-the-month") {
-          const creatorOverlay = document.getElementById("creatorBannerOverlay");
-          if (creatorOverlay) {
-            creatorOverlay.classList.remove("hidden");
-            creatorOverlay.setAttribute("aria-hidden", "false");
-
-            const dismiss = () => {
-              creatorOverlay.classList.add("hidden");
-              creatorOverlay.setAttribute("aria-hidden", "true");
-              history.replaceState(null, '', '/');
-              window.PAGE_MODE = "";
-            };
-
-            const enterBtn = document.getElementById("creatorBannerEnterBtn");
-            if (enterBtn) enterBtn.addEventListener("click", dismiss);
-            creatorOverlay.addEventListener("click", (e) => {
-              if (e.target === creatorOverlay) dismiss();
-            });
+          var params = new URLSearchParams(window.location.search);
+          if (!params.get('code')) {
+            // Direct visit to /creator-of-the-month without edit code — open the card
+            if (typeof window.openCotmCard === 'function') {
+              window.openCotmCard();
+            }
           }
         }
       }

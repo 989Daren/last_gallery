@@ -7,7 +7,7 @@
 |----------|--------|---------|
 | `/` | GET | Main gallery page (supports `?art=<asset_id>` deep link for shared artwork) |
 | `/edit` | GET | Gallery page in edit mode — auto-opens edit banner, skips welcome |
-| `/creator-of-the-month` | GET | Gallery page with Creator of the Month coming-soon banner |
+| `/creator-of-the-month` | GET | Gallery page with Creator of the Month spotlight |
 | `/privacy` | GET | Privacy policy page |
 | `/api/wall_state` | GET | Get all tile assignments from database |
 | `/api/countdown_state` | GET | Get countdown timer state (with server-side auto-transitions) |
