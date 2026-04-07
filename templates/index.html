@@ -76,7 +76,7 @@
             <button id="menu-item-human-centric" role="menuitem">A Human Centric Gallery</button>
           </li>
           <li role="none">
-            <button id="menu-item-edit" role="menuitem">Edit Your Artwork or Exhibit</button>
+            <button id="menu-item-edit" role="menuitem">Edit Your Submission</button>
           </li>
           <li role="none" id="cotmMenuItem" class="hidden">
             <button id="menu-item-cotm" role="menuitem">&#9733; Creator of the Month</button>
@@ -370,11 +370,18 @@
       <div class="countdown-info-accent"></div>
       <div class="countdown-info-body edit-banner-body">
         <button id="editBannerCloseBtn" class="countdown-info-close" type="button" aria-label="Close">&times;</button>
-        <h3>Edit Your Artwork or Exhibit</h3>
-        <p class="edit-banner-intro">Once submitted, artwork becomes a permanent part of The Last Gallery time capsule. However, if you need to correct artist or artwork related information, you're welcome to do that here.</p>
+        <h3>Edit Your Submission</h3>
+        <p class="edit-banner-intro">Choose what you're editing:</p>
+        <div class="edit-type-selector" id="editTypeSelector">
+          <button type="button" class="edit-type-pill active" data-type="artwork">Artwork</button>
+          <button type="button" class="edit-type-pill" data-type="exhibit">Exhibit</button>
+          <button type="button" class="edit-type-pill" data-type="creator">Creator Profile</button>
+        </div>
         <div class="edit-code-section">
-          <label for="editTitleInput" class="edit-code-label">Artwork title <span class="edit-label-hint">or type "Exhibit"</span></label>
-          <input id="editTitleInput" type="text" maxlength="120" placeholder="Enter title" autocomplete="off" spellcheck="false" />
+          <div id="editTitleGroup">
+            <label for="editTitleInput" class="edit-code-label">Artwork title</label>
+            <input id="editTitleInput" type="text" maxlength="120" placeholder="Enter title" autocomplete="off" spellcheck="false" />
+          </div>
           <label for="editCodeInput" class="edit-code-label">Edit code sent to your email</label>
           <input id="editCodeInput" type="text" maxlength="8" placeholder="enter/paste your edit code here" autocomplete="off" spellcheck="false" />
           <div id="editCodeError" class="edit-code-error hidden">Invalid edit code. Please try again.</div>

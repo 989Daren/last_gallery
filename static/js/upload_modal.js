@@ -323,6 +323,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const cotmProfileExpandSection = document.getElementById("cotmProfileExpandSection");
   const cotmProfileError = document.getElementById("cotmProfileError");
   let _cotmPendingProfile = null; // Deferred profile data, flushed after metadata save
+  let _creatorEditCode = null; // Set when editing profile directly (not via upload flow)
 
   // Tier-3 confirmation banner refs
   const confirmBannerOverlay = document.getElementById("confirmBannerOverlay");
@@ -723,9 +724,14 @@ document.addEventListener("DOMContentLoaded", () => {
   function openCotmProfileOverlay() {
     if (!cotmProfileOverlay) return;
 
-    // Pre-fill medium from artwork metadata if profile medium is empty
-    if (cotmProfileMedium && !cotmProfileMedium.value.trim() && metaMediumInput) {
+    // Pre-fill medium from artwork metadata if profile medium is empty (upload flow only)
+    if (!_creatorEditCode && cotmProfileMedium && !cotmProfileMedium.value.trim() && metaMediumInput) {
       cotmProfileMedium.value = metaMediumInput.value || "";
+    }
+
+    // Adjust save button text based on context
+    if (cotmProfileSaveBtn) {
+      cotmProfileSaveBtn.textContent = _creatorEditCode ? "Save" : "Save & Enter";
     }
 
     cotmProfileOverlay.classList.remove("hidden");
@@ -743,6 +749,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!cotmProfileOverlay) return;
     cotmProfileOverlay.classList.add("hidden");
     cotmProfileOverlay.setAttribute("aria-hidden", "true");
+    _creatorEditCode = null;
     console.log(`${LOG_PREFIX} COTM profile overlay closed`);
   }
 
@@ -785,7 +792,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function saveCotmProfile() {
+  async function saveCotmProfile() {
     // Validate bio is required
     const bio = (cotmProfileBio?.value || "").trim();
     if (!bio) {
@@ -795,8 +802,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (cotmProfileError) cotmProfileError.classList.add("hidden");
 
-    // Always defer DB write — store in memory, flush after metadata save succeeds
-    _cotmPendingProfile = {
+    const profileData = {
       bio_text: bio,
       artist_location: (cotmProfileLocation?.value || "").trim(),
       medium_techniques: (cotmProfileMedium?.value || "").trim(),
@@ -804,6 +810,34 @@ document.addEventListener("DOMContentLoaded", () => {
       background_education: (cotmProfileEducation?.value || "").trim(),
       professional_highlights: (cotmProfileHighlights?.value || "").trim(),
     };
+
+    // Direct edit path (from edit banner) — save immediately
+    if (_creatorEditCode) {
+      if (cotmProfileSaveBtn) { cotmProfileSaveBtn.disabled = true; cotmProfileSaveBtn.textContent = "Saving..."; }
+      try {
+        const res = await fetch("/api/artist_profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: _creatorEditCode, ...profileData, cotm_opt_in: true })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          closeCotmProfileOverlay();
+          _creatorEditCode = null;
+          console.log(`${LOG_PREFIX} Creator profile saved directly`);
+        } else {
+          console.error(`${LOG_PREFIX} Creator profile save error:`, data.error);
+        }
+      } catch (err) {
+        console.error(`${LOG_PREFIX} Creator profile save failed:`, err);
+      } finally {
+        if (cotmProfileSaveBtn) { cotmProfileSaveBtn.disabled = false; cotmProfileSaveBtn.textContent = "Save & Enter"; }
+      }
+      return;
+    }
+
+    // Upload flow path — defer DB write until metadata save succeeds
+    _cotmPendingProfile = profileData;
     markCotmOptedIn();
     closeCotmProfileOverlay();
     console.log(`${LOG_PREFIX} COTM profile stored pending (will save after metadata)`);
@@ -1158,15 +1192,38 @@ document.addEventListener("DOMContentLoaded", () => {
   const editBannerContinueBtn = document.getElementById("editBannerContinueBtn");
   const menuItemEdit = document.getElementById("menu-item-edit");
   const editTitleInput = document.getElementById("editTitleInput");
+  const editTitleGroup = document.getElementById("editTitleGroup");
   const editCodeInput = document.getElementById("editCodeInput");
   const editCodeError = document.getElementById("editCodeError");
   const editCodeLabel = document.querySelector('label[for="editCodeInput"]');
-  const editTitleLabel = document.querySelector('label[for="editTitleInput"]');
+  const editTypeSelector = document.getElementById("editTypeSelector");
+  const editTypePills = editTypeSelector ? editTypeSelector.querySelectorAll(".edit-type-pill") : [];
+  let _editType = "artwork"; // "artwork" | "exhibit" | "creator"
   const forgotCodeLink = document.getElementById("forgotCodeLink");
   const resendCodeSection = document.getElementById("resendCodeSection");
   const resendEmailInput = document.getElementById("resendEmailInput");
   const resendCodeBtn = document.getElementById("resendCodeBtn");
   const resendCodeMsg = document.getElementById("resendCodeMsg");
+
+  function setEditType(type) {
+    _editType = type;
+    editTypePills.forEach(pill => {
+      pill.classList.toggle("active", pill.dataset.type === type);
+    });
+    // Show title input only for artwork; hide for exhibit and creator
+    if (editTitleGroup) {
+      editTitleGroup.classList.toggle("hidden", type !== "artwork");
+    }
+    if (editCodeError) editCodeError.classList.add("hidden");
+  }
+
+  // Wire segmented control
+  editTypePills.forEach(pill => {
+    pill.addEventListener("click", () => {
+      setEditType(pill.dataset.type);
+      if (editCodeInput) editCodeInput.focus();
+    });
+  });
 
   function openEditBanner() {
     if (!editBannerOverlay) return;
@@ -1179,22 +1236,26 @@ document.addEventListener("DOMContentLoaded", () => {
     if (resendEmailInput) resendEmailInput.value = "";
     if (resendCodeMsg) resendCodeMsg.classList.add("hidden");
 
-    // Admin mode: hide edit code field, change title field to accept tile ID
+    // Admin mode: hide segmented control, show tile ID field
     const adminMode = typeof window.isAdminActive === "function" && window.isAdminActive();
     if (adminMode) {
+      if (editTypeSelector) editTypeSelector.style.display = "none";
       if (editCodeLabel) editCodeLabel.style.display = "none";
       if (editCodeInput) editCodeInput.style.display = "none";
       if (forgotCodeLink) forgotCodeLink.style.display = "none";
+      if (editTitleGroup) editTitleGroup.classList.remove("hidden");
+      const editTitleLabel = document.querySelector('label[for="editTitleInput"]');
       if (editTitleLabel) editTitleLabel.textContent = "Tile ID";
       if (editTitleInput) {
         editTitleInput.placeholder = "Admin";
         editTitleInput.maxLength = 10;
       }
     } else {
+      if (editTypeSelector) editTypeSelector.style.display = "";
       if (editCodeLabel) editCodeLabel.style.display = "";
       if (editCodeInput) editCodeInput.style.display = "";
       if (forgotCodeLink) forgotCodeLink.style.display = "";
-      if (editTitleLabel) editTitleLabel.innerHTML = 'Artwork title <span class="edit-label-hint">or type &quot;Exhibit&quot;</span>';
+      setEditType("artwork");
       if (editTitleInput) {
         editTitleInput.placeholder = "Enter title";
         editTitleInput.maxLength = 120;
@@ -1204,7 +1265,8 @@ document.addEventListener("DOMContentLoaded", () => {
     editBannerOverlay.classList.remove("hidden");
     editBannerOverlay.setAttribute("aria-hidden", "false");
     setTimeout(() => {
-      if (editTitleInput) editTitleInput.focus();
+      const focusTarget = (_editType === "artwork" && editTitleInput) ? editTitleInput : editCodeInput;
+      if (focusTarget) focusTarget.focus();
     }, 100);
   }
 
@@ -1307,19 +1369,69 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Normal user path: artwork title + edit code
+      // Normal user path — route based on selected edit type
       const code = (editCodeInput?.value || "").trim();
 
-      if (!title || !code) {
-        if (editCodeError) {
-          editCodeError.textContent = "Please enter both your artwork title and edit code.";
-          editCodeError.classList.remove("hidden");
+      // Creator Profile path: only needs edit code
+      if (_editType === "creator") {
+        if (!code) {
+          if (editCodeError) {
+            editCodeError.textContent = "Please enter your edit code.";
+            editCodeError.classList.remove("hidden");
+          }
+          return;
+        }
+        try {
+          editBannerContinueBtn.disabled = true;
+          const res = await fetch("/api/artist_profile?code=" + encodeURIComponent(code));
+          const result = await res.json();
+          if (!result.ok) {
+            if (editCodeError) {
+              editCodeError.textContent = result.error || "Invalid edit code.";
+              editCodeError.classList.remove("hidden");
+            }
+            return;
+          }
+          if (!result.profile) {
+            if (editCodeError) {
+              editCodeError.textContent = "No creator profile found. Opt in when uploading artwork.";
+              editCodeError.classList.remove("hidden");
+            }
+            return;
+          }
+          // Prefill the profile overlay and open it
+          const p = result.profile;
+          if (cotmProfileBio) cotmProfileBio.value = p.bio_text || "";
+          if (cotmProfileLocation) cotmProfileLocation.value = p.artist_location || "";
+          if (cotmProfileMedium) cotmProfileMedium.value = p.medium_techniques || "";
+          if (cotmProfileFocus) cotmProfileFocus.value = p.artistic_focus || "";
+          if (cotmProfileEducation) cotmProfileEducation.value = p.background_education || "";
+          if (cotmProfileHighlights) cotmProfileHighlights.value = p.professional_highlights || "";
+          // Store code for saving
+          _creatorEditCode = code;
+          closeEditBanner();
+          openCotmProfileOverlay();
+        } catch (err) {
+          console.error(`${LOG_PREFIX} Creator profile lookup error:`, err);
+          if (editCodeError) {
+            editCodeError.textContent = "Lookup failed. Please try again.";
+            editCodeError.classList.remove("hidden");
+          }
+        } finally {
+          editBannerContinueBtn.disabled = false;
         }
         return;
       }
 
-      // "Exhibit" keyword → open exhibit dashboard
-      if (title.toLowerCase() === 'exhibit') {
+      // Exhibit path: only needs edit code
+      if (_editType === "exhibit") {
+        if (!code) {
+          if (editCodeError) {
+            editCodeError.textContent = "Please enter your edit code.";
+            editCodeError.classList.remove("hidden");
+          }
+          return;
+        }
         try {
           editBannerContinueBtn.disabled = true;
           const res = await fetch('/api/my_artworks', {
@@ -1354,6 +1466,15 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         } finally {
           editBannerContinueBtn.disabled = false;
+        }
+        return;
+      }
+
+      // Artwork path: needs title + edit code
+      if (!title || !code) {
+        if (editCodeError) {
+          editCodeError.textContent = "Please enter both your artwork title and edit code.";
+          editCodeError.classList.remove("hidden");
         }
         return;
       }

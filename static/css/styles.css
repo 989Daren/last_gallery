@@ -1701,7 +1701,41 @@ label {
   font-size: 0.85rem;
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.65);
-  margin: 0 0 4px;
+  margin: 0 0 12px;
+}
+
+/* Edit type segmented control */
+.edit-type-selector {
+  display: flex;
+  gap: 0;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 14px;
+}
+.edit-type-pill {
+  flex: 1;
+  padding: 7px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #888;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+.edit-type-pill:hover {
+  color: #ccc;
+}
+.edit-type-pill.active {
+  background: rgba(212, 168, 67, 0.2);
+  color: #D4A843;
+}
+#editTitleGroup.hidden {
+  display: none;
 }
 
 .edit-banner-actions {
