@@ -620,7 +620,11 @@ def send_edit_code(email, code, artwork_title=""):
         f'{EMAIL_LOGO_HTML}'
         f'{artwork_line_html}'
         f'<p style="font-size:18px;"><strong>Your Edit Code:</strong> {html_mod.escape(code)}</p>'
-        "<p>If you need to edit your artwork's information, copy and paste your Edit Code into the link below.</p>"
+        '<p style="margin-top:16px; padding:12px; background:#1a1a1a; border:1px solid #333; '
+        'border-radius:6px; font-size:14px; color:#ccc;">'
+        '<strong style="color:#D4A843;">Shortcut Tip:</strong> On the device you uploaded from, '
+        'just click your new artwork tile and an "edit" button is available near the bottom &mdash; no code needed.</p>'
+        "<p>If you need to edit from another device, copy and paste your Edit Code into the link below.</p>"
         f'<p><a href="{html_mod.escape(edit_link)}">{html_mod.escape(edit_link)}</a></p>'
         '<hr style="margin:24px 0;">'
         '<p style="font-size:16px;"><strong>Unlocked artwork is eligible for '
@@ -632,7 +636,9 @@ def send_edit_code(email, code, artwork_title=""):
     plain_body = (
         f"{artwork_line_plain}"
         f"Your Edit Code: {code}\n\n"
-        "If you need to edit your artwork's information, copy and paste your Edit Code into the link below.\n"
+        "Shortcut Tip: On the device you uploaded from, just click your new artwork tile "
+        "and an \"edit\" button is available near the bottom -- no code needed.\n\n"
+        "If you need to edit from another device, copy and paste your Edit Code into the link below.\n"
         f"{edit_link}\n\n"
         "---\n\n"
         "Unlocked artwork is eligible for The Last Gallery's Creator of the Month!\n"
@@ -3428,6 +3434,10 @@ def get_cotm():
         conn.close()
         return jsonify({"ok": True, "active": False})
 
+    # Profile data from artist_profiles (single source of truth)
+    cursor.execute("SELECT * FROM artist_profiles WHERE email = ?", (cotm["email"],))
+    profile = cursor.fetchone()
+
     excluded = json.loads(cotm["excluded_asset_ids"] or "[]")
     cursor.execute(
         "SELECT asset_id, artist_name, artwork_title, tile_url, popup_url, "
@@ -3468,13 +3478,13 @@ def get_cotm():
             "id": cotm["id"],
             "month": cotm["month"],
             "artist_name": cotm["artist_name"],
-            "bio_text": cotm["bio_text"],
-            "bio_photo_url": cotm["bio_photo_url"],
-            "artist_location": cotm["artist_location"],
-            "medium_techniques": cotm["medium_techniques"],
-            "artistic_focus": cotm["artistic_focus"],
-            "background_education": cotm["background_education"],
-            "professional_highlights": cotm["professional_highlights"],
+            "bio_text": profile["bio_text"] if profile else "",
+            "bio_photo_url": profile["bio_photo_url"] if profile else None,
+            "artist_location": profile["artist_location"] if profile else "",
+            "medium_techniques": profile["medium_techniques"] if profile else "",
+            "artistic_focus": profile["artistic_focus"] if profile else "",
+            "background_education": profile["background_education"] if profile else "",
+            "professional_highlights": profile["professional_highlights"] if profile else "",
             "selected_at": cotm["selected_at"],
         },
         "artworks": artworks,
@@ -3514,8 +3524,7 @@ def admin_cotm_select():
         "INSERT INTO creator_of_the_month (month, artist_name, email, selected_at, updated_at) "
         "VALUES (?, ?, ?, datetime('now'), datetime('now')) "
         "ON CONFLICT(month) DO UPDATE SET artist_name=excluded.artist_name, email=excluded.email, "
-        "bio_text='', bio_photo_url=NULL, artist_location='', excluded_asset_ids='[]', "
-        "selected_at=datetime('now'), updated_at=datetime('now')",
+        "excluded_asset_ids='[]', selected_at=datetime('now'), updated_at=datetime('now')",
         (month, artist_name, email)
     )
     conn.commit()
@@ -3542,6 +3551,10 @@ def get_cotm_edit():
     if not email or not cotm:
         conn.close()
         return jsonify({"ok": False, "error": "Invalid edit code or no active COTM."}), 403
+
+    # Profile data from artist_profiles (single source of truth)
+    cursor.execute("SELECT * FROM artist_profiles WHERE email = ?", (email,))
+    profile = cursor.fetchone()
 
     excluded = json.loads(cotm["excluded_asset_ids"] or "[]")
 
@@ -3570,13 +3583,13 @@ def get_cotm_edit():
             "id": cotm["id"],
             "month": cotm["month"],
             "artist_name": cotm["artist_name"],
-            "bio_text": cotm["bio_text"],
-            "bio_photo_url": cotm["bio_photo_url"],
-            "artist_location": cotm["artist_location"],
-            "medium_techniques": cotm["medium_techniques"],
-            "artistic_focus": cotm["artistic_focus"],
-            "background_education": cotm["background_education"],
-            "professional_highlights": cotm["professional_highlights"],
+            "bio_text": profile["bio_text"] if profile else "",
+            "bio_photo_url": profile["bio_photo_url"] if profile else None,
+            "artist_location": profile["artist_location"] if profile else "",
+            "medium_techniques": profile["medium_techniques"] if profile else "",
+            "artistic_focus": profile["artistic_focus"] if profile else "",
+            "background_education": profile["background_education"] if profile else "",
+            "professional_highlights": profile["professional_highlights"] if profile else "",
         },
         "artworks": artworks,
     })
@@ -3605,13 +3618,25 @@ def save_cotm_profile():
         excluded_ids = []
     excluded_ids = [int(x) for x in excluded_ids if isinstance(x, (int, float))]
 
+    # Update artwork exclusions on the COTM record
     cursor.execute(
-        "UPDATE creator_of_the_month SET bio_text = ?, artist_location = ?, "
-        "medium_techniques = ?, artistic_focus = ?, background_education = ?, "
-        "professional_highlights = ?, excluded_asset_ids = ?, updated_at = datetime('now') WHERE id = ?",
-        (bio_text, artist_location, medium_techniques, artistic_focus,
-         background_education, professional_highlights, json.dumps(excluded_ids), cotm["id"])
+        "UPDATE creator_of_the_month SET excluded_asset_ids = ?, updated_at = datetime('now') WHERE id = ?",
+        (json.dumps(excluded_ids), cotm["id"])
     )
+
+    # Profile data goes to artist_profiles (single source of truth)
+    cursor.execute(
+        "INSERT INTO artist_profiles (email, bio_text, artist_location, medium_techniques, "
+        "artistic_focus, background_education, professional_highlights, cotm_opt_in) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 1) "
+        "ON CONFLICT(email) DO UPDATE SET bio_text=excluded.bio_text, "
+        "artist_location=excluded.artist_location, medium_techniques=excluded.medium_techniques, "
+        "artistic_focus=excluded.artistic_focus, background_education=excluded.background_education, "
+        "professional_highlights=excluded.professional_highlights, updated_at=datetime('now')",
+        (email, bio_text, artist_location, medium_techniques, artistic_focus,
+         background_education, professional_highlights)
+    )
+
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -3636,12 +3661,17 @@ def upload_cotm_photo():
         conn.close()
         return jsonify({"ok": False, "error": "Empty file."}), 400
 
+    # Get existing photo URL from artist_profiles for cleanup
+    cursor.execute("SELECT bio_photo_url FROM artist_profiles WHERE email = ?", (email,))
+    profile_row = cursor.fetchone()
+    old_photo = profile_row["bio_photo_url"] if profile_row else None
+
     cotm_id = cotm["id"]
     cotm_dir = os.path.join(UPLOAD_DIR, 'cotm', str(cotm_id))
     os.makedirs(cotm_dir, exist_ok=True)
 
     # Delete old photo
-    _delete_upload_files(cotm["bio_photo_url"])
+    _delete_upload_files(old_photo)
 
     filename = f"headshot_{uuid.uuid4().hex[:12]}.jpg"
     filepath = os.path.join(cotm_dir, filename)
@@ -3656,13 +3686,98 @@ def upload_cotm_photo():
             f.write(thumb_buf.getvalue())
 
     photo_url = f'/uploads/cotm/{cotm_id}/{filename}'
+    # Photo URL stored in artist_profiles (single source of truth)
     cursor.execute(
-        "UPDATE creator_of_the_month SET bio_photo_url = ?, updated_at = datetime('now') WHERE id = ?",
-        (photo_url, cotm_id)
+        "UPDATE artist_profiles SET bio_photo_url = ?, updated_at = datetime('now') WHERE email = ?",
+        (photo_url, email)
     )
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "photo_url": photo_url})
+
+
+# ========================================
+# Artist Profile (COTM opt-in)
+# ========================================
+
+@app.route("/api/artist_profile", methods=["GET"])
+def get_artist_profile():
+    """Authenticated: return artist profile for COTM opt-in editing."""
+    code = (request.args.get("code") or "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "Edit code required."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 403
+
+    email = code_row["email"].lower()
+    cursor.execute("SELECT * FROM artist_profiles WHERE email = ?", (email,))
+    profile = cursor.fetchone()
+    conn.close()
+
+    if not profile:
+        return jsonify({"ok": True, "profile": None})
+
+    return jsonify({
+        "ok": True,
+        "profile": {
+            "bio_text": profile["bio_text"],
+            "artist_location": profile["artist_location"],
+            "medium_techniques": profile["medium_techniques"],
+            "artistic_focus": profile["artistic_focus"],
+            "background_education": profile["background_education"],
+            "professional_highlights": profile["professional_highlights"],
+            "cotm_opt_in": profile["cotm_opt_in"],
+        },
+    })
+
+
+@app.route("/api/artist_profile", methods=["POST"])
+def save_artist_profile():
+    """Authenticated: save artist profile (COTM opt-in + bio fields)."""
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "Edit code required."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email FROM edit_codes WHERE code = ?", (code,))
+    code_row = cursor.fetchone()
+    if not code_row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Invalid edit code."}), 403
+
+    email = code_row["email"].lower()
+
+    bio_text = (data.get("bio_text") or "").strip()[:500]
+    artist_location = (data.get("artist_location") or "").strip()[:100]
+    medium_techniques = (data.get("medium_techniques") or "").strip()[:200]
+    artistic_focus = (data.get("artistic_focus") or "").strip()[:1000]
+    background_education = (data.get("background_education") or "").strip()[:1000]
+    professional_highlights = (data.get("professional_highlights") or "").strip()[:1000]
+    cotm_opt_in = 1 if data.get("cotm_opt_in", True) else 0
+
+    cursor.execute(
+        "INSERT INTO artist_profiles (email, bio_text, artist_location, medium_techniques, "
+        "artistic_focus, background_education, professional_highlights, cotm_opt_in) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(email) DO UPDATE SET bio_text=excluded.bio_text, "
+        "artist_location=excluded.artist_location, medium_techniques=excluded.medium_techniques, "
+        "artistic_focus=excluded.artistic_focus, background_education=excluded.background_education, "
+        "professional_highlights=excluded.professional_highlights, cotm_opt_in=excluded.cotm_opt_in, "
+        "updated_at=datetime('now')",
+        (email, bio_text, artist_location, medium_techniques, artistic_focus,
+         background_education, professional_highlights, cotm_opt_in)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

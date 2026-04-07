@@ -274,6 +274,17 @@
           </label>
         </div>
 
+        <!-- COTM opt-in button -->
+        <div id="cotmOptInSection" class="cotm-optin-section">
+          <button id="cotmOptInBtn" type="button" class="cotm-optin-btn">
+            <span class="cotm-optin-btn-icon">&#9733;&#xFE0F;</span>
+            <span class="cotm-optin-btn-text">
+              <span id="cotmOptInLabel" class="cotm-optin-label">Enter Creator of the Month Drawing</span>
+              <span class="cotm-optin-sub">One artist spotlighted monthly to every visitor</span>
+            </span>
+          </button>
+        </div>
+
         <div id="metaError" class="error-text hidden"></div>
       </div>
 
@@ -296,6 +307,58 @@
         <div class="confirm-banner-actions">
           <button id="confirmCancelBtn" type="button" class="secondary-btn">Cancel</button>
           <button id="confirmSaveBtn" type="button" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tier-3: COTM Opt-In Profile Overlay (overlays Tier-2 metadata modal) -->
+  <div id="cotmProfileOverlay" class="confirm-banner-overlay hidden" aria-hidden="true">
+    <div class="cotm-profile-card" role="dialog" aria-modal="true">
+      <div class="confirm-accent"></div>
+      <button id="cotmProfileCloseBtn" type="button" class="close-btn" aria-label="Close">&times;</button>
+      <div class="cotm-profile-body">
+        <h2 class="cotm-profile-heading">Creator of the Month</h2>
+        <p class="cotm-profile-sub">Tell visitors about yourself. If selected, this appears in your spotlight.</p>
+
+        <div class="cotm-profile-field">
+          <label class="cotm-profile-label" for="cotmProfileBio">Bio / Artist Statement <span class="required-mark">*</span></label>
+          <textarea id="cotmProfileBio" class="cotm-profile-textarea" placeholder="Tell visitors about yourself and your work" maxlength="500" rows="4"></textarea>
+        </div>
+
+        <div class="cotm-profile-field">
+          <label class="cotm-profile-label" for="cotmProfileLocation">Location</label>
+          <input type="text" id="cotmProfileLocation" class="cotm-profile-input" placeholder="e.g. Brooklyn, NY" maxlength="100" />
+        </div>
+
+        <a href="javascript:void(0)" id="cotmProfileExpandLink" class="cotm-profile-expand-link">More about you (optional)</a>
+
+        <div id="cotmProfileExpandSection" class="cotm-profile-expand hidden">
+          <div class="cotm-profile-field">
+            <label class="cotm-profile-label" for="cotmProfileMedium">Medium / Techniques</label>
+            <input type="text" id="cotmProfileMedium" class="cotm-profile-input" placeholder="e.g. Oil, watercolor, mixed media" maxlength="200" />
+          </div>
+          <div class="cotm-profile-field">
+            <label class="cotm-profile-label" for="cotmProfileFocus">Artistic Focus</label>
+            <textarea id="cotmProfileFocus" class="cotm-profile-textarea" placeholder="Your style, subject matter, and themes" maxlength="1000" rows="3"></textarea>
+          </div>
+          <div class="cotm-profile-field">
+            <label class="cotm-profile-label" for="cotmProfileEducation">Background / Education</label>
+            <textarea id="cotmProfileEducation" class="cotm-profile-textarea" placeholder="Artistic training, degrees, or how you developed your skills" maxlength="1000" rows="3"></textarea>
+          </div>
+          <div class="cotm-profile-field">
+            <label class="cotm-profile-label" for="cotmProfileHighlights">Professional Highlights</label>
+            <textarea id="cotmProfileHighlights" class="cotm-profile-textarea" placeholder="Awards, residencies, exhibitions, collections, press" maxlength="1000" rows="3"></textarea>
+          </div>
+        </div>
+
+        <div id="cotmProfileError" class="required-error hidden" style="margin-top:8px; font-size:0.85rem;">
+          A bio / artist statement is required to enter the drawing.
+        </div>
+
+        <div class="cotm-profile-actions">
+          <button id="cotmProfileCancelBtn" type="button" class="secondary-btn">Cancel</button>
+          <button id="cotmProfileSaveBtn" type="button" class="primary-btn">Save &amp; Enter</button>
         </div>
       </div>
     </div>

@@ -1845,6 +1845,132 @@ label {
   flex-shrink: 0;
 }
 
+/* ===== COTM Opt-In Button (in metadata modal) ===== */
+.cotm-optin-section {
+  margin-top: 18px;
+}
+.cotm-optin-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s, border-color 0.2s;
+}
+.cotm-optin-btn:hover {
+  background: rgba(212, 168, 67, 0.14);
+  border-color: rgba(212, 168, 67, 0.5);
+}
+.cotm-optin-btn.cotm-optin-entered {
+  border-color: rgba(212, 168, 67, 0.5);
+  background: rgba(212, 168, 67, 0.12);
+}
+.cotm-optin-btn-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.cotm-optin-btn-text {
+  display: flex;
+  flex-direction: column;
+}
+.cotm-optin-label {
+  font-size: 0.9rem;
+  color: #D4A843;
+  font-weight: 600;
+}
+.cotm-optin-sub {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 2px;
+}
+
+/* ===== COTM Profile Overlay (Tier-3, over metadata modal) ===== */
+.cotm-profile-card {
+  position: relative;
+  background: #111;
+  border-radius: 12px;
+  max-width: 420px;
+  width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+.cotm-profile-card > .close-btn {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 2;
+}
+.cotm-profile-body {
+  padding: 24px 20px 16px;
+}
+.cotm-profile-heading {
+  font-size: 15px;
+  color: #D4A843;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.cotm-profile-sub {
+  font-size: 0.8rem;
+  color: #888;
+  margin: 0 0 16px;
+}
+.cotm-profile-field {
+  margin-bottom: 14px;
+}
+.cotm-profile-label {
+  display: block;
+  font-size: 0.8rem;
+  color: #999;
+  margin-bottom: 4px;
+}
+.cotm-profile-input,
+.cotm-profile-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #ddd;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+.cotm-profile-input:focus,
+.cotm-profile-textarea:focus {
+  border-color: #D4A843;
+  outline: none;
+}
+.cotm-profile-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+.cotm-profile-expand-link {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: #D4A843;
+  text-decoration: none;
+  margin-bottom: 14px;
+}
+.cotm-profile-expand-link:hover {
+  text-decoration: underline;
+}
+.cotm-profile-expand.hidden {
+  display: none;
+}
+.cotm-profile-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.cotm-profile-actions button {
+  flex: 1;
+}
+
 /* Modal overlay (shown by default unless .hidden is present) */
 .modalOverlay {
   position: fixed;

@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 22
 
 
 def get_db():
@@ -470,6 +470,50 @@ def init_db():
             cursor.execute(f"ALTER TABLE creator_of_the_month ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
         _set_schema_version(cursor, 20)
         print("Migration 20 complete: COTM profile detail columns added")
+
+    if current_version < 21:
+        print("Applying migration 21: artist_profiles table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS artist_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                bio_text TEXT NOT NULL DEFAULT '',
+                artist_location TEXT NOT NULL DEFAULT '',
+                medium_techniques TEXT NOT NULL DEFAULT '',
+                artistic_focus TEXT NOT NULL DEFAULT '',
+                background_education TEXT NOT NULL DEFAULT '',
+                professional_highlights TEXT NOT NULL DEFAULT '',
+                bio_photo_url TEXT,
+                cotm_opt_in INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        _set_schema_version(cursor, 21)
+        print("Migration 21 complete: artist_profiles table created")
+
+    if current_version < 22:
+        print("Applying migration 22: slim creator_of_the_month (drop profile columns)...")
+        cursor.execute("""
+            CREATE TABLE creator_of_the_month_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                month TEXT NOT NULL UNIQUE,
+                artist_name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                excluded_asset_ids TEXT NOT NULL DEFAULT '[]',
+                selected_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO creator_of_the_month_new (id, month, artist_name, email, excluded_asset_ids, selected_at, updated_at)
+            SELECT id, month, artist_name, email, excluded_asset_ids, selected_at, updated_at
+            FROM creator_of_the_month
+        """)
+        cursor.execute("DROP TABLE creator_of_the_month")
+        cursor.execute("ALTER TABLE creator_of_the_month_new RENAME TO creator_of_the_month")
+        _set_schema_version(cursor, 22)
+        print("Migration 22 complete: profile columns removed from creator_of_the_month")
 
     conn.commit()
     conn.close()

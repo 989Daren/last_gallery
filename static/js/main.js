@@ -620,13 +620,13 @@ const ConicalNav = {
     for (const entry of _dismissibleRegistry) {
       if (entry.hashName && entry.isOpen()) return "#" + entry.hashName;
     }
-    // Non-registry full-screen overlays
+    // Non-registry full-screen overlays (exclusive — can't layer with art)
     if (this.isUnlockOpen()) return "#unlock";
     if (this.isUploadOpen()) return "#upload";
-    if (this.isCotmOpen()) return "#cotm";
 
-    // Build compound hash for popup layers
+    // Build compound hash for layered states: #cotm, #cotm/art, #cotm/art/ribbon
     const parts = [];
+    if (this.isCotmOpen()) parts.push("cotm");
     if (this.isExhibitViewOpen()) parts.push("exhibitview");
     if (this.isArtOpen()) parts.push("art");
     if (this.isRibbonOpen()) parts.push("ribbon");

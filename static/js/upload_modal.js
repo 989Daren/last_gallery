@@ -306,6 +306,24 @@ document.addEventListener("DOMContentLoaded", () => {
   const metaUnlockCheckbox = document.getElementById("metaUnlockCheckbox");
   let _editOriginalUnlocked = false; // Track original value to detect changes
 
+  // COTM opt-in refs
+  const cotmOptInBtn = document.getElementById("cotmOptInBtn");
+  const cotmOptInLabel = document.getElementById("cotmOptInLabel");
+  const cotmProfileOverlay = document.getElementById("cotmProfileOverlay");
+  const cotmProfileCloseBtn = document.getElementById("cotmProfileCloseBtn");
+  const cotmProfileCancelBtn = document.getElementById("cotmProfileCancelBtn");
+  const cotmProfileSaveBtn = document.getElementById("cotmProfileSaveBtn");
+  const cotmProfileBio = document.getElementById("cotmProfileBio");
+  const cotmProfileLocation = document.getElementById("cotmProfileLocation");
+  const cotmProfileMedium = document.getElementById("cotmProfileMedium");
+  const cotmProfileFocus = document.getElementById("cotmProfileFocus");
+  const cotmProfileEducation = document.getElementById("cotmProfileEducation");
+  const cotmProfileHighlights = document.getElementById("cotmProfileHighlights");
+  const cotmProfileExpandLink = document.getElementById("cotmProfileExpandLink");
+  const cotmProfileExpandSection = document.getElementById("cotmProfileExpandSection");
+  const cotmProfileError = document.getElementById("cotmProfileError");
+  let _cotmPendingProfile = null; // Deferred profile data, flushed after metadata save
+
   // Tier-3 confirmation banner refs
   const confirmBannerOverlay = document.getElementById("confirmBannerOverlay");
   const confirmCancelBtn = document.getElementById("confirmCancelBtn");
@@ -419,6 +437,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (metaUnlockCheckbox) metaUnlockCheckbox.checked = false;
     _editOriginalUnlocked = false;
 
+    // Reset COTM opt-in state for new uploads
+    resetCotmOptInState();
+    _cotmPendingProfile = null;
+
     // Show overlay
     metaOverlay.classList.remove("hidden");
     metaOverlay.setAttribute("aria-hidden", "false");
@@ -503,6 +525,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (metaSkipBtn) {
         metaSkipBtn.disabled = true;
         metaSkipBtn.classList.add("edit-mode-disabled");
+      }
+
+      // Reset and fetch COTM opt-in profile if artist has an edit code
+      resetCotmOptInState();
+      _cotmPendingProfile = null;
+      const editEmail = (data.contact1_value || "").trim().toLowerCase();
+      if (editEmail) {
+        try {
+          const map = JSON.parse(localStorage.getItem("tlg_edit_codes") || "{}");
+          const ec = map[editEmail];
+          if (ec) fetchAndPrefillProfile(ec);
+        } catch (e) {}
       }
 
       // Show overlay
@@ -683,6 +717,166 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ========================================
+  // COTM Opt-In Profile Overlay
+  // ========================================
+
+  function openCotmProfileOverlay() {
+    if (!cotmProfileOverlay) return;
+
+    // Pre-fill medium from artwork metadata if profile medium is empty
+    if (cotmProfileMedium && !cotmProfileMedium.value.trim() && metaMediumInput) {
+      cotmProfileMedium.value = metaMediumInput.value || "";
+    }
+
+    cotmProfileOverlay.classList.remove("hidden");
+    cotmProfileOverlay.setAttribute("aria-hidden", "false");
+    if (cotmProfileError) cotmProfileError.classList.add("hidden");
+
+    setTimeout(() => {
+      if (cotmProfileBio) cotmProfileBio.focus();
+    }, 100);
+
+    console.log(`${LOG_PREFIX} COTM profile overlay opened`);
+  }
+
+  function closeCotmProfileOverlay() {
+    if (!cotmProfileOverlay) return;
+    cotmProfileOverlay.classList.add("hidden");
+    cotmProfileOverlay.setAttribute("aria-hidden", "true");
+    console.log(`${LOG_PREFIX} COTM profile overlay closed`);
+  }
+
+  function resetCotmOptInState() {
+    if (cotmOptInBtn) cotmOptInBtn.classList.remove("cotm-optin-entered");
+    if (cotmOptInLabel) cotmOptInLabel.textContent = "Enter Creator of the Month Drawing";
+    if (cotmProfileBio) cotmProfileBio.value = "";
+    if (cotmProfileLocation) cotmProfileLocation.value = "";
+    if (cotmProfileMedium) cotmProfileMedium.value = "";
+    if (cotmProfileFocus) cotmProfileFocus.value = "";
+    if (cotmProfileEducation) cotmProfileEducation.value = "";
+    if (cotmProfileHighlights) cotmProfileHighlights.value = "";
+    if (cotmProfileExpandSection) cotmProfileExpandSection.classList.add("hidden");
+    if (cotmProfileExpandLink) cotmProfileExpandLink.textContent = "More about you (optional)";
+    if (cotmProfileError) cotmProfileError.classList.add("hidden");
+  }
+
+  function markCotmOptedIn() {
+    if (cotmOptInBtn) cotmOptInBtn.classList.add("cotm-optin-entered");
+    if (cotmOptInLabel) cotmOptInLabel.textContent = "Entered \u2714";
+  }
+
+  async function fetchAndPrefillProfile(editCode) {
+    if (!editCode) return;
+    try {
+      const res = await fetch("/api/artist_profile?code=" + encodeURIComponent(editCode));
+      const data = await res.json();
+      if (data.ok && data.profile) {
+        const p = data.profile;
+        if (cotmProfileBio) cotmProfileBio.value = p.bio_text || "";
+        if (cotmProfileLocation) cotmProfileLocation.value = p.artist_location || "";
+        if (cotmProfileMedium) cotmProfileMedium.value = p.medium_techniques || "";
+        if (cotmProfileFocus) cotmProfileFocus.value = p.artistic_focus || "";
+        if (cotmProfileEducation) cotmProfileEducation.value = p.background_education || "";
+        if (cotmProfileHighlights) cotmProfileHighlights.value = p.professional_highlights || "";
+        if (p.cotm_opt_in) markCotmOptedIn();
+      }
+    } catch (err) {
+      console.error(`${LOG_PREFIX} Failed to fetch artist profile:`, err);
+    }
+  }
+
+  function saveCotmProfile() {
+    // Validate bio is required
+    const bio = (cotmProfileBio?.value || "").trim();
+    if (!bio) {
+      if (cotmProfileError) cotmProfileError.classList.remove("hidden");
+      if (cotmProfileBio) cotmProfileBio.focus();
+      return;
+    }
+    if (cotmProfileError) cotmProfileError.classList.add("hidden");
+
+    // Always defer DB write — store in memory, flush after metadata save succeeds
+    _cotmPendingProfile = {
+      bio_text: bio,
+      artist_location: (cotmProfileLocation?.value || "").trim(),
+      medium_techniques: (cotmProfileMedium?.value || "").trim(),
+      artistic_focus: (cotmProfileFocus?.value || "").trim(),
+      background_education: (cotmProfileEducation?.value || "").trim(),
+      professional_highlights: (cotmProfileHighlights?.value || "").trim(),
+    };
+    markCotmOptedIn();
+    closeCotmProfileOverlay();
+    console.log(`${LOG_PREFIX} COTM profile stored pending (will save after metadata)`);
+  }
+
+  async function flushPendingCotmProfile(editCode) {
+    if (!_cotmPendingProfile || !editCode) return;
+    const profile = _cotmPendingProfile;
+    _cotmPendingProfile = null;
+    try {
+      await fetch("/api/artist_profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: editCode,
+          bio_text: profile.bio_text,
+          artist_location: profile.artist_location,
+          medium_techniques: profile.medium_techniques,
+          artistic_focus: profile.artistic_focus,
+          background_education: profile.background_education,
+          professional_highlights: profile.professional_highlights,
+          cotm_opt_in: true,
+        })
+      });
+      console.log(`${LOG_PREFIX} Pending COTM profile flushed`);
+    } catch (err) {
+      console.error(`${LOG_PREFIX} Failed to flush pending COTM profile:`, err);
+    }
+  }
+
+  // Wire COTM opt-in button
+  if (cotmOptInBtn) {
+    cotmOptInBtn.addEventListener("click", () => {
+      openCotmProfileOverlay();
+    });
+  }
+
+  // Wire profile overlay close/cancel
+  if (cotmProfileCloseBtn) {
+    cotmProfileCloseBtn.addEventListener("click", closeCotmProfileOverlay);
+  }
+  if (cotmProfileCancelBtn) {
+    cotmProfileCancelBtn.addEventListener("click", closeCotmProfileOverlay);
+  }
+
+  // Wire profile save
+  if (cotmProfileSaveBtn) {
+    cotmProfileSaveBtn.addEventListener("click", () => {
+      saveCotmProfile();
+    });
+  }
+
+  // Wire expand/collapse link
+  if (cotmProfileExpandLink) {
+    cotmProfileExpandLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!cotmProfileExpandSection) return;
+      const isHidden = cotmProfileExpandSection.classList.contains("hidden");
+      cotmProfileExpandSection.classList.toggle("hidden");
+      cotmProfileExpandLink.textContent = isHidden ? "Less" : "More about you (optional)";
+    });
+  }
+
+  // Live validation: hide bio error as user types
+  if (cotmProfileBio) {
+    cotmProfileBio.addEventListener("input", () => {
+      if (cotmProfileBio.value.trim() && cotmProfileError) {
+        cotmProfileError.classList.add("hidden");
+      }
+    });
+  }
+
+  // ========================================
   // Save metadata to DB (called after confirmation)
   // ========================================
 
@@ -760,6 +954,11 @@ document.addEventListener("DOMContentLoaded", () => {
       // Store edit code in localStorage for ownership detection (skip admin edits)
       if (result.edit_code && !adminActive && typeof window.storeEditCode === 'function') {
         window.storeEditCode(result.edit_code, result.contact1_value || '');
+      }
+
+      // Flush pending COTM profile if artist opted in during first upload
+      if (result.edit_code && _cotmPendingProfile) {
+        flushPendingCotmProfile(result.edit_code);
       }
 
       // If admin changed unlock status, set it explicitly via force_unlock endpoint

@@ -123,12 +123,14 @@ def select():
     )
     recent_winners = {row["artist_name"].lower() for row in cursor.fetchall()}
 
-    # Get all eligible artists: at least one unlocked artwork, not admin
+    # Get all eligible artists: at least one unlocked artwork, not admin, opted in via artist_profiles
     cursor.execute("""
-        SELECT DISTINCT artist_name
-        FROM assets
-        WHERE unlocked = 1
-          AND artist_name COLLATE NOCASE != ?
+        SELECT DISTINCT a.artist_name
+        FROM assets a
+        JOIN artist_profiles ap ON LOWER(TRIM(a.contact1_value)) = ap.email
+        WHERE a.unlocked = 1
+          AND ap.cotm_opt_in = 1
+          AND a.artist_name COLLATE NOCASE != ?
     """, (ADMIN_ARTIST_NAME,))
     all_eligible = [row["artist_name"] for row in cursor.fetchall()]
 
@@ -163,13 +165,12 @@ def select():
         return
     email = email_row["email"]
 
-    # Insert or replace COTM record
+    # Insert or replace COTM record (profile data lives in artist_profiles)
     cursor.execute(
         "INSERT INTO creator_of_the_month (month, artist_name, email, selected_at, updated_at) "
         "VALUES (?, ?, ?, datetime('now'), datetime('now')) "
         "ON CONFLICT(month) DO UPDATE SET artist_name=excluded.artist_name, email=excluded.email, "
-        "bio_text='', bio_photo_url=NULL, artist_location='', excluded_asset_ids='[]', "
-        "selected_at=datetime('now'), updated_at=datetime('now')",
+        "excluded_asset_ids='[]', selected_at=datetime('now'), updated_at=datetime('now')",
         (current_month, winner, email)
     )
     conn.commit()
