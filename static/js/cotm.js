@@ -279,7 +279,7 @@
 
     _overlay.innerHTML =
       '<div class="cotm-container">' +
-        '<div class="cotm-welcome">&#9733; Creator of the Month</div>' +
+        '<div class="cotm-welcome"><img src="/static/images/logo_email.png" class="cotm-welcome-logo" alt=""> Creator of the Month</div>' +
         '<div class="cotm-card">' +
           '<div class="cotm-accent"></div>' +
           '<button class="cotm-close" aria-label="Close">&times;</button>' +
@@ -524,7 +524,7 @@
 
     _overlay.innerHTML =
       '<div class="cotm-container">' +
-        '<div class="cotm-welcome">&#9733; Creator of the Month</div>' +
+        '<div class="cotm-welcome"><img src="/static/images/logo_email.png" class="cotm-welcome-logo" alt=""> Creator of the Month</div>' +
         '<div class="cotm-card cotm-edit-card">' +
           '<div class="cotm-accent"></div>' +
           '<button class="cotm-close" aria-label="Close">&times;</button>' +
