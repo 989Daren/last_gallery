@@ -637,17 +637,26 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Upload limit check on email blur (new uploads only)
+    // Detect returning opted-in artist as they type email (debounced)
+    let _cotmEmailDebounce = null;
+    metaContact1Input.addEventListener("input", () => {
+      if (isEditMode) return;
+      clearTimeout(_cotmEmailDebounce);
+      _cotmEmailDebounce = setTimeout(() => {
+        const email = (metaContact1Input.value || "").trim();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+        try {
+          const map = JSON.parse(localStorage.getItem("tlg_edit_codes") || "{}");
+          const ec = map[email.toLowerCase()];
+          if (ec) fetchAndPrefillProfile(ec);
+        } catch (e) {}
+      }, 400);
+    });
+
     metaContact1Input.addEventListener("blur", async () => {
       if (isEditMode) return;
       const email = (metaContact1Input.value || "").trim();
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
-
-      // Detect returning opted-in artist → update COTM button
-      try {
-        const map = JSON.parse(localStorage.getItem("tlg_edit_codes") || "{}");
-        const ec = map[email.toLowerCase()];
-        if (ec) fetchAndPrefillProfile(ec);
-      } catch (e) {}
 
       // Admin bypasses the upload limit
       if (typeof window.isAdminActive === "function" && window.isAdminActive()) return;
