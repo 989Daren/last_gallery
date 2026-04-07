@@ -639,10 +639,18 @@ document.addEventListener("DOMContentLoaded", () => {
     // Upload limit check on email blur (new uploads only)
     metaContact1Input.addEventListener("blur", async () => {
       if (isEditMode) return;
-      // Admin bypasses the upload limit
-      if (typeof window.isAdminActive === "function" && window.isAdminActive()) return;
       const email = (metaContact1Input.value || "").trim();
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+
+      // Detect returning opted-in artist → update COTM button
+      try {
+        const map = JSON.parse(localStorage.getItem("tlg_edit_codes") || "{}");
+        const ec = map[email.toLowerCase()];
+        if (ec) fetchAndPrefillProfile(ec);
+      } catch (e) {}
+
+      // Admin bypasses the upload limit
+      if (typeof window.isAdminActive === "function" && window.isAdminActive()) return;
 
       try {
         const res = await fetch("/api/check_upload_limit", {
@@ -667,13 +675,6 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (err) {
         console.error(`${LOG_PREFIX} Upload limit check error:`, err);
       }
-
-      // Detect returning opted-in artist → update COTM button
-      try {
-        const map = JSON.parse(localStorage.getItem("tlg_edit_codes") || "{}");
-        const ec = map[email.toLowerCase()];
-        if (ec) fetchAndPrefillProfile(ec);
-      } catch (e) {}
     });
   }
 
