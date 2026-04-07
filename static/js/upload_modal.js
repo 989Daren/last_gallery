@@ -776,7 +776,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function markCotmOptedIn() {
     if (cotmOptInBtn) cotmOptInBtn.classList.add("cotm-optin-entered");
-    if (cotmOptInLabel) cotmOptInLabel.textContent = "Edit Your Entry \u2714";
+    if (cotmOptInLabel) cotmOptInLabel.textContent = "Edit Your Creator Profile \u2714";
   }
 
   async function fetchAndPrefillProfile(editCode) {
