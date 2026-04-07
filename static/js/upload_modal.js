@@ -667,6 +667,13 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (err) {
         console.error(`${LOG_PREFIX} Upload limit check error:`, err);
       }
+
+      // Detect returning opted-in artist → update COTM button
+      try {
+        const map = JSON.parse(localStorage.getItem("tlg_edit_codes") || "{}");
+        const ec = map[email.toLowerCase()];
+        if (ec) fetchAndPrefillProfile(ec);
+      } catch (e) {}
     });
   }
 
@@ -769,7 +776,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function markCotmOptedIn() {
     if (cotmOptInBtn) cotmOptInBtn.classList.add("cotm-optin-entered");
-    if (cotmOptInLabel) cotmOptInLabel.textContent = "Entered \u2714";
+    if (cotmOptInLabel) cotmOptInLabel.textContent = "Edit Your Entry \u2714";
   }
 
   async function fetchAndPrefillProfile(editCode) {
