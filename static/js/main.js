@@ -913,7 +913,7 @@ function showShareToast() {
 window.showShareToast = showShareToast;
 window.openArtworkPopup = openArtworkPopup;
 
-function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value, unlocked, assetId, tileId, isExhibit, upgradable }) {
+function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value, unlocked, assetId, tileId, exhibitContext, upgradable }) {
   _currentPopupAssetId = assetId || null;
   const overlay = ensurePopupDom();
 
@@ -1033,8 +1033,8 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
 
     var ownedInfo = typeof window.getOwnedAssetInfo === 'function' ? window.getOwnedAssetInfo(assetId) : null;
     var isAdmin = typeof window.isAdminActive === 'function' && window.isAdminActive();
-    // Skip edit button for artwork viewed inside an exhibit track (not an editing path)
-    if ((ownedInfo || isAdmin) && popupInfo && !isExhibit) {
+    // No edit button for artwork viewed inside an exhibit track (use exhibit intro card instead)
+    if ((ownedInfo || isAdmin) && popupInfo && !exhibitContext) {
       const editDiv = document.createElement("div");
       editDiv.className = "ribbon-edit";
       const editButton = document.createElement("button");
@@ -1051,14 +1051,8 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
           } else if (ownedInfo.tile_id && typeof window.openMetaModalForEdit === 'function') {
             window.openMetaModalForEdit(ownedInfo.tile_id);
           }
-        } else {
-          // Admin path — use function params directly
-          var pin = typeof window.getAdminPin === 'function' ? window.getAdminPin() : '';
-          if (isExhibit && typeof window.openExhibitDashboard === 'function') {
-            window.openExhibitDashboard(assetId, '', pin);
-          } else if (tileId && typeof window.openMetaModalForEdit === 'function') {
-            window.openMetaModalForEdit(tileId);
-          }
+        } else if (tileId && typeof window.openMetaModalForEdit === 'function') {
+          window.openMetaModalForEdit(tileId);
         }
       });
       editDiv.appendChild(editButton);
@@ -1089,7 +1083,7 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
   // Reset state
   overlay.classList.remove("show-title", "stage-info-bg", "stage-info-text", "hide-info", "no-share", "exhibit-popup");
   if (!_currentPopupAssetId) overlay.classList.add("no-share");
-  if (isExhibit) overlay.classList.add("exhibit-popup");
+  if (exhibitContext) overlay.classList.add("exhibit-popup");
   overlay.classList.add("is-open");
   overlay.setAttribute("aria-hidden", "false");
 
