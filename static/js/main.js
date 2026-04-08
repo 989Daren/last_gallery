@@ -1033,7 +1033,8 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
 
     var ownedInfo = typeof window.getOwnedAssetInfo === 'function' ? window.getOwnedAssetInfo(assetId) : null;
     var isAdmin = typeof window.isAdminActive === 'function' && window.isAdminActive();
-    if ((ownedInfo || isAdmin) && popupInfo) {
+    // Skip edit button for artwork viewed inside an exhibit track (not an editing path)
+    if ((ownedInfo || isAdmin) && popupInfo && !isExhibit) {
       const editDiv = document.createElement("div");
       editDiv.className = "ribbon-edit";
       const editButton = document.createElement("button");
