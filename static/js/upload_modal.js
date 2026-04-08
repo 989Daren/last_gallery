@@ -1249,13 +1249,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (editCodeError) editCodeError.classList.add("hidden");
   }
 
+  function focusEditField(type) {
+    if ((type === "tile" || type === "artwork") && editTitleInput) editTitleInput.focus();
+    else if (type !== "creator" && editCodeInput) editCodeInput.focus();
+  }
+
   // Wire segmented control
   editTypePills.forEach(pill => {
     pill.addEventListener("click", () => {
       setEditType(pill.dataset.type);
-      if (pill.dataset.type === "tile" && editTitleInput) editTitleInput.focus();
-      else if (pill.dataset.type === "artwork" && editTitleInput) editTitleInput.focus();
-      else if (pill.dataset.type !== "creator" && editCodeInput) editCodeInput.focus();
+      focusEditField(pill.dataset.type);
     });
   });
 
@@ -1303,11 +1306,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     editBannerOverlay.classList.remove("hidden");
     editBannerOverlay.setAttribute("aria-hidden", "false");
-    setTimeout(() => {
-      if (_editType === "tile" && editTitleInput) editTitleInput.focus();
-      else if (_editType === "artwork" && editTitleInput) editTitleInput.focus();
-      else if (editCodeInput) editCodeInput.focus();
-    }, 100);
+    setTimeout(() => focusEditField(_editType), 100);
   }
 
   function closeEditBanner() {

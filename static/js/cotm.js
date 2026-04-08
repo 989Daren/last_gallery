@@ -69,10 +69,11 @@
     // Recalculate wall viewport to account for the new bar
     window.dispatchEvent(new Event('resize'));
 
-    // Observe countdown bar visibility changes
+    // Observe countdown bar visibility changes (guard against duplicate observers)
     var countdownBar = document.getElementById('countdownBar');
-    if (countdownBar && typeof MutationObserver !== 'undefined') {
-      new MutationObserver(updateActionBarPosition).observe(countdownBar, { attributes: true, attributeFilter: ['class'] });
+    if (countdownBar && typeof MutationObserver !== 'undefined' && !countdownBar._cotmObserver) {
+      countdownBar._cotmObserver = new MutationObserver(updateActionBarPosition);
+      countdownBar._cotmObserver.observe(countdownBar, { attributes: true, attributeFilter: ['class'] });
     }
 
     var btn = document.getElementById('cotmActionBtn');
@@ -307,10 +308,8 @@
     if (enterBtn) enterBtn.addEventListener('click', closeCotmCard);
 
     // Tap anywhere to close — skip interactive elements (buttons, links, thumbnails)
-    _overlay.addEventListener('click', function(e) {
-      if (e.target.closest('a, button, .cotm-thumb, .cotm-share-btn')) return;
-      closeCotmCard();
-    });
+    _overlay.removeEventListener('click', _onOverlayClick);
+    _overlay.addEventListener('click', _onOverlayClick);
 
     // Escape key
     document.addEventListener('keydown', _onKeyDown);
@@ -414,6 +413,11 @@
         }
       });
     }
+  }
+
+  function _onOverlayClick(e) {
+    if (e.target.closest('a, button, .cotm-thumb, .cotm-share-btn')) return;
+    closeCotmCard();
   }
 
   function _onKeyDown(e) {
@@ -659,9 +663,12 @@
     }
 
     // Tap outside
-    _overlay.addEventListener('click', function(e) {
-      if (e.target === _overlay) closeCotmEdit();
-    });
+    _overlay.removeEventListener('click', _onEditOverlayClick);
+    _overlay.addEventListener('click', _onEditOverlayClick);
+  }
+
+  function _onEditOverlayClick(e) {
+    if (e.target === _overlay) closeCotmEdit();
   }
 
   function saveCotmProfile() {
