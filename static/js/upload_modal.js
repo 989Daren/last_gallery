@@ -1369,7 +1369,7 @@ document.addEventListener("DOMContentLoaded", () => {
             editBannerContinueBtn.disabled = true;
             const res = await fetch("/api/cotm");
             const result = await res.json();
-            if (!result.ok || !result.artist_name) {
+            if (!result.ok || !result.active) {
               if (editCodeError) {
                 editCodeError.textContent = "No Creator of the Month currently selected.";
                 editCodeError.classList.remove("hidden");
