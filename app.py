@@ -3182,7 +3182,7 @@ def _verify_cotm_code(cursor, code):
             _clear_pin_failures()
             cursor.execute("SELECT * FROM creator_of_the_month WHERE month = ?", (month,))
             cotm = cursor.fetchone()
-            return ("admin", cotm) if cotm else (None, None)
+            return (cotm["email"], cotm) if cotm else (None, None)
         _record_pin_failure()
         return None, None
     if not code:
@@ -3553,9 +3553,7 @@ def get_cotm_edit():
         return jsonify({"ok": False, "error": "Invalid edit code or no active COTM."}), 403
 
     # Profile data from artist_profiles (single source of truth)
-    # Admin bypass returns "admin" as email — use COTM record's email instead
-    profile_email = cotm["email"] if email == "admin" else email
-    cursor.execute("SELECT * FROM artist_profiles WHERE email = ?", (profile_email,))
+    cursor.execute("SELECT * FROM artist_profiles WHERE email = ?", (email,))
     profile = cursor.fetchone()
 
     excluded = json.loads(cotm["excluded_asset_ids"] or "[]")
@@ -3609,9 +3607,6 @@ def save_cotm_profile():
         conn.close()
         return jsonify({"ok": False, "error": "Invalid edit code or no active COTM."}), 403
 
-    # Admin bypass returns "admin" as email — use COTM record's email instead
-    profile_email = cotm["email"] if email == "admin" else email
-
     bio_text = (data.get("bio_text") or "").strip()[:500]
     artist_location = (data.get("artist_location") or "").strip()[:100]
     medium_techniques = (data.get("medium_techniques") or "").strip()[:200]
@@ -3638,7 +3633,7 @@ def save_cotm_profile():
         "artist_location=excluded.artist_location, medium_techniques=excluded.medium_techniques, "
         "artistic_focus=excluded.artistic_focus, background_education=excluded.background_education, "
         "professional_highlights=excluded.professional_highlights, updated_at=datetime('now')",
-        (profile_email, bio_text, artist_location, medium_techniques, artistic_focus,
+        (email, bio_text, artist_location, medium_techniques, artistic_focus,
          background_education, professional_highlights)
     )
 
@@ -3658,9 +3653,6 @@ def upload_cotm_photo():
         conn.close()
         return jsonify({"ok": False, "error": "Invalid edit code or no active COTM."}), 403
 
-    # Admin bypass returns "admin" as email — use COTM record's email instead
-    profile_email = cotm["email"] if email == "admin" else email
-
     if 'photo' not in request.files:
         conn.close()
         return jsonify({"ok": False, "error": "No photo file provided."}), 400
@@ -3670,7 +3662,7 @@ def upload_cotm_photo():
         return jsonify({"ok": False, "error": "Empty file."}), 400
 
     # Get existing photo URL from artist_profiles for cleanup
-    cursor.execute("SELECT bio_photo_url FROM artist_profiles WHERE email = ?", (profile_email,))
+    cursor.execute("SELECT bio_photo_url FROM artist_profiles WHERE email = ?", (email,))
     profile_row = cursor.fetchone()
     old_photo = profile_row["bio_photo_url"] if profile_row else None
 
@@ -3697,7 +3689,7 @@ def upload_cotm_photo():
     # Photo URL stored in artist_profiles (single source of truth)
     cursor.execute(
         "UPDATE artist_profiles SET bio_photo_url = ?, updated_at = datetime('now') WHERE email = ?",
-        (photo_url, profile_email)
+        (photo_url, email)
     )
     conn.commit()
     conn.close()

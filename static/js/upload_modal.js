@@ -324,6 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const cotmProfileError = document.getElementById("cotmProfileError");
   let _cotmPendingProfile = null; // Deferred profile data, flushed after metadata save
   let _creatorEditCode = null; // Set when editing profile directly (not via upload flow)
+  let _cotmLastCheckedCode = null; // Guard against duplicate profile fetches on input
 
   // Tier-3 confirmation banner refs
   const confirmBannerOverlay = document.getElementById("confirmBannerOverlay");
@@ -648,7 +649,10 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
           const map = JSON.parse(localStorage.getItem("tlg_edit_codes") || "{}");
           const ec = map[email.toLowerCase()];
-          if (ec) fetchAndPrefillProfile(ec);
+          if (ec && ec !== _cotmLastCheckedCode) {
+            _cotmLastCheckedCode = ec;
+            fetchAndPrefillProfile(ec);
+          }
         } catch (e) {}
       }, 400);
     });
@@ -771,6 +775,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function resetCotmOptInState() {
+    _cotmLastCheckedCode = null;
     if (cotmOptInBtn) cotmOptInBtn.classList.remove("cotm-optin-entered");
     if (cotmOptInLabel) cotmOptInLabel.textContent = "Enter Creator of the Month Drawing";
     if (cotmProfileBio) cotmProfileBio.value = "";
