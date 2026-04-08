@@ -241,21 +241,27 @@
       });
     }
 
-    // Owner edit button — absolute above intro card top-right
+    // Edit button — shown for owner (via localStorage) or admin
     var ownedInfo = typeof window.getOwnedAssetInfo === 'function'
       ? window.getOwnedAssetInfo(exhibit.asset_id) : null;
+    var isAdmin = typeof window.isAdminActive === 'function' && window.isAdminActive();
     var editBtn = null;
-    if (ownedInfo) {
+    if (ownedInfo || isAdmin) {
       editBtn = document.createElement('button');
       editBtn.className = 'exhibit-intro-edit-btn';
       editBtn.type = 'button';
       editBtn.textContent = 'edit';
       editBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        var code = typeof window.getEditCodeForAsset === 'function' ? window.getEditCodeForAsset(ownedInfo.asset_id) : '';
         closeExhibit();
         if (typeof window.openExhibitDashboard === 'function') {
-          window.openExhibitDashboard(ownedInfo.asset_id, code);
+          if (ownedInfo) {
+            var code = typeof window.getEditCodeForAsset === 'function' ? window.getEditCodeForAsset(ownedInfo.asset_id) : '';
+            window.openExhibitDashboard(ownedInfo.asset_id, code);
+          } else {
+            var pin = typeof window.getAdminPin === 'function' ? window.getAdminPin() : '';
+            window.openExhibitDashboard(exhibit.asset_id, '', pin);
+          }
         }
       });
     }

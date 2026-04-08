@@ -1222,14 +1222,24 @@ document.addEventListener("DOMContentLoaded", () => {
   const resendCodeBtn = document.getElementById("resendCodeBtn");
   const resendCodeMsg = document.getElementById("resendCodeMsg");
 
+  let _adminEditMode = false;
+
   function setEditType(type) {
     _editType = type;
     editTypePills.forEach(pill => {
-      pill.classList.toggle("active", pill.dataset.type === type);
+      if (_adminEditMode) {
+        // Admin: show only "tile" and "creator" pills
+        const isAdminPill = pill.dataset.type === "tile" || pill.dataset.type === "creator";
+        pill.style.display = isAdminPill ? "" : "none";
+        pill.classList.toggle("active", pill.dataset.type === type);
+      } else {
+        pill.style.display = "";
+        pill.classList.toggle("active", pill.dataset.type === type);
+      }
     });
-    // Show title input only for artwork; hide for exhibit and creator
+    // Show title input for artwork (user) and tile (admin); hide for exhibit and creator
     if (editTitleGroup) {
-      editTitleGroup.classList.toggle("hidden", type !== "artwork");
+      editTitleGroup.classList.toggle("hidden", type !== "artwork" && type !== "tile");
     }
     if (editCodeError) editCodeError.classList.add("hidden");
   }
@@ -1238,7 +1248,9 @@ document.addEventListener("DOMContentLoaded", () => {
   editTypePills.forEach(pill => {
     pill.addEventListener("click", () => {
       setEditType(pill.dataset.type);
-      if (editCodeInput) editCodeInput.focus();
+      if (pill.dataset.type === "tile" && editTitleInput) editTitleInput.focus();
+      else if (pill.dataset.type === "artwork" && editTitleInput) editTitleInput.focus();
+      else if (pill.dataset.type !== "creator" && editCodeInput) editCodeInput.focus();
     });
   });
 
@@ -1253,37 +1265,43 @@ document.addEventListener("DOMContentLoaded", () => {
     if (resendEmailInput) resendEmailInput.value = "";
     if (resendCodeMsg) resendCodeMsg.classList.add("hidden");
 
-    // Admin mode: hide segmented control, show tile ID field
     const adminMode = typeof window.isAdminActive === "function" && window.isAdminActive();
+    _adminEditMode = adminMode;
+
     if (adminMode) {
-      if (editTypeSelector) editTypeSelector.style.display = "none";
+      // Admin: 2-pill selector (Tile / Creator Profile), no edit code field
+      if (editTypeSelector) editTypeSelector.style.display = "";
       if (editCodeLabel) editCodeLabel.style.display = "none";
       if (editCodeInput) editCodeInput.style.display = "none";
       if (forgotCodeLink) forgotCodeLink.style.display = "none";
-      if (editTitleGroup) editTitleGroup.classList.remove("hidden");
       const editTitleLabel = document.querySelector('label[for="editTitleInput"]');
       if (editTitleLabel) editTitleLabel.textContent = "Tile ID";
       if (editTitleInput) {
         editTitleInput.placeholder = "Admin";
         editTitleInput.maxLength = 10;
       }
+      setEditType("tile");
     } else {
+      // User: 3-pill selector (Artwork / Exhibit / Creator Profile)
       if (editTypeSelector) editTypeSelector.style.display = "";
       if (editCodeLabel) editCodeLabel.style.display = "";
       if (editCodeInput) editCodeInput.style.display = "";
       if (forgotCodeLink) forgotCodeLink.style.display = "";
-      setEditType("artwork");
+      const editTitleLabel = document.querySelector('label[for="editTitleInput"]');
+      if (editTitleLabel) editTitleLabel.textContent = "Artwork title";
       if (editTitleInput) {
         editTitleInput.placeholder = "Enter title";
         editTitleInput.maxLength = 120;
       }
+      setEditType("artwork");
     }
 
     editBannerOverlay.classList.remove("hidden");
     editBannerOverlay.setAttribute("aria-hidden", "false");
     setTimeout(() => {
-      const focusTarget = (_editType === "artwork" && editTitleInput) ? editTitleInput : editCodeInput;
-      if (focusTarget) focusTarget.focus();
+      if (_editType === "tile" && editTitleInput) editTitleInput.focus();
+      else if (_editType === "artwork" && editTitleInput) editTitleInput.focus();
+      else if (editCodeInput) editCodeInput.focus();
     }, 100);
   }
 
@@ -1341,8 +1359,40 @@ document.addEventListener("DOMContentLoaded", () => {
       const adminMode = typeof window.isAdminActive === "function" && window.isAdminActive();
       const title = (editTitleInput?.value || "").trim();
 
-      // Admin path: tile ID lookup (no edit code required)
+      // Admin paths (no edit code required)
       if (adminMode) {
+        const pin = typeof window.getAdminPin === "function" ? window.getAdminPin() : "";
+
+        // Admin → Creator Profile: open current COTM winner's edit form
+        if (_editType === "creator") {
+          try {
+            editBannerContinueBtn.disabled = true;
+            const res = await fetch("/api/cotm");
+            const result = await res.json();
+            if (!result.ok || !result.artist_name) {
+              if (editCodeError) {
+                editCodeError.textContent = "No Creator of the Month currently selected.";
+                editCodeError.classList.remove("hidden");
+              }
+              return;
+            }
+            closeEditBanner();
+            if (typeof window.openCotmEditAsAdmin === "function") {
+              window.openCotmEditAsAdmin(pin);
+            }
+          } catch (err) {
+            console.error(`${LOG_PREFIX} Admin COTM lookup error:`, err);
+            if (editCodeError) {
+              editCodeError.textContent = "Lookup failed. Please try again.";
+              editCodeError.classList.remove("hidden");
+            }
+          } finally {
+            editBannerContinueBtn.disabled = false;
+          }
+          return;
+        }
+
+        // Admin → Tile: look up tile ID, auto-route to artwork or exhibit
         const tileId = title.toUpperCase();
         if (!tileId) {
           if (editCodeError) {
@@ -1354,7 +1404,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
           editBannerContinueBtn.disabled = true;
-          const pin = typeof window.getAdminPin === "function" ? window.getAdminPin() : "";
           const res = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(tileId)}`, {
             headers: { "X-Admin-Pin": pin }
           });

@@ -120,13 +120,13 @@
         showPinchHint();
         return;
       }
-      // TODO: Re-enable localStorage gate once COTM design is finalized
-      // var key = 'cotm_seen_' + _data.cotm.month;
-      // if (localStorage.getItem(key)) {
-      //   showPinchHint();
-      //   return;
-      // }
-      // localStorage.setItem(key, '1');
+      // Show once per COTM cycle; new winner = new key = shows again
+      var key = 'cotm_seen_' + _data.cotm.month;
+      if (localStorage.getItem(key)) {
+        showPinchHint();
+        return;
+      }
+      localStorage.setItem(key, '1');
       _afterCloseCallback = function() {
         setTimeout(showPinchHint, 300);
       };
@@ -372,19 +372,25 @@
       }
     });
 
-    // Owner edit button — check if viewer has a stored edit code matching the COTM artist's email
+    // Edit button — shown for owner (via localStorage edit code) or admin
     var editBtn = null;
     var ownerCode = _findOwnerCode(artworks);
-    if (ownerCode) {
+    var isAdmin = typeof window.isAdminActive === 'function' && window.isAdminActive();
+    if (ownerCode || isAdmin) {
       editBtn = document.createElement('button');
       editBtn.className = 'cotm-edit-btn';
       editBtn.type = 'button';
       editBtn.textContent = 'edit';
       editBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        _editAuth = { code: ownerCode };
         closeCotmCard();
-        _openEditFormWithFetch('/api/cotm/edit?code=' + encodeURIComponent(ownerCode), {});
+        if (ownerCode) {
+          _editAuth = { code: ownerCode };
+          _openEditFormWithFetch('/api/cotm/edit?code=' + encodeURIComponent(ownerCode), {});
+        } else {
+          var pin = typeof window.getAdminPin === 'function' ? window.getAdminPin() : '';
+          openCotmEditAsAdmin(pin);
+        }
       });
     }
 

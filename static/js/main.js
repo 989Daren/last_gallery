@@ -1027,12 +1027,13 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       popupInfo.appendChild(iconDiv);
     }
 
-    // Owner edit button — absolute bottom-left of ribbon
+    // Edit button — shown for owner (via localStorage) or admin
     const existingEditBtn = popupInfo?.querySelector(".ribbon-edit");
     if (existingEditBtn) existingEditBtn.remove();
 
     var ownedInfo = typeof window.getOwnedAssetInfo === 'function' ? window.getOwnedAssetInfo(assetId) : null;
-    if (ownedInfo && popupInfo) {
+    var isAdmin = typeof window.isAdminActive === 'function' && window.isAdminActive();
+    if ((ownedInfo || isAdmin) && popupInfo) {
       const editDiv = document.createElement("div");
       editDiv.className = "ribbon-edit";
       const editButton = document.createElement("button");
@@ -1041,12 +1042,22 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       editButton.textContent = "edit";
       editButton.addEventListener("click", (e) => {
         e.stopPropagation();
-        const code = typeof window.getEditCodeForAsset === 'function' ? window.getEditCodeForAsset(assetId) : '';
         closeArtworkPopup();
-        if (ownedInfo.asset_type === 'exhibit' && typeof window.openExhibitDashboard === 'function') {
-          window.openExhibitDashboard(ownedInfo.asset_id, code);
-        } else if (ownedInfo.tile_id && typeof window.openMetaModalForEdit === 'function') {
-          window.openMetaModalForEdit(ownedInfo.tile_id);
+        if (ownedInfo) {
+          const code = typeof window.getEditCodeForAsset === 'function' ? window.getEditCodeForAsset(assetId) : '';
+          if (ownedInfo.asset_type === 'exhibit' && typeof window.openExhibitDashboard === 'function') {
+            window.openExhibitDashboard(ownedInfo.asset_id, code);
+          } else if (ownedInfo.tile_id && typeof window.openMetaModalForEdit === 'function') {
+            window.openMetaModalForEdit(ownedInfo.tile_id);
+          }
+        } else {
+          // Admin path — use function params directly
+          var pin = typeof window.getAdminPin === 'function' ? window.getAdminPin() : '';
+          if (isExhibit && typeof window.openExhibitDashboard === 'function') {
+            window.openExhibitDashboard(assetId, '', pin);
+          } else if (tileId && typeof window.openMetaModalForEdit === 'function') {
+            window.openMetaModalForEdit(tileId);
+          }
         }
       });
       editDiv.appendChild(editButton);
