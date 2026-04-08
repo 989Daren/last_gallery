@@ -2,6 +2,17 @@
 
 ---
 
+## 2026-04-08
+
+### Exhibit Image Share Links
+- **Share button on exhibit track popups**: Artwork popups opened from the exhibit scrolling gallery now show the share icon (same position as tile artwork popups)
+- **Share URL format**: `/?art=ei:<image_id>` — uses `ei:` prefix to identify exhibit images vs tile assets
+- **Deep link behavior**: Shared link opens the gallery wall with the exhibit image popped up (no exhibit context). Dismissing lands the visitor on the gallery wall, not the exhibit.
+- **OG tags**: `?art=ei:<image_id>` serves dynamic Open Graph title/image from `exhibit_images` table
+- **New endpoint**: `GET /api/exhibit_image/<image_id>` returns exhibit image data for deep link rendering
+
+---
+
 ## 2026-03-05
 
 ### Dismissible Overlay Registry

@@ -1805,11 +1805,40 @@ document.addEventListener("DOMContentLoaded", () => {
           requestAnimationFrame(() => openUnlockModal(upgradeAssetId));
         }
 
-        // Art share deep link handler (?art=<asset_id>)
+        // Art share deep link handler (?art=<asset_id> or ?art=ei:<image_id>)
         if (window.PAGE_MODE === "art") {
           const artAssetId = window._artDeepLinkAssetId;
           delete window._artDeepLinkAssetId;
           requestAnimationFrame(() => {
+            // Exhibit image deep link (ei:<image_id>)
+            if (artAssetId && artAssetId.startsWith("ei:")) {
+              const imageId = artAssetId.slice(3);
+              fetch("/api/exhibit_image/" + imageId)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                  if (!data || !data.ok) return;
+                  const img = data.image;
+                  openArtworkPopup({
+                    imgSrc: img.image_url,
+                    title: img.artwork_title || "",
+                    artist: img.artist_name || "",
+                    yearCreated: img.year_created || "",
+                    medium: img.medium || "",
+                    dimensions: img.dimensions || "",
+                    editionInfo: img.edition_info || "",
+                    forSale: img.for_sale || "",
+                    saleType: img.sale_type || "",
+                    contact1Type: img.contact1_type || "",
+                    contact1Value: img.contact1_value || "",
+                    contact2Type: img.contact2_type || "",
+                    contact2Value: img.contact2_value || "",
+                    assetId: artAssetId
+                  });
+                })
+                .catch(err => { if (window.DEBUG) console.warn("Exhibit image deep link failed:", err); });
+              return;
+            }
+
             const tileEl = document.querySelector('.tile[data-asset-id="' + artAssetId + '"]');
             if (!tileEl) return;
 

@@ -11,6 +11,7 @@
 | `/privacy` | GET | Privacy policy page |
 | `/api/wall_state` | GET | Get all tile assignments from database |
 | `/api/countdown_state` | GET | Get countdown timer state (with server-side auto-transitions) |
+| `/api/exhibit_image/<image_id>` | GET | Get single exhibit image data (for share-link deep links) |
 | `/uploads/<filename>` | GET | Serve uploaded images (1-year immutable cache) |
 
 ### Upload
@@ -172,11 +173,11 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 - **Upgrade deep link**: `/?upgrade=1&asset_id=X` (from post-shuffle notification emails). `handleUpgradeDeepLink()` cleans URL, sets `PAGE_MODE = "upgrade"`, skips welcome, opens unlock modal with artwork pre-selected.
 
 ## Share Links
-- **Share URL format**: `/?art=<asset_id>` — identifies artwork by permanent asset_id (survives tile shuffles)
+- **Share URL format**: `/?art=<asset_id>` for tile artwork, `/?art=ei:<image_id>` for exhibit images — both survive tile shuffles
 - **Share icon on artwork popup**: Android-style three-dot SVG icon, 29px white circle, 8px left of the close X. Appears with ribbon text (`stage-info-text`). Uses `navigator.share()` on mobile (native share sheet), falls back to clipboard copy + "Link copied" toast on desktop.
 - **Share icon on exhibit intro**: 27px circle, positioned above intro card top-right, accounts for optional edit button
-- **Deep link handler**: `handleArtDeepLink()` parses `?art=` before boot, sets `PAGE_MODE = "art"`, cleans URL via `replaceState`. After boot: finds tile by `data-asset-id`, scrolls to it, opens artwork popup (or exhibit intro for exhibit tiles).
-- **OG tags**: Server-side in `index()` route — queries asset by id, serves dynamic `og:title` ("Title by Artist"), `og:image` (popup image for artwork, tile image for exhibits), `og:url`. Falls back to site defaults when no `?art=` param or asset not found.
+- **Deep link handler**: `handleArtDeepLink()` parses `?art=` before boot, sets `PAGE_MODE = "art"`, cleans URL via `replaceState`. After boot: for `ei:` prefixed IDs, fetches exhibit image data from `/api/exhibit_image/<id>` and opens popup on the wall (no exhibit context). For regular IDs: finds tile by `data-asset-id`, scrolls to it, opens artwork popup (or exhibit intro for exhibit tiles).
+- **OG tags**: Server-side in `index()` route — queries asset by id (or exhibit image by `image_id` for `ei:` prefix), serves dynamic `og:title` ("Title by Artist"), `og:image` (popup image for artwork, tile image for exhibits, `image_url` for exhibit images), `og:url`. Falls back to site defaults when no `?art=` param or asset not found.
 - **Edge case**: If shared artwork has been removed (expired, cleared), the deep link loads the gallery normally (no error, no popup).
 
 ## Human Centric Gallery Modal
@@ -213,7 +214,7 @@ Three-step purchase flow using edit codes for identity ("lock what you landed on
 ## Exhibit Tiles
 Top-tier artist feature ($199.99). An exhibit tile is an easily identifiable tile (gold badge overlay + shimmer animation) that, when clicked, opens an introduction modal covering the artist. A "Continue" button leads to a horizontally scrolling presentation of all the artist's works — full (scaled) images with padding, layered on a transparent dark background, auto-scrolling left to right with viewer scroll/swipe controls. Requires unlocked artwork in an M/LG/XL tile. On purchase, `asset_type` is set to `'exhibit'`, an `exhibits` row is created, and the artwork is seeded as the first exhibit image. Artists manage their exhibit via the exhibit dashboard (up to 20 images, profile editing, image reorder). Frontend modules: `exhibit.js` (scrolling gallery + intro modal), `exhibit_dashboard.js` (artist self-management).
 - **Intro popup share button**: 27px circle with three-dot share icon, positioned above the intro card's top-right corner. Sits to the left of the edit button (6px gap) when present, or at the right edge otherwise. Shares `?art=<asset_id>` — deep link opens the exhibit intro.
-- **Exhibit image popups**: Images in the scrolling gallery reuse `openArtworkPopup()` but do not pass `assetId`, so the share button is hidden (`no-share` class).
+- **Exhibit image popups**: Images in the scrolling gallery reuse `openArtworkPopup()` with `assetId: 'ei:<image_id>'` and `exhibitContext: true`. Share button is visible; share link (`?art=ei:<image_id>`) opens the image directly on the gallery wall (no exhibit context), dismissing lands on the wall.
 - **Scrolling gallery swipe (mobile)**: Physics-based momentum model. `touchmove` samples velocity frame-by-frame (exponential smoothing, `VELOCITY_SMOOTH = 0.3`). On release, throw distance = `absV × THROW_DECAY × (curItemWidth + SPACING)` (`THROW_DECAY = 0.83`). Nearest image center to that distance is the target. Minimum-advance rule ensures a valid swipe always moves at least 1 image. Light swipes always land on the next image; strong swipes travel proportionally farther. Animation uses ease-out (`cubic-bezier(0.25, 0.46, 0.45, 0.94)`), duration 0.25–0.65s scaled by velocity. Velocity zeroed if finger stationary >80ms before release (`VELOCITY_DECAY_MS`).
 - **Scrolling gallery drag (desktop)**: Same `snapByMomentum()` path as mobile — live velocity tracked in `onDragMove`, resolved on `onDragEnd`. Low velocity (<0.15 px/ms) snaps to nearest without momentum.
 - **Gallery close button**: Absolutely positioned within `.exhibit-ribbon-area` at `top: 20px; transform: translateY(-100%)` — bottom edge sits 20px above the ribbon area top, clearing the gold bar on mobile.

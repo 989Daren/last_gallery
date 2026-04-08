@@ -865,34 +865,56 @@ def index():
     except Exception:
         grid_color = DEFAULT_GRID_COLOR
 
-    # Per-artwork OG tags for share links (?art=<asset_id>)
+    # Per-artwork OG tags for share links (?art=<asset_id> or ?art=ei:<image_id>)
     og = None
     art_id = request.args.get("art")
     if art_id:
+        db = None
         try:
             db = get_db()
-            row = db.execute(
-                "SELECT artwork_title, artist_name, popup_url, tile_url, asset_type "
-                "FROM assets WHERE asset_id = ?",
-                (art_id,)
-            ).fetchone()
-            if row:
-                if row["asset_type"] == "exhibit":
-                    # Exhibit: use tile image (the artwork on the wall) as preview
-                    img_url = row["tile_url"] or row["popup_url"]
-                    og = {
-                        "title": f"{row['artwork_title']} by {row['artist_name']}" if row["artist_name"] else row["artwork_title"],
-                        "image": f"{BASE_URL}{img_url}",
-                        "url": f"{BASE_URL}/?art={art_id}",
-                    }
-                elif row["popup_url"]:
-                    og = {
-                        "title": f"{row['artwork_title']} by {row['artist_name']}" if row["artist_name"] else row["artwork_title"],
-                        "image": f"{BASE_URL}{row['popup_url']}",
-                        "url": f"{BASE_URL}/?art={art_id}",
-                    }
+            og_title = lambda r: f"{r['artwork_title']} by {r['artist_name']}" if r["artist_name"] else r["artwork_title"]
+            if art_id.startswith("ei:"):
+                # Exhibit image share link
+                try:
+                    ei_id = int(art_id[3:])
+                except ValueError:
+                    ei_id = None
+                if ei_id is not None:
+                    row = db.execute(
+                        "SELECT artwork_title, artist_name, image_url FROM exhibit_images WHERE image_id = ?",
+                        (ei_id,)
+                    ).fetchone()
+                    if row and row["image_url"]:
+                        og = {
+                            "title": og_title(row),
+                            "image": f"{BASE_URL}{row['image_url']}",
+                            "url": f"{BASE_URL}/?art={art_id}",
+                        }
+            else:
+                row = db.execute(
+                    "SELECT artwork_title, artist_name, popup_url, tile_url, asset_type "
+                    "FROM assets WHERE asset_id = ?",
+                    (art_id,)
+                ).fetchone()
+                if row:
+                    if row["asset_type"] == "exhibit":
+                        img_url = row["tile_url"] or row["popup_url"]
+                        og = {
+                            "title": og_title(row),
+                            "image": f"{BASE_URL}{img_url}",
+                            "url": f"{BASE_URL}/?art={art_id}",
+                        }
+                    elif row["popup_url"]:
+                        og = {
+                            "title": og_title(row),
+                            "image": f"{BASE_URL}{row['popup_url']}",
+                            "url": f"{BASE_URL}/?art={art_id}",
+                        }
         except Exception:
             pass
+        finally:
+            if db:
+                db.close()
 
     return render_template("index.html", grid_color=grid_color, og=og, tier_config_json=json.dumps(TIER_CONFIG))
 
@@ -3418,6 +3440,23 @@ def get_exhibit_public(asset_id):
         },
         "images": images,
     })
+
+
+@app.route("/api/exhibit_image/<int:image_id>", methods=["GET"])
+def get_exhibit_image(image_id):
+    """Public: return a single exhibit image's data for share-link deep links."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT image_id, image_url, artwork_title, artist_name, year_created, "
+        "medium, dimensions, edition_info, for_sale, sale_type, "
+        "contact1_type, contact1_value, contact2_type, contact2_value "
+        "FROM exhibit_images WHERE image_id = ?",
+        (image_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"ok": False}), 404
+    return jsonify({"ok": True, "image": dict(row)})
 
 
 # ---- Creator of the Month API ----
