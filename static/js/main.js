@@ -1063,7 +1063,7 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       editDiv.appendChild(editButton);
 
       // Upgrade / Unlock button — to the right of edit (mutually exclusive)
-      var actionLabel = upgradable ? 'upgrade' : !ownedInfo.unlocked ? 'unlock' : null;
+      var actionLabel = ownedInfo ? (upgradable ? 'upgrade' : !ownedInfo.unlocked ? 'unlock' : null) : null;
       if (actionLabel && typeof window.openFloorUpgrade === 'function') {
         const actionBtn = document.createElement("button");
         actionBtn.className = "ribbon-upgrade-btn";
