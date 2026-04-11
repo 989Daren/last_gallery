@@ -1221,6 +1221,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const editTypeSelector = document.getElementById("editTypeSelector");
   const editTypePills = editTypeSelector ? editTypeSelector.querySelectorAll(".edit-type-pill") : [];
   let _editType = "artwork"; // "artwork" | "exhibit" | "creator"
+  const editCreatorNote = document.getElementById("editCreatorNote");
+  const editCodeSection = document.querySelector(".edit-code-section");
+  const editCreatorNoteDefaultHtml = editCreatorNote ? editCreatorNote.innerHTML : "";
   const forgotCodeLink = document.getElementById("forgotCodeLink");
   const resendCodeSection = document.getElementById("resendCodeSection");
   const resendEmailInput = document.getElementById("resendEmailInput");
@@ -1232,26 +1235,20 @@ document.addEventListener("DOMContentLoaded", () => {
   function setEditType(type) {
     _editType = type;
     editTypePills.forEach(pill => {
-      if (_adminEditMode) {
-        // Admin: show only "tile" and "creator" pills
-        const isAdminPill = pill.dataset.type === "tile" || pill.dataset.type === "creator";
-        pill.style.display = isAdminPill ? "" : "none";
-        pill.classList.toggle("active", pill.dataset.type === type);
-      } else {
-        pill.style.display = "";
-        pill.classList.toggle("active", pill.dataset.type === type);
-      }
+      const isAdminPill = pill.dataset.type === "tile" || pill.dataset.type === "creator";
+      const visible = _adminEditMode ? isAdminPill : pill.dataset.type !== "tile";
+      pill.style.display = visible ? "" : "none";
+      pill.classList.toggle("active", pill.dataset.type === type);
     });
-    // Show title input for artwork (user) and tile (admin); hide for exhibit and creator
-    if (editTitleGroup) {
-      editTitleGroup.classList.toggle("hidden", type !== "artwork" && type !== "tile");
-    }
+    if (editTitleGroup) editTitleGroup.classList.toggle("hidden", type !== "artwork" && type !== "tile");
+    if (editCodeSection) editCodeSection.style.display = (_adminEditMode && type === "creator") ? "none" : "";
+    if (editCreatorNote) editCreatorNote.classList.toggle("hidden", type !== "creator");
     if (editCodeError) editCodeError.classList.add("hidden");
   }
 
   function focusEditField(type) {
-    if ((type === "tile" || type === "artwork") && editTitleInput) editTitleInput.focus();
-    else if (type !== "creator" && editCodeInput) editCodeInput.focus();
+    if ((type === "artwork" || type === "tile") && editTitleInput) editTitleInput.focus();
+    else if ((type === "exhibit" || (type === "creator" && !_adminEditMode)) && editCodeInput) editCodeInput.focus();
   }
 
   // Wire segmented control
@@ -1267,6 +1264,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (editTitleInput) editTitleInput.value = "";
     if (editCodeInput) editCodeInput.value = "";
     if (editCodeError) editCodeError.classList.add("hidden");
+    if (editCreatorNote) editCreatorNote.innerHTML = editCreatorNoteDefaultHtml;
 
     // Reset resend section
     if (resendCodeSection) resendCodeSection.classList.add("hidden");
@@ -1277,7 +1275,6 @@ document.addEventListener("DOMContentLoaded", () => {
     _adminEditMode = adminMode;
 
     if (adminMode) {
-      // Admin: 2-pill selector (Tile / Creator Profile), no edit code field
       if (editTypeSelector) editTypeSelector.style.display = "";
       if (editCodeLabel) editCodeLabel.style.display = "none";
       if (editCodeInput) editCodeInput.style.display = "none";
@@ -1285,12 +1282,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const editTitleLabel = document.querySelector('label[for="editTitleInput"]');
       if (editTitleLabel) editTitleLabel.textContent = "Tile ID";
       if (editTitleInput) {
-        editTitleInput.placeholder = "Admin";
+        editTitleInput.placeholder = "e.g. A1";
         editTitleInput.maxLength = 10;
       }
       setEditType("tile");
     } else {
-      // User: 3-pill selector (Artwork / Exhibit / Creator Profile)
       if (editTypeSelector) editTypeSelector.style.display = "";
       if (editCodeLabel) editCodeLabel.style.display = "";
       if (editCodeInput) editCodeInput.style.display = "";
@@ -1319,6 +1315,11 @@ document.addEventListener("DOMContentLoaded", () => {
       window.PAGE_MODE = "";
     }
   }
+
+  window.openEditBannerForCreator = function() {
+    openEditBanner();
+    setEditType("creator");
+  };
 
   // Hamburger menu "Edit Your Artwork or Exhibit" opens the banner
   if (menuItemEdit) {
@@ -1361,89 +1362,33 @@ document.addEventListener("DOMContentLoaded", () => {
   if (editBannerContinueBtn) {
     editBannerContinueBtn.addEventListener("click", async () => {
       const adminMode = typeof window.isAdminActive === "function" && window.isAdminActive();
+      const pin = adminMode && typeof window.getAdminPin === "function" ? window.getAdminPin() : "";
       const title = (editTitleInput?.value || "").trim();
+      const code = (editCodeInput?.value || "").trim();
 
-      // Admin paths (no edit code required)
-      if (adminMode) {
-        const pin = typeof window.getAdminPin === "function" ? window.getAdminPin() : "";
-
-        // Admin → Creator Profile: open current COTM winner's edit form
-        if (_editType === "creator") {
+      if (_editType === "creator") {
+        if (adminMode) {
           try {
             editBannerContinueBtn.disabled = true;
             const res = await fetch("/api/cotm");
             const result = await res.json();
             if (!result.ok || !result.active) {
-              if (editCodeError) {
-                editCodeError.textContent = "No Creator of the Month currently selected.";
-                editCodeError.classList.remove("hidden");
+              if (editCreatorNote) {
+                editCreatorNote.textContent = "No Creator of the Month currently selected.";
               }
               return;
             }
             closeEditBanner();
-            if (typeof window.openCotmEditAsAdmin === "function") {
-              window.openCotmEditAsAdmin(pin);
-            }
+            if (typeof window.openCotmEditAsAdmin === "function") window.openCotmEditAsAdmin(pin);
           } catch (err) {
             console.error(`${LOG_PREFIX} Admin COTM lookup error:`, err);
-            if (editCodeError) {
-              editCodeError.textContent = "Lookup failed. Please try again.";
-              editCodeError.classList.remove("hidden");
-            }
+            if (editCreatorNote) editCreatorNote.textContent = "Lookup failed. Please try again.";
           } finally {
             editBannerContinueBtn.disabled = false;
           }
           return;
         }
 
-        // Admin → Tile: look up tile ID, auto-route to artwork or exhibit
-        const tileId = title.toUpperCase();
-        if (!tileId) {
-          if (editCodeError) {
-            editCodeError.textContent = "Please enter a tile ID.";
-            editCodeError.classList.remove("hidden");
-          }
-          return;
-        }
-
-        try {
-          editBannerContinueBtn.disabled = true;
-          const res = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(tileId)}`, {
-            headers: { "X-Admin-Pin": pin }
-          });
-          const result = await res.json();
-
-          if (!result.ok || !result.occupied) {
-            if (editCodeError) {
-              editCodeError.textContent = result.error || "Tile is empty or not found.";
-              editCodeError.classList.remove("hidden");
-            }
-            return;
-          }
-
-          closeEditBanner();
-          if (result.asset_type === 'exhibit' && typeof window.openExhibitDashboard === 'function') {
-            window.openExhibitDashboard(result.asset_id, '', pin);
-          } else {
-            openMetaModalForEdit(tileId);
-          }
-        } catch (err) {
-          console.error(`${LOG_PREFIX} Admin tile lookup error:`, err);
-          if (editCodeError) {
-            editCodeError.textContent = "Lookup failed. Please try again.";
-            editCodeError.classList.remove("hidden");
-          }
-        } finally {
-          editBannerContinueBtn.disabled = false;
-        }
-        return;
-      }
-
-      // Normal user path — route based on selected edit type
-      const code = (editCodeInput?.value || "").trim();
-
-      // Creator Profile path: only needs edit code
-      if (_editType === "creator") {
         if (!code) {
           if (editCodeError) {
             editCodeError.textContent = "Please enter your edit code.";
@@ -1462,24 +1407,24 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             return;
           }
-          if (!result.profile) {
-            if (editCodeError) {
-              editCodeError.textContent = "No creator profile found. Opt in when uploading artwork.";
-              editCodeError.classList.remove("hidden");
-            }
+
+          if (typeof window.storeEditCode === "function") window.storeEditCode(code);
+          closeEditBanner();
+
+          if (result.is_current_cotm) {
+            if (typeof window.openCotmCard === "function") window.openCotmCard();
             return;
           }
-          // Prefill the profile overlay and open it
-          const p = result.profile;
+
+          const p = result.profile || {};
           if (cotmProfileBio) cotmProfileBio.value = p.bio_text || "";
           if (cotmProfileLocation) cotmProfileLocation.value = p.artist_location || "";
           if (cotmProfileMedium) cotmProfileMedium.value = p.medium_techniques || "";
           if (cotmProfileFocus) cotmProfileFocus.value = p.artistic_focus || "";
           if (cotmProfileEducation) cotmProfileEducation.value = p.background_education || "";
           if (cotmProfileHighlights) cotmProfileHighlights.value = p.professional_highlights || "";
-          // Store code for saving
+          if (p.cotm_opt_in) markCotmOptedIn();
           _creatorEditCode = code;
-          closeEditBanner();
           openCotmProfileOverlay();
         } catch (err) {
           console.error(`${LOG_PREFIX} Creator profile lookup error:`, err);
@@ -1493,7 +1438,46 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Exhibit path: only needs edit code
+      if (_editType === "tile" && adminMode) {
+        const tileId = title.toUpperCase();
+        if (!tileId) {
+          if (editCodeError) {
+            editCodeError.textContent = "Please enter a tile ID.";
+            editCodeError.classList.remove("hidden");
+          }
+          return;
+        }
+        try {
+          editBannerContinueBtn.disabled = true;
+          const res = await fetch(`/api/admin/tile_info?tile_id=${encodeURIComponent(tileId)}`, {
+            headers: { "X-Admin-Pin": pin }
+          });
+          const result = await res.json();
+          if (!result.ok || !result.occupied) {
+            if (editCodeError) {
+              editCodeError.textContent = result.error || "Tile is empty or not found.";
+              editCodeError.classList.remove("hidden");
+            }
+            return;
+          }
+          closeEditBanner();
+          if (result.asset_type === 'exhibit' && typeof window.openExhibitDashboard === 'function') {
+            window.openExhibitDashboard(result.asset_id, '', pin);
+          } else {
+            openMetaModalForEdit(tileId);
+          }
+        } catch (err) {
+          console.error(`${LOG_PREFIX} Admin tile lookup error:`, err);
+          if (editCodeError) {
+            editCodeError.textContent = "Lookup failed. Please try again.";
+            editCodeError.classList.remove("hidden");
+          }
+        } finally {
+          editBannerContinueBtn.disabled = false;
+        }
+        return;
+      }
+
       if (_editType === "exhibit") {
         if (!code) {
           if (editCodeError) {
@@ -1540,7 +1524,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Artwork path: needs title + edit code
       if (!title || !code) {
         if (editCodeError) {
           editCodeError.textContent = "Please enter both your artwork title and edit code.";
@@ -1566,7 +1549,6 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        // Success — store code for owner edit links, close banner
         if (typeof window.storeEditCode === 'function') window.storeEditCode(code);
         closeEditBanner();
         openMetaModalForEdit(result.tile_id);

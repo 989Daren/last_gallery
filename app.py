@@ -3757,14 +3757,19 @@ def get_artist_profile():
     email = code_row["email"].lower()
     cursor.execute("SELECT * FROM artist_profiles WHERE email = ?", (email,))
     profile = cursor.fetchone()
+
+    # Check if this email is the current COTM winner
+    month = datetime.now(timezone.utc).strftime('%Y-%m')
+    cursor.execute(
+        "SELECT 1 FROM creator_of_the_month WHERE month = ? AND email = ?",
+        (month, email),
+    )
+    is_current_cotm = cursor.fetchone() is not None
     conn.close()
 
-    if not profile:
-        return jsonify({"ok": True, "profile": None})
-
-    return jsonify({
-        "ok": True,
-        "profile": {
+    profile_dict = None
+    if profile:
+        profile_dict = {
             "bio_text": profile["bio_text"],
             "artist_location": profile["artist_location"],
             "medium_techniques": profile["medium_techniques"],
@@ -3772,7 +3777,12 @@ def get_artist_profile():
             "background_education": profile["background_education"],
             "professional_highlights": profile["professional_highlights"],
             "cotm_opt_in": profile["cotm_opt_in"],
-        },
+        }
+
+    return jsonify({
+        "ok": True,
+        "is_current_cotm": is_current_cotm,
+        "profile": profile_dict,
     })
 
 
