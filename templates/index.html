@@ -318,8 +318,8 @@
       <div class="confirm-accent"></div>
       <button id="cotmProfileCloseBtn" type="button" class="close-btn" aria-label="Close">&times;</button>
       <div class="cotm-profile-body">
-        <h2 class="cotm-profile-heading">Creator of the Month</h2>
-        <p class="cotm-profile-sub">Tell visitors about yourself. If selected, this appears in your spotlight.</p>
+        <h2 class="cotm-profile-heading">Creator of the Month Drawing</h2>
+        <p class="cotm-profile-sub">Tell visitors about yourself. If selected, this appears in your spotlight. Note: must have at least one unlocked artwork tile to qualify.</p>
 
         <div class="cotm-profile-field">
           <label class="cotm-profile-label" for="cotmProfileBio">Bio / Artist Statement <span class="required-mark">*</span></label>
@@ -375,9 +375,10 @@
         <div class="edit-type-selector" id="editTypeSelector">
           <button type="button" class="edit-type-pill active" data-type="artwork">Artwork</button>
           <button type="button" class="edit-type-pill" data-type="exhibit">Exhibit</button>
-          <button type="button" class="edit-type-pill" data-type="creator">Creator Profile</button>
           <button type="button" class="edit-type-pill" data-type="tile" style="display:none">Tile</button>
+          <button type="button" class="edit-type-pill" data-type="creator">Creator Profile</button>
         </div>
+        <p id="editCreatorNote" class="edit-creator-note hidden">Used for Creator of the Month drawing.<br>Note: Must have at least one unlocked artwork tile to qualify.</p>
         <div class="edit-code-section">
           <div id="editTitleGroup">
             <label for="editTitleInput" class="edit-code-label">Artwork title</label>
