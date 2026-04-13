@@ -802,6 +802,13 @@ function ensurePopupDom() {
   // ⚠️ PHASE 1 AUDIT: innerHTML mutation (non-render, UI setup)
   overlay.innerHTML = `
     <div class="popup" role="dialog" aria-modal="true" aria-label="Artwork preview">
+      <div class="popup-welcome-banner hidden" id="popupWelcomeBanner">
+        <img src="/static/images/logo_email.png" class="popup-welcome-logo" alt="">
+        <div class="popup-welcome-text">
+          <div class="popup-welcome-line1">Welcome to The Last Gallery!</div>
+          <div class="popup-welcome-line2">Add Your Artwork. It's FREE!</div>
+        </div>
+      </div>
       <div class="popup-title">
         <div class="art-title" id="popupTitle"></div>
         <div class="art-artist" id="popupArtist"></div>
@@ -916,6 +923,16 @@ window.openArtworkPopup = openArtworkPopup;
 function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensions, editionInfo, forSale, saleType, contact1Type, contact1Value, contact2Type, contact2Value, unlocked, assetId, tileId, exhibitContext, upgradable }) {
   _currentPopupAssetId = assetId || null;
   const overlay = ensurePopupDom();
+
+  // Show welcome banner for art deep link visitors
+  const welcomeBanner = document.getElementById('popupWelcomeBanner');
+  if (welcomeBanner) {
+    if (window.PAGE_MODE === 'art' && !window.__simpleWelcomeInit) {
+      welcomeBanner.classList.remove('hidden');
+    } else {
+      welcomeBanner.classList.add('hidden');
+    }
+  }
 
   const titleEl  = $(IDS.popupTitle);
   const artistEl = $(IDS.popupArtist);
@@ -1137,6 +1154,14 @@ function closeArtworkPopup(silent) {
   // Notify COTM module to restore card from dimmed state
   if (typeof window._onCotmPopupClosed === 'function') {
     window._onCotmPopupClosed();
+  }
+
+  // Art deep link: trigger pinch hint after visitor closes the shared artwork
+  if (!window.__simpleWelcomeInit) {
+    window.__simpleWelcomeInit = true;
+    const welcomeBanner = document.getElementById('popupWelcomeBanner');
+    if (welcomeBanner) welcomeBanner.classList.add('hidden');
+    setTimeout(showPinchHint, 300);
   }
 }
 
@@ -1788,8 +1813,77 @@ document.addEventListener("DOMContentLoaded", () => {
       commitWallStateChange(assignments.length ? 'boot hydration' : 'boot hydration (no-db)');
       // Show welcome banner AFTER boot hydration/render has completed
       // Skip welcome if PAGE_MODE is set (edit or creator-of-the-month)
+      // For "art" deep links: show art first, welcome after popup closes
       if (!window.PAGE_MODE) {
         requestAnimationFrame(() => initSimpleWelcomeAlways());
+      } else if (window.PAGE_MODE === "art") {
+        // Art share deep links: open popup immediately, defer welcome until close
+        const artAssetId = window._artDeepLinkAssetId;
+        delete window._artDeepLinkAssetId;
+        requestAnimationFrame(() => {
+          // Exhibit image deep link (ei:<image_id>)
+          if (artAssetId && artAssetId.startsWith("ei:")) {
+            const imageId = artAssetId.slice(3);
+            fetch("/api/exhibit_image/" + imageId)
+              .then(r => r.ok ? r.json() : null)
+              .then(data => {
+                if (!data || !data.ok) return;
+                const img = data.image;
+                openArtworkPopup({
+                  imgSrc: img.image_url,
+                  title: img.artwork_title || "",
+                  artist: img.artist_name || "",
+                  yearCreated: img.year_created || "",
+                  medium: img.medium || "",
+                  dimensions: img.dimensions || "",
+                  editionInfo: img.edition_info || "",
+                  forSale: img.for_sale || "",
+                  saleType: img.sale_type || "",
+                  contact1Type: img.contact1_type || "",
+                  contact1Value: img.contact1_value || "",
+                  contact2Type: img.contact2_type || "",
+                  contact2Value: img.contact2_value || "",
+                  assetId: artAssetId
+                });
+              })
+              .catch(err => { if (window.DEBUG) console.warn("Exhibit image deep link failed:", err); });
+            return;
+          }
+
+          const tileEl = document.querySelector('.tile[data-asset-id="' + artAssetId + '"]');
+          if (!tileEl) return;
+
+          // Exhibit tiles → open exhibit intro
+          if (tileEl.dataset.assetType === 'exhibit') {
+            if (typeof window.openExhibitIntro === 'function') {
+              window.openExhibitIntro(parseInt(artAssetId));
+            }
+            return;
+          }
+
+          // Regular artwork tiles → open popup
+          if (tileEl.dataset.popupUrl) {
+            openArtworkPopup({
+              imgSrc: tileEl.dataset.popupUrl,
+              title: tileEl.dataset.artworkName || "",
+              artist: tileEl.dataset.artistName || "",
+              yearCreated: tileEl.dataset.yearCreated || "",
+              medium: tileEl.dataset.medium || "",
+              dimensions: tileEl.dataset.dimensions || "",
+              editionInfo: tileEl.dataset.editionInfo || "",
+              forSale: tileEl.dataset.forSale || "",
+              saleType: tileEl.dataset.saleType || "",
+              contact1Type: tileEl.dataset.contact1Type || "",
+              contact1Value: tileEl.dataset.contact1Value || "",
+              contact2Type: tileEl.dataset.contact2Type || "",
+              contact2Value: tileEl.dataset.contact2Value || "",
+              unlocked: tileEl.dataset.unlocked || "0",
+              assetId: tileEl.dataset.assetId || "",
+              tileId: tileEl.dataset.id || "",
+              upgradable: tileEl.dataset.upgradable === "1"
+            });
+          }
+        });
       } else {
         window.__simpleWelcomeInit = true;
 
@@ -1803,76 +1897,6 @@ document.addEventListener("DOMContentLoaded", () => {
           const upgradeAssetId = window._upgradeDeepLinkAssetId;
           delete window._upgradeDeepLinkAssetId;
           requestAnimationFrame(() => openUnlockModal(upgradeAssetId));
-        }
-
-        // Art share deep link handler (?art=<asset_id> or ?art=ei:<image_id>)
-        if (window.PAGE_MODE === "art") {
-          const artAssetId = window._artDeepLinkAssetId;
-          delete window._artDeepLinkAssetId;
-          requestAnimationFrame(() => {
-            // Exhibit image deep link (ei:<image_id>)
-            if (artAssetId && artAssetId.startsWith("ei:")) {
-              const imageId = artAssetId.slice(3);
-              fetch("/api/exhibit_image/" + imageId)
-                .then(r => r.ok ? r.json() : null)
-                .then(data => {
-                  if (!data || !data.ok) return;
-                  const img = data.image;
-                  openArtworkPopup({
-                    imgSrc: img.image_url,
-                    title: img.artwork_title || "",
-                    artist: img.artist_name || "",
-                    yearCreated: img.year_created || "",
-                    medium: img.medium || "",
-                    dimensions: img.dimensions || "",
-                    editionInfo: img.edition_info || "",
-                    forSale: img.for_sale || "",
-                    saleType: img.sale_type || "",
-                    contact1Type: img.contact1_type || "",
-                    contact1Value: img.contact1_value || "",
-                    contact2Type: img.contact2_type || "",
-                    contact2Value: img.contact2_value || "",
-                    assetId: artAssetId
-                  });
-                })
-                .catch(err => { if (window.DEBUG) console.warn("Exhibit image deep link failed:", err); });
-              return;
-            }
-
-            const tileEl = document.querySelector('.tile[data-asset-id="' + artAssetId + '"]');
-            if (!tileEl) return;
-
-            // Exhibit tiles → open exhibit intro
-            if (tileEl.dataset.assetType === 'exhibit') {
-              if (typeof window.openExhibitIntro === 'function') {
-                window.openExhibitIntro(parseInt(artAssetId));
-              }
-              return;
-            }
-
-            // Regular artwork tiles → open popup
-            if (tileEl.dataset.popupUrl) {
-              openArtworkPopup({
-                imgSrc: tileEl.dataset.popupUrl,
-                title: tileEl.dataset.artworkName || "",
-                artist: tileEl.dataset.artistName || "",
-                yearCreated: tileEl.dataset.yearCreated || "",
-                medium: tileEl.dataset.medium || "",
-                dimensions: tileEl.dataset.dimensions || "",
-                editionInfo: tileEl.dataset.editionInfo || "",
-                forSale: tileEl.dataset.forSale || "",
-                saleType: tileEl.dataset.saleType || "",
-                contact1Type: tileEl.dataset.contact1Type || "",
-                contact1Value: tileEl.dataset.contact1Value || "",
-                contact2Type: tileEl.dataset.contact2Type || "",
-                contact2Value: tileEl.dataset.contact2Value || "",
-                unlocked: tileEl.dataset.unlocked || "0",
-                assetId: tileEl.dataset.assetId || "",
-                tileId: tileEl.dataset.id || "",
-                upgradable: tileEl.dataset.upgradable === "1"
-              });
-            }
-          });
         }
 
         // Creator of the Month handler (non-edit mode — edit mode handled by cotm.js DOMContentLoaded)
