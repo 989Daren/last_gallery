@@ -77,7 +77,7 @@
               '<input type="text" class="unlock-modal-input" id="unlockCodeInput" maxlength="8" placeholder="8-character code" autocomplete="off" />' +
               '<div class="unlock-modal-inline-error hidden" id="unlockCodeError"></div>' +
             '</div>' +
-            '<button class="unlock-modal-cta" type="button" id="unlockStep1Btn">Continue</button>' +
+            '<button class="unlock-modal-cta btn-gold" type="button" id="unlockStep1Btn">Continue</button>' +
             '<div class="unlock-modal-forgot" id="unlockForgotLink">Forgot your edit code?</div>' +
             '<div class="unlock-modal-resend-section hidden" id="unlockResendSection">' +
               '<input type="email" class="unlock-modal-input" id="unlockResendEmail" placeholder="Your email address" />' +
@@ -92,7 +92,7 @@
             '<h2 class="unlock-modal-headline">Your Artworks</h2>' +
             '<p class="unlock-modal-subtitle" id="unlockEmailDisplay"></p>' +
             '<div class="unlock-artwork-list" id="unlockArtworkList"></div>' +
-            '<button class="unlock-modal-cta" type="button" id="unlockStep2Btn" disabled>Continue</button>' +
+            '<button class="unlock-modal-cta btn-gold" type="button" id="unlockStep2Btn" disabled>Continue</button>' +
             '<div class="unlock-modal-back-link" id="unlockStep2Back">Back</div>' +
           '</div>' +
 
@@ -467,7 +467,7 @@
 
         var ctaHtml = '';
         if (tier.status === 'available') {
-          ctaHtml = '<button class="unlock-tier-cta" type="button" data-tier="' + tier.tier + '">Purchase</button>';
+          ctaHtml = '<button class="unlock-tier-cta btn-gold" type="button" data-tier="' + tier.tier + '">Purchase</button>';
         }
 
         card.innerHTML =

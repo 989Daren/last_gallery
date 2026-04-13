@@ -175,7 +175,7 @@
               'placeholder="Awards, residencies, exhibitions, collections, press" ' +
               'maxlength="1000" rows="3">' + escapeHtml(exhibit.professional_highlights) + '</textarea>' +
           '</div>' +
-          '<button class="exdash-save-profile" id="exdashSaveProfile">Save Profile</button>' +
+          '<button class="exdash-save-profile btn-gold" id="exdashSaveProfile">Save Profile</button>' +
           '</div>' +
         '</div>' +
 
@@ -189,7 +189,7 @@
             listHtml +
           '</div>' +
           '<div class="exdash-bottom-bar">' +
-            '<button class="exdash-add-btn" id="exdashAddBtn"' +
+            '<button class="exdash-add-btn btn-gold" id="exdashAddBtn"' +
               (imageCount >= 20 ? ' disabled' : '') + '>Add Artwork</button>' +
             '<button class="exdash-done-btn" id="exdashDoneBtn">Done</button>' +
           '</div>' +
@@ -654,7 +654,7 @@
             '<input type="text" id="exdashMetaC2Value" class="exdash-input exdash-contact-value" value="' + escapeHtml(img.contact2_value || '') + '" />' +
           '</div>' +
         '</div>' +
-        '<button class="exdash-save-profile" id="exdashSaveMeta">Save Details</button>' +
+        '<button class="exdash-save-profile btn-gold" id="exdashSaveMeta">Save Details</button>' +
       '</div>';
 
     container.scrollTop = 0;

@@ -45,6 +45,43 @@
   --input-bg: rgba(0,0,0,0.35);
 }
 
+/* ===== Shared Button Foundations ===== */
+.btn-gold {
+  background: linear-gradient(135deg, #b8860b, #ffd700);
+  color: #111;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+.btn-gold:hover { filter: brightness(1.1); }
+
+.btn-outline {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.btn-outline:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.btn-circle {
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.2s;
+}
+.btn-circle:hover { background: rgba(0, 0, 0, 0.9); }
+
 /* ✅ Page must never scroll horizontally.
    Horizontal scrolling (when needed) is handled ONLY by .gallery-wall-wrapper. */
 html, body {
@@ -511,25 +548,6 @@ label {
   border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 700;
-  cursor: pointer;
-  transition: filter 0.2s, border-color 0.2s, color 0.2s;
-}
-.about-exhibits-btn-primary {
-  border: none;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-}
-.about-exhibits-btn-primary:hover {
-  filter: brightness(1.1);
-}
-.about-exhibits-btn-secondary {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-}
-.about-exhibits-btn-secondary:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 @media (max-width: 600px) {
@@ -714,33 +732,10 @@ label {
 .countdownModalCard .cd-actions button {
   padding: 8px 20px;
   border-radius: 8px;
-  border: none;
-  cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;
-  transition: filter 0.2s, border-color 0.2s, color 0.2s;
 }
 
-.countdownModalCard .cd-actions .cd-cancel-btn {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.countdownModalCard .cd-actions .cd-cancel-btn:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.countdownModalCard .cd-actions .cd-save-btn {
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-  font-weight: 700;
-}
-
-.countdownModalCard .cd-actions .cd-save-btn:hover {
-  filter: brightness(1.1);
-}
 
 /* =====================================================
    GALLERY WALL
@@ -1017,18 +1012,13 @@ label {
 }
 
 .ribbon-upgrade-btn {
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  border: none;
   color: #000;
   font-size: 0.8rem;
-  font-weight: bold;
   letter-spacing: 0.05em;
   padding: 4px 14px;
   border-radius: 3px;
-  cursor: pointer;
   pointer-events: auto;
   margin-left: 8px;
-  transition: filter 0.2s;
 }
 
 .ribbon-upgrade-btn:hover {
@@ -1308,32 +1298,9 @@ label {
   padding: 10px 20px;
   font-size: 0.9rem;
   border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  transition: filter 0.2s, border-color 0.2s, color 0.2s;
   font-weight: 500;
 }
 
-.modal-actions-tier2 .secondary-btn {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.modal-actions-tier2 .secondary-btn:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.modal-actions-tier2 .primary-btn {
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-  font-weight: 700;
-}
-
-.modal-actions-tier2 .primary-btn:hover {
-  filter: brightness(1.1);
-}
 
 .modal-actions-tier2 button:disabled {
   opacity: 0.5;
@@ -1398,33 +1365,15 @@ label {
 /* Primary button — gold gradient */
 #metaModal .primary-btn {
   padding: 10px 28px;
-  border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
   font-size: 0.9rem;
-  font-weight: 700;
-  transition: filter 0.2s;
-}
-
-#metaModal .primary-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
 }
 
 /* Secondary button — outlined, muted */
 #metaModal .secondary-btn {
   padding: 10px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
   font-size: 0.9rem;
-  transition: border-color 0.2s, color 0.2s;
-}
-
-#metaModal .secondary-btn:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Input focus — gold tint */
@@ -1531,33 +1480,9 @@ label {
   padding: 10px 20px;
   font-size: 0.9rem;
   border-radius: 8px;
-  border: none;
-  cursor: pointer;
   font-weight: 500;
 }
 
-.confirm-banner-actions .secondary-btn {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  transition: border-color 0.2s, color 0.2s;
-}
-
-.confirm-banner-actions .secondary-btn:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.confirm-banner-actions .primary-btn {
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-  font-weight: 700;
-  transition: filter 0.2s;
-}
-
-.confirm-banner-actions .primary-btn:hover {
-  filter: brightness(1.1);
-}
 
 @media (max-width: 600px) {
   .confirm-banner-content {
@@ -1773,51 +1698,21 @@ label {
   padding: 10px 20px;
   font-size: 0.9rem;
   border-radius: 8px;
-  cursor: pointer;
   font-weight: 500;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  transition: border-color 0.2s, color 0.2s;
-}
-
-.edit-banner-cancel:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 .edit-banner-continue {
   padding: 10px 20px;
   font-size: 0.9rem;
   border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  font-weight: 700;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-  transition: filter 0.2s;
-}
-
-.edit-banner-continue:hover {
-  filter: brightness(1.1);
 }
 
 .resend-btn {
   padding: 8px 16px;
   font-size: 0.85rem;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  cursor: pointer;
   font-weight: 500;
   white-space: nowrap;
-  transition: border-color 0.2s, color 0.2s;
-}
-
-.resend-btn:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 @media (max-width: 600px) {
@@ -2040,31 +1935,13 @@ label {
 }
 .cotm-profile-actions .secondary-btn {
   padding: 10px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
   font-size: 0.9rem;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-.cotm-profile-actions .secondary-btn:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 .cotm-profile-actions .primary-btn {
   padding: 10px 28px;
-  border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
   font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: filter 0.2s;
-}
-.cotm-profile-actions .primary-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
 }
 .cotm-profile-actions .primary-btn:disabled {
   opacity: 0.5;
@@ -2229,34 +2106,14 @@ label {
 
 #uploadModal #cancelUploadBtn {
   padding: 10px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
   font-size: 0.9rem;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-
-#uploadModal #cancelUploadBtn:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 #uploadModal #uploadContinue {
   padding: 10px 28px;
-  border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
   font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: filter 0.2s;
-}
-
-#uploadModal #uploadContinue:hover:not(:disabled) {
-  filter: brightness(1.1);
 }
 
 #uploadModal #uploadContinue:disabled {
@@ -2957,15 +2814,6 @@ label {
   right: 37px;
   width: 29px;
   height: 29px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
   transition: background 0.2s, opacity 0.3s;
   z-index: 10;
   opacity: 0;
@@ -2976,10 +2824,6 @@ label {
 .popup-overlay.is-open.stage-info-text .popup-share-btn {
   opacity: 1;
   pointer-events: auto;
-}
-
-.popup-share-btn:hover {
-  background: rgba(0, 0, 0, 0.9);
 }
 
 /* Hide share button for exhibit image popups (no asset_id to share) */
@@ -2994,17 +2838,8 @@ label {
   right: 0;
   width: 29px;
   height: 29px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
   font-size: 22px;
   line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
   transition: background 0.2s, opacity 0.3s;
   z-index: 10;
   opacity: 0;
@@ -3015,10 +2850,6 @@ label {
 .popup-overlay.is-open.hide-info .popup-close-btn {
   opacity: 1;
   pointer-events: auto;
-}
-
-.popup-close-btn:hover {
-  background: rgba(0, 0, 0, 0.9);
 }
 
 /* Share toast notification */
@@ -3050,17 +2881,8 @@ label {
   right: 10px;
   width: 28px;
   height: 28px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
   font-size: 20px;
   line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
   transition: background 0.2s, opacity 0.2s;
   z-index: 10;
   opacity: 0;
@@ -3071,10 +2893,6 @@ label {
 .popup-overlay.stage-info-text:not(.hide-info) .ribbon-close-btn {
   opacity: 1;
   pointer-events: auto;
-}
-
-.ribbon-close-btn:hover {
-  background: rgba(0, 0, 0, 0.9);
 }
 
 /* Dismiss ribbon only */
@@ -3614,36 +3432,18 @@ label {
 }
 
 .deadline-banner-unlock {
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  border: none;
   color: #000;
   padding: 10px 20px;
   font-size: 0.9rem;
   font-weight: 600;
   border-radius: 6px;
-  cursor: pointer;
-  transition: filter 0.2s;
-}
-
-.deadline-banner-unlock:hover {
-  filter: brightness(1.1);
 }
 
 .deadline-banner-dismiss {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.6);
   padding: 10px 20px;
   font-size: 0.9rem;
   font-weight: 500;
   border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-
-.deadline-banner-dismiss:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 @media (max-width: 600px) {
@@ -3770,18 +3570,9 @@ label {
   width: 100%;
   padding: 14px;
   font-size: 1rem;
-  font-weight: 700;
-  border: none;
   border-radius: 8px;
-  cursor: pointer;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
   transition: filter 0.2s, opacity 0.2s;
   margin-bottom: 12px;
-}
-
-.unlock-modal-cta:hover {
-  filter: brightness(1.1);
 }
 
 .unlock-modal-cta:disabled {
@@ -4099,18 +3890,9 @@ label {
   width: 100%;
   padding: 10px;
   font-size: 0.9rem;
-  font-weight: 700;
-  border: none;
   border-radius: 6px;
-  cursor: pointer;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
   transition: filter 0.2s, opacity 0.2s;
   margin-top: 4px;
-}
-
-.unlock-tier-cta:hover {
-  filter: brightness(1.1);
 }
 
 .unlock-tier-cta:disabled {
@@ -4209,17 +3991,7 @@ label {
   display: inline-block;
   padding: 12px 28px;
   font-size: 0.95rem;
-  font-weight: 700;
-  border: none;
   border-radius: 8px;
-  cursor: pointer;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-  transition: filter 0.2s;
-}
-
-.purchase-success-btn:hover {
-  filter: brightness(1.1);
 }
 
 /* =====================================================
@@ -4445,21 +4217,10 @@ label {
 
 .pricing-cta {
   display: block;
-  width: 100%;
   margin-top: 12px;
   padding: 12px;
   font-size: 1rem;
-  font-weight: 700;
-  border: none;
   border-radius: 8px;
-  cursor: pointer;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-  transition: filter 0.2s;
-}
-
-.pricing-cta:hover {
-  filter: brightness(1.1);
 }
 
 @media (max-width: 600px) {
@@ -4683,52 +4444,23 @@ label {
   position: absolute;
   width: 27px;
   height: 27px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
   z-index: 2;
-  transition: background 0.2s;
-}
-.exhibit-intro-share-btn:hover {
-  background: rgba(0, 0, 0, 0.9);
 }
 
 .exhibit-intro-cancel {
   flex: 1;
   padding: 12px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
   font-size: 0.95rem;
   font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-.exhibit-intro-cancel:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 .exhibit-intro-enter {
   flex: 1;
   padding: 12px;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  border: none;
   border-radius: 8px;
-  color: #111;
   font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: filter 0.2s;
 }
-.exhibit-intro-enter:hover { filter: brightness(1.1); }
 
 .exhibit-intro-loading,
 .exhibit-intro-error {
@@ -5142,14 +4874,11 @@ label {
 }
 
 .exdash-save-profile {
-  background: linear-gradient(135deg, #b8860b, #ffd700);
   color: #000;
-  border: none;
   border-radius: 6px;
   padding: 9px 20px;
   font-size: 0.85rem;
   font-weight: 600;
-  cursor: pointer;
   width: 100%;
 }
 .exdash-save-profile:disabled {
@@ -5308,14 +5037,11 @@ label {
 
 .exdash-add-btn {
   flex: 1;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
   color: #000;
-  border: none;
   border-radius: 6px;
   padding: 10px 0;
   font-size: 0.85rem;
   font-weight: 600;
-  cursor: pointer;
 }
 .exdash-add-btn:disabled {
   opacity: 0.4;
@@ -5626,16 +5352,9 @@ label {
 }
 .cotm-enter {
   padding: 10px 28px;
-  border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-  font-weight: 700;
   font-size: 0.95rem;
-  cursor: pointer;
-  transition: filter 0.2s;
 }
-.cotm-enter:hover { filter: brightness(1.1); }
 .cotm-enter-drawing {
   padding: 10px 28px;
   border: 1px solid #D4A843;
@@ -5657,19 +5376,8 @@ label {
   position: absolute;
   width: 27px;
   height: 27px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
   z-index: 2;
-  transition: background 0.2s;
 }
-.cotm-share-btn:hover { background: rgba(0, 0, 0, 0.9); }
 
 .cotm-edit-btn {
   position: absolute;
@@ -5778,13 +5486,8 @@ label {
 }
 .cotm-edit-photo-btn {
   padding: 6px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
   font-size: 0.82rem;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
 }
 .cotm-edit-photo-btn:hover { border-color: #D4A843; color: #D4A843; }
 
@@ -5823,14 +5526,9 @@ label {
 }
 .cotm-edit-toggle-btn {
   padding: 4px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
   font-size: 0.75rem;
-  cursor: pointer;
   flex-shrink: 0;
-  transition: border-color 0.2s, color 0.2s;
 }
 .cotm-edit-toggle-btn:hover { border-color: #D4A843; color: #D4A843; }
 
@@ -5843,17 +5541,8 @@ label {
 }
 .cotm-edit-save {
   padding: 9px 22px;
-  border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  color: #111;
-  font-weight: 700;
   font-size: 0.9rem;
-  cursor: pointer;
-  transition: filter 0.2s;
-}
-.cotm-edit-save:hover:not(:disabled) {
-  filter: brightness(1.1);
 }
 .cotm-edit-save:disabled {
   opacity: 0.6;
@@ -5861,18 +5550,9 @@ label {
 }
 .cotm-edit-done {
   padding: 9px 22px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
   font-size: 0.9rem;
   font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-.cotm-edit-done:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 /* ===== Mobile Responsive ===== */

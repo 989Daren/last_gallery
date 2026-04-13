@@ -37,8 +37,8 @@
           '<p class="deadline-banner-text">Your artwork is live on the gallery wall! Since you already have a free tile, this upload must be unlocked within 24 hours or it will be removed.</p>' +
 
           '<div class="deadline-banner-footer">' +
-            '<button class="deadline-banner-unlock" type="button">Unlock Now</button>' +
-            '<button class="deadline-banner-dismiss" type="button">OK, I understand</button>' +
+            '<button class="deadline-banner-unlock btn-gold" type="button">Unlock Now</button>' +
+            '<button class="deadline-banner-dismiss btn-outline" type="button">OK, I understand</button>' +
           '</div>' +
 
         '</div>' +

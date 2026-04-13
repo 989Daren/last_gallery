@@ -815,18 +815,18 @@ function ensurePopupDom() {
       </div>
 
       <div class="popup-media">
-        <button class="popup-share-btn" id="popupShareBtn" aria-label="Share artwork">
+        <button class="popup-share-btn btn-circle" id="popupShareBtn" aria-label="Share artwork">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
             <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
           </svg>
         </button>
-        <button class="popup-close-btn" id="popupCloseBtn" aria-label="Close image">&times;</button>
+        <button class="popup-close-btn btn-circle" id="popupCloseBtn" aria-label="Close image">&times;</button>
         <img class="popup-img" id="popupImg" alt="">
         <div class="popup-info">
           <div class="popup-info-bg"></div>
           <div class="popup-info-text" id="popupInfoText"></div>
-          <button class="ribbon-close-btn" id="ribbonCloseBtn" aria-label="Close info">&times;</button>
+          <button class="ribbon-close-btn btn-circle" id="ribbonCloseBtn" aria-label="Close info">&times;</button>
         </div>
       </div>
     </div>
@@ -1078,7 +1078,7 @@ function openArtworkPopup({ imgSrc, title, artist, yearCreated, medium, dimensio
       var actionLabel = ownedInfo ? (upgradable ? 'upgrade' : !ownedInfo.unlocked ? 'unlock' : null) : null;
       if (actionLabel && typeof window.openFloorUpgrade === 'function') {
         const actionBtn = document.createElement("button");
-        actionBtn.className = "ribbon-upgrade-btn";
+        actionBtn.className = "ribbon-upgrade-btn btn-gold";
         actionBtn.type = "button";
         actionBtn.textContent = actionLabel;
         actionBtn.title = actionLabel === 'upgrade'
@@ -2076,7 +2076,7 @@ document.addEventListener("DOMContentLoaded", () => {
           '<div class="purchase-success-icon">\u2713</div>' +
           '<h2 class="purchase-success-headline">Upgrade Complete!</h2>' +
           '<p class="purchase-success-msg">' + msg + '</p>' +
-          '<button class="purchase-success-btn" type="button">View My Artwork</button>' +
+          '<button class="purchase-success-btn btn-gold" type="button">View My Artwork</button>' +
         '</div>' +
       '</div>';
 

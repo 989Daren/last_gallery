@@ -296,7 +296,7 @@
           expandedHtml +
           thumbsHtml +
           '<div class="cotm-actions">' +
-            '<button class="cotm-enter">Enter Gallery</button>' +
+            '<button class="cotm-enter btn-gold">Enter Gallery</button>' +
             '<button class="cotm-enter-drawing">Enter to Win!</button>' +
           '</div>' +
         '</div>' +
@@ -360,7 +360,7 @@
 
     // Share button — absolute positioned above card top-right
     var shareBtn = document.createElement('button');
-    shareBtn.className = 'cotm-share-btn';
+    shareBtn.className = 'cotm-share-btn btn-circle';
     shareBtn.type = 'button';
     shareBtn.setAttribute('aria-label', 'Share');
     shareBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
@@ -536,7 +536,7 @@
         '<div class="cotm-edit-artwork-row' + (excluded ? ' cotm-edit-excluded' : '') + '" data-asset-id="' + a.asset_id + '">' +
           '<img class="cotm-edit-artwork-thumb" src="' + escapeHtml(a.tile_url) + '" alt="" />' +
           '<div class="cotm-edit-artwork-title">' + escapeHtml(a.artwork_title || 'Untitled') + '</div>' +
-          '<button class="cotm-edit-toggle-btn" type="button">' + (excluded ? 'Include' : 'Exclude') + '</button>' +
+          '<button class="cotm-edit-toggle-btn btn-outline" type="button">' + (excluded ? 'Include' : 'Exclude') + '</button>' +
         '</div>';
     }
 
@@ -551,7 +551,7 @@
           '<div class="cotm-edit-section">' +
             '<div class="cotm-edit-photo-field">' +
               '<div class="cotm-edit-photo-preview" id="cotmEditPhotoPreview">' + photoPreview + '</div>' +
-              '<button class="cotm-edit-photo-btn" id="cotmEditPhotoBtn" type="button">' +
+              '<button class="cotm-edit-photo-btn btn-outline" id="cotmEditPhotoBtn" type="button">' +
                 (cotm.bio_photo_url ? 'Change Photo' : 'Add Headshot') +
               '</button>' +
             '</div>' +
@@ -601,8 +601,8 @@
             : '') +
 
           '<div class="cotm-edit-actions">' +
-            '<button class="cotm-edit-save" id="cotmEditSave">Save</button>' +
-            '<button class="cotm-edit-done" id="cotmEditDone">Done</button>' +
+            '<button class="cotm-edit-save btn-gold" id="cotmEditSave">Save</button>' +
+            '<button class="cotm-edit-done btn-outline" id="cotmEditDone">Done</button>' +
           '</div>' +
         '</div>' +
       '</div>';

@@ -200,8 +200,8 @@
           bioHtml +
           expandedHtml +
           '<div class="exhibit-intro-actions">' +
-            '<button class="exhibit-intro-cancel">Cancel</button>' +
-            '<button class="exhibit-intro-enter">Enter Exhibit</button>' +
+            '<button class="exhibit-intro-cancel btn-outline">Cancel</button>' +
+            '<button class="exhibit-intro-enter btn-gold">Enter Exhibit</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -268,7 +268,7 @@
 
     // Share button — absolute above intro card, to the left of edit (if present)
     var shareBtn = document.createElement('button');
-    shareBtn.className = 'exhibit-intro-share-btn';
+    shareBtn.className = 'exhibit-intro-share-btn btn-circle';
     shareBtn.type = 'button';
     shareBtn.setAttribute('aria-label', 'Share exhibit');
     shareBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
