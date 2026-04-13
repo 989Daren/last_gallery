@@ -357,6 +357,9 @@
           '<div class="exhibit-ribbon-wrapper">' +
             '<a class="exhibit-about-link" id="exhibitAboutLink">About Exhibits</a>' +
             '<div class="exhibit-gold-line exhibit-gold-line-top"></div>' +
+            '<div class="exhibit-loading-notice" id="exhibitLoadingNotice">' +
+              'Exhibit Loading<span class="exhibit-loading-dots"><span>.</span><span>.</span><span>.</span></span>' +
+            '</div>' +
             '<div class="exhibit-ribbon" id="exhibitRibbon"></div>' +
             '<div class="exhibit-gold-line exhibit-gold-line-bottom"></div>' +
           '</div>' +
@@ -391,6 +394,12 @@
     // Hide ribbon until images are measured and positioned
     _ribbonEl.style.visibility = 'hidden';
 
+    // Show loading notice after a short delay (avoid flash on fast loads)
+    var loadingNotice = document.getElementById('exhibitLoadingNotice');
+    var loadingTimer = setTimeout(function() {
+      if (loadingNotice) loadingNotice.classList.add('visible');
+    }, 300);
+
     // Place one copy of source images (all at left:0 temporarily)
     for (var i = 0; i < images.length; i++) {
       var item = createTrackItem(i, 0, 0);
@@ -404,6 +413,17 @@
     var allImgs = _ribbonEl.querySelectorAll('img');
 
     function onAllLoaded() {
+      // Dismiss loading notice
+      clearTimeout(loadingTimer);
+      if (loadingNotice) {
+        if (loadingNotice.classList.contains('visible')) {
+          loadingNotice.classList.add('fade-out');
+          setTimeout(function() { loadingNotice.remove(); }, 180);
+        } else {
+          loadingNotice.remove();
+        }
+      }
+
       // Measure rendered widths
       for (var i = 0; i < _trackItems.length; i++) {
         var w = _trackItems[i].el.offsetWidth;
