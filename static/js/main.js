@@ -64,7 +64,7 @@ function showPinchHint() {
 
   const label = document.createElement('div');
   label.className = 'pinch-hint-label';
-  label.textContent = 'PINCH TO ZOOM';
+  label.textContent = 'PINCH TO ZOOM OUT';
 
   hint.appendChild(dotL);
   hint.appendChild(dotR);
@@ -2005,10 +2005,29 @@ document.addEventListener("DOMContentLoaded", () => {
         centerGalleryView();
         initZoom();
 
-        // On touch devices, start zoomed out so the full wall is visible behind the welcome modal.
-        // No will-change here — applied only during active gestures to avoid mobile
-        // compositor texture limits that clip the bottom half of the grid.
-        if (window.matchMedia('(pointer: coarse)').matches && zoomState.initialized) {
+        // Landing zone: scroll to (center_x, center_y) at scale=1.0 on default homepage visits.
+        // Skip when a deep link / specific mode owns the initial scroll target.
+        const lz = window.LANDING_ZONE;
+        const lzModes = new Set(["", "edit", "creator-of-the-month"]);
+        const useLandingZone = lz && lzModes.has(window.PAGE_MODE || "");
+        if (useLandingZone) {
+          const wrapper = zoomState._wrapper || document.querySelector('.gallery-wall-wrapper');
+          const vw = wrapper ? wrapper.clientWidth : window.innerWidth;
+          // Subtract the wrapper's top padding (fixed header + countdown/COTM bars)
+          // so center_y lands at the visual middle of the usable wall area, not
+          // the middle of the whole window.
+          const padTop = wrapper ? (parseInt(getComputedStyle(wrapper).paddingTop) || 0) : 0;
+          const vh = window.innerHeight - padTop;
+          const scrollX = Math.max(0, lz.center_x - vw / 2);
+          const scrollY = Math.max(0, lz.center_y - vh / 2);
+          zoomState.scale = 1.0;
+          zoomState.tx = 0;
+          zoomState.ty = 0;
+          if (zoomState._zoomWrapper) zoomState._zoomWrapper.style.transform = '';
+          unlockScrollTo(scrollX, scrollY);
+        } else if (window.matchMedia('(pointer: coarse)').matches && zoomState.initialized) {
+          // No landing zone applicable: existing behavior — start zoomed out on touch devices
+          // so the full wall is visible behind the welcome modal.
           recalculateZoomLimits();
           zoomState.scale = zoomState.minScale;
           clampTransform(0, 0, zoomState.minScale);

@@ -4,7 +4,11 @@ __pycache__/
 # Local data files
 data/grid_color.json
 data/gallery.db
+data/gallery.db.bak*
 data/backups/
+
+# Generated preview output (regenerable via preview_landing_zones.py)
+grid utilities/landing_zones_preview.svg
 
 # Environment variables
 .env

@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from PIL import Image, ImageDraw, ImageFont
 from db import init_db, get_db
+from landing_zones import select_landing_zone, apply_zone_positioning, get_current_landing_zone
 
 load_dotenv()
 
@@ -916,7 +917,26 @@ def index():
             if db:
                 db.close()
 
-    return render_template("index.html", grid_color=grid_color, og=og, tier_config_json=json.dumps(TIER_CONFIG))
+    landing_zone_json = _landing_zone_template_json()
+    return render_template("index.html", grid_color=grid_color, og=og, tier_config_json=json.dumps(TIER_CONFIG), landing_zone_json=landing_zone_json)
+
+
+def _landing_zone_template_json():
+    """Return the current week's landing zone as a JSON string for template embedding."""
+    try:
+        zone = get_current_landing_zone()
+    except Exception:
+        app.logger.exception("[_landing_zone_template_json] lookup failed")
+        return "null"
+    if not zone:
+        return "null"
+    return json.dumps({
+        "id": zone["id"],
+        "name": zone["name"],
+        "anchor_tile_id": zone["anchor_tile_id"],
+        "center_x": zone["center_x"],
+        "center_y": zone["center_y"],
+    })
 
 
 @app.route("/edit")
@@ -926,7 +946,8 @@ def edit_page():
         grid_color = load_grid_color()
     except Exception:
         grid_color = DEFAULT_GRID_COLOR
-    return render_template("index.html", grid_color=grid_color, page_mode="edit", tier_config_json=json.dumps(TIER_CONFIG))
+    landing_zone_json = _landing_zone_template_json()
+    return render_template("index.html", grid_color=grid_color, page_mode="edit", tier_config_json=json.dumps(TIER_CONFIG), landing_zone_json=landing_zone_json)
 
 
 @app.route("/creator-of-the-month")
@@ -936,7 +957,8 @@ def artist_of_the_month():
         grid_color = load_grid_color()
     except Exception:
         grid_color = DEFAULT_GRID_COLOR
-    return render_template("index.html", grid_color=grid_color, page_mode="creator-of-the-month", tier_config_json=json.dumps(TIER_CONFIG))
+    landing_zone_json = _landing_zone_template_json()
+    return render_template("index.html", grid_color=grid_color, page_mode="creator-of-the-month", tier_config_json=json.dumps(TIER_CONFIG), landing_zone_json=landing_zone_json)
 
 
 @app.route("/api/grid-color", methods=["POST"])
@@ -1948,6 +1970,9 @@ def _run_shuffle():
         conn.close()
         return (True, "No tiles to shuffle")
 
+    # Pick this week's landing zone (caller-managed conn so it commits atomically with the shuffle)
+    zone = select_landing_zone(conn=conn)
+
     # Build tile pools grouped by size, shuffle each
     tile_size_map = get_tile_size_map()
     pools = {}  # size -> [tile_id, ...]
@@ -2053,6 +2078,29 @@ def _run_shuffle():
             tid = pool.pop()
 
         assignments[asset_id] = tid
+
+    # Landing-zone positioning pass: ensure exhibit in anchor + min 4 in zone
+    if zone:
+        asset_ids = [o['asset_id'] for o in occupied]
+        placeholders = ','.join('?' * len(asset_ids))
+        cursor.execute(
+            f"SELECT asset_id, asset_type, artist_name FROM assets WHERE asset_id IN ({placeholders})",
+            asset_ids,
+        )
+        rows = cursor.fetchall()
+        asset_type_map = {r['asset_id']: r['asset_type'] for r in rows}
+        # Mirror /api/wall_state filter: only assets with non-empty artist_name
+        # (or asset_type='info') actually render. Info tiles can land in the
+        # zone but don't satisfy the min-fill rule, so we exclude them too.
+        displayable_assets = {
+            r['asset_id'] for r in rows
+            if r['asset_type'] != 'info' and (r['artist_name'] or '').strip()
+        }
+        zone_stats = apply_zone_positioning(
+            zone, assignments, original_tile, tile_size_map,
+            asset_type_map, displayable_assets,
+        )
+        app.logger.info("[SHUFFLE] Landing zone %s applied: %s", zone['name'], zone_stats)
 
     # Write all assignments to database
     for asset_id, tid in assignments.items():

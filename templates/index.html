@@ -36,6 +36,7 @@
     window.SERVER_GRID_COLOR = "{{ grid_color|default('#b84c27') }}";
     window.PAGE_MODE = "{{ page_mode|default('') }}";
     window.TIER_CONFIG = {{ tier_config_json|default('{}')|safe }};
+    window.LANDING_ZONE = {{ landing_zone_json|default('null')|safe }};
   </script>
 
 </head>

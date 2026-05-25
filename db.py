@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 
 def get_db():
@@ -514,6 +514,31 @@ def init_db():
         cursor.execute("ALTER TABLE creator_of_the_month_new RENAME TO creator_of_the_month")
         _set_schema_version(cursor, 22)
         print("Migration 22 complete: profile columns removed from creator_of_the_month")
+
+    if current_version < 23:
+        print("Applying migration 23: landing_zones table...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS landing_zones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL DEFAULT '',
+                anchor_tile_id TEXT NOT NULL,
+                center_x INTEGER NOT NULL,
+                center_y INTEGER NOT NULL,
+                ref_width INTEGER NOT NULL DEFAULT 340,
+                ref_height INTEGER NOT NULL DEFAULT 680,
+                tile_ids TEXT NOT NULL DEFAULT '[]',
+                active INTEGER NOT NULL DEFAULT 1,
+                last_used_week TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY(anchor_tile_id) REFERENCES tiles(tile_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_landing_zones_active
+            ON landing_zones(active)
+        """)
+        _set_schema_version(cursor, 23)
+        print("Migration 23 complete: landing_zones table created")
 
     conn.commit()
     conn.close()

@@ -2,6 +2,24 @@
 
 ---
 
+## 2026-05-25
+
+### Landing Zones
+- **New feature**: gallery now opens on a curated viewport-sized region of the wall instead of the full zoomed-out grid. One zone (of 10 curated) is picked per weekly shuffle and served to everyone visiting that week.
+- **Selection rules**: random pick from active zones, excluding whichever zone was most recently used (no repeats two weeks in a row). Falls back to allowing the most-recent if exclusion would leave the pool empty.
+- **Anchor placement**: every zone is anchored on a Medium tile. After the size-respecting shuffle runs, a positioning pass swaps an exhibit into the anchor (no-stay rule preserved) and ensures the zone contains at least 4 displayable artworks (info tiles can land in-zone but don't count toward the minimum).
+- **Frontend load**: when `window.LANDING_ZONE` is present, the boot RAF scrolls to `(center_x, center_y)` at scale=1.0 instead of the existing touch-device zoom-out default. Only applied on default homepage / edit / COTM modes; deep links (art, purchase_success, upgrade) keep their own scroll targets.
+- **Pinch hint animation**: dots now animate spread → closer together, with label "PINCH TO ZOOM OUT", to demonstrate zooming back out from the landing view.
+- **Schema migration 23**: new `landing_zones` table — `id, name, anchor_tile_id (FK→tiles), center_x/y, ref_width/height, tile_ids (JSON snapshot), active, last_used_week, created_at`.
+- **New files**: `landing_zones.py` (module), `grid utilities/seed_landing_zones.py`, `grid utilities/preview_landing_zones.py`, `grid utilities/cleanup_orphan_uploads.py`.
+
+### Orphan file cleanup
+- Added `grid utilities/cleanup_orphan_uploads.py` — broadly scans every TEXT column in every table for `uploads/` references; flags top-level files in `/uploads/` that no DB row references. Archives to `_archive/` rather than hard-deleting.
+- One-time pass: archived 81 file-orphans (~20 MB), then deleted 5 abandoned-upload asset rows (assets with empty `artist_name` from users who started but never completed the metadata modal) and their image files.
+- Pre-existing data gap: `repair_tiles.py` ran once at the start of this work to add 21 tiles to the `tiles` table that existed in the SVG but had never been registered.
+
+---
+
 ## 2026-04-08
 
 ### Exhibit Image Share Links
