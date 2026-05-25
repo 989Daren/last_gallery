@@ -297,7 +297,6 @@
           thumbsHtml +
           '<div class="cotm-actions">' +
             '<button class="cotm-enter btn-gold">Enter Gallery</button>' +
-            '<button class="cotm-enter-drawing">Enter to Win!</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -305,15 +304,8 @@
     // Wire events
     var closeBtn = _overlay.querySelector('.cotm-close');
     var enterBtn = _overlay.querySelector('.cotm-enter');
-    var enterDrawingBtn = _overlay.querySelector('.cotm-enter-drawing');
     if (closeBtn) closeBtn.addEventListener('click', closeCotmCard);
     if (enterBtn) enterBtn.addEventListener('click', closeCotmCard);
-    if (enterDrawingBtn) enterDrawingBtn.addEventListener('click', function() {
-      closeCotmCard();
-      if (typeof window.openEditBannerForCreator === 'function') {
-        window.openEditBannerForCreator();
-      }
-    });
 
     // Tap anywhere to close — skip interactive elements (buttons, links, thumbnails)
     _overlay.removeEventListener('click', _onOverlayClick);

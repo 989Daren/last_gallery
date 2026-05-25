@@ -5355,21 +5355,6 @@ label {
   border-radius: 8px;
   font-size: 0.95rem;
 }
-.cotm-enter-drawing {
-  padding: 10px 28px;
-  border: 1px solid #D4A843;
-  border-radius: 8px;
-  background: transparent;
-  color: #D4A843;
-  font-weight: 700;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-.cotm-enter-drawing:hover {
-  background: rgba(212, 168, 67, 0.15);
-  color: #ffd700;
-}
 
 /* ===== Share Button ===== */
 .cotm-share-btn {
