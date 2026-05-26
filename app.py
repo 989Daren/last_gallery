@@ -860,12 +860,7 @@ def privacy():
 # ---- Routes ----
 @app.route("/")
 def index():
-    """Render the main gallery page with grid color only (no SQLite)."""
-    try:
-        grid_color = load_grid_color()
-    except Exception:
-        grid_color = DEFAULT_GRID_COLOR
-
+    """Render the main gallery page."""
     # Per-artwork OG tags for share links (?art=<asset_id> or ?art=ei:<image_id>)
     og = None
     art_id = request.args.get("art")
@@ -917,48 +912,61 @@ def index():
             if db:
                 db.close()
 
-    landing_zone_json = _landing_zone_template_json()
-    return render_template("index.html", grid_color=grid_color, og=og, tier_config_json=json.dumps(TIER_CONFIG), landing_zone_json=landing_zone_json)
+    return _render_index_template(og=og)
 
+
+# Cached current-week landing zone JSON; key is the ISO week string. The active
+# zone only changes once per shuffle, so this avoids hitting the DB on every
+# page render.
+_LANDING_ZONE_CACHE = {}
 
 def _landing_zone_template_json():
-    """Return the current week's landing zone as a JSON string for template embedding."""
+    from landing_zones import _iso_week
+    week_key = _iso_week(datetime.now(timezone.utc))
+    if week_key in _LANDING_ZONE_CACHE:
+        return _LANDING_ZONE_CACHE[week_key]
     try:
         zone = get_current_landing_zone()
     except Exception:
         app.logger.exception("[_landing_zone_template_json] lookup failed")
         return "null"
-    if not zone:
-        return "null"
-    return json.dumps({
+    payload = "null" if not zone else json.dumps({
         "id": zone["id"],
         "name": zone["name"],
         "anchor_tile_id": zone["anchor_tile_id"],
         "center_x": zone["center_x"],
         "center_y": zone["center_y"],
     })
+    _LANDING_ZONE_CACHE.clear()
+    _LANDING_ZONE_CACHE[week_key] = payload
+    return payload
+
+
+def _render_index_template(page_mode="", **extra):
+    try:
+        grid_color = load_grid_color()
+    except Exception:
+        grid_color = DEFAULT_GRID_COLOR
+    return render_template(
+        "index.html",
+        grid_color=grid_color,
+        page_mode=page_mode,
+        tier_config_json=json.dumps(TIER_CONFIG),
+        landing_zone_json=_landing_zone_template_json(),
+        **extra,
+    )
 
 
 @app.route("/edit")
 def edit_page():
     """Gallery page in edit mode — auto-opens edit banner."""
-    try:
-        grid_color = load_grid_color()
-    except Exception:
-        grid_color = DEFAULT_GRID_COLOR
-    landing_zone_json = _landing_zone_template_json()
-    return render_template("index.html", grid_color=grid_color, page_mode="edit", tier_config_json=json.dumps(TIER_CONFIG), landing_zone_json=landing_zone_json)
+    return _render_index_template(page_mode="edit")
 
 
 @app.route("/creator-of-the-month")
 def artist_of_the_month():
     """Creator of the Month page — opens COTM intro card (or edit form if code param present)."""
-    try:
-        grid_color = load_grid_color()
-    except Exception:
-        grid_color = DEFAULT_GRID_COLOR
-    landing_zone_json = _landing_zone_template_json()
-    return render_template("index.html", grid_color=grid_color, page_mode="creator-of-the-month", tier_config_json=json.dumps(TIER_CONFIG), landing_zone_json=landing_zone_json)
+    return _render_index_template(page_mode="creator-of-the-month")
 
 
 @app.route("/api/grid-color", methods=["POST"])
@@ -1957,9 +1965,10 @@ def _run_shuffle():
     conn = get_db()
     cursor = conn.cursor()
 
-    # Get occupied tiles with unlock + floor info
+    # Get occupied tiles with unlock + floor info + asset_type/artist_name (for landing-zone positioning)
     cursor.execute("""
-        SELECT t.tile_id, t.asset_id, a.unlocked, a.qualified_floor
+        SELECT t.tile_id, t.asset_id, a.unlocked, a.qualified_floor,
+               a.asset_type, a.artist_name
         FROM tiles t
         JOIN assets a ON a.asset_id = t.asset_id
         WHERE t.asset_id IS NOT NULL
@@ -2079,22 +2088,16 @@ def _run_shuffle():
 
         assignments[asset_id] = tid
 
-    # Landing-zone positioning pass: ensure exhibit in anchor + min 4 in zone
+    # Landing-zone positioning pass: ensure exhibit in anchor + min 4 in zone.
+    # asset_type/artist_name come from the SELECT at the top of this function.
+    # `displayable_assets` mirrors the /api/wall_state render filter: non-info
+    # AND artist_name set (info tiles can land in-zone but don't count toward
+    # the min-fill rule).
     if zone:
-        asset_ids = [o['asset_id'] for o in occupied]
-        placeholders = ','.join('?' * len(asset_ids))
-        cursor.execute(
-            f"SELECT asset_id, asset_type, artist_name FROM assets WHERE asset_id IN ({placeholders})",
-            asset_ids,
-        )
-        rows = cursor.fetchall()
-        asset_type_map = {r['asset_id']: r['asset_type'] for r in rows}
-        # Mirror /api/wall_state filter: only assets with non-empty artist_name
-        # (or asset_type='info') actually render. Info tiles can land in the
-        # zone but don't satisfy the min-fill rule, so we exclude them too.
+        asset_type_map = {o['asset_id']: o['asset_type'] for o in occupied}
         displayable_assets = {
-            r['asset_id'] for r in rows
-            if r['asset_type'] != 'info' and (r['artist_name'] or '').strip()
+            o['asset_id'] for o in occupied
+            if o['asset_type'] != 'info' and (o['artist_name'] or '').strip()
         }
         zone_stats = apply_zone_positioning(
             zone, assignments, original_tile, tile_size_map,

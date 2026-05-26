@@ -525,7 +525,7 @@ def init_db():
                 center_x INTEGER NOT NULL,
                 center_y INTEGER NOT NULL,
                 ref_width INTEGER NOT NULL DEFAULT 340,
-                ref_height INTEGER NOT NULL DEFAULT 680,
+                ref_height INTEGER NOT NULL DEFAULT 510,
                 tile_ids TEXT NOT NULL DEFAULT '[]',
                 active INTEGER NOT NULL DEFAULT 1,
                 last_used_week TEXT,

@@ -20,8 +20,6 @@ SVG_PATH = os.path.join(BASE_DIR, "static", "grid_full.svg")
 OUT_PATH = os.path.join(SCRIPT_DIR, "landing_zones_preview.svg")
 CHROMEPULL_OUT = "/home/daren/pc/landing_zones_preview.svg"
 
-REF_W, REF_H = 340, 510  # design px (must match seed)
-
 COLORS = [
     "#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#00c7be",
     "#30b0c7", "#007aff", "#5856d6", "#af52de", "#ff2d92",
@@ -93,16 +91,14 @@ def main():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     zones = list(conn.execute(
-        "SELECT id, name, anchor_tile_id, center_x, center_y FROM landing_zones ORDER BY id"
+        "SELECT id, name, anchor_tile_id, center_x, center_y, ref_width, ref_height "
+        "FROM landing_zones ORDER BY id"
     ).fetchall())
     conn.close()
 
     if not zones:
         print("No zones in DB. Run seed_landing_zones.py first.")
         return 1
-
-    VP_W_RAW = REF_W * scale
-    VP_H_RAW = REF_H * scale
 
     overlay = ['<g id="landing-zone-overlay" transform="scale(1 -1)" '
                'fill-opacity="0.20" stroke-width="5">']
@@ -111,14 +107,16 @@ def main():
         color = COLORS[i % len(COLORS)]
         # Convert zone center from rendered design coords to raw SVG coords:
         #   rendered_cy = (Mt_raw - raw_cy) / scale  =>  raw_cy = Mt_raw - rendered_cy*scale
+        vp_w_raw = z["ref_width"] * scale
+        vp_h_raw = z["ref_height"] * scale
         zone_center_raw_x = z["center_x"] * scale + ml_raw
         zone_center_raw_y = Mt_raw - z["center_y"] * scale
-        vl = zone_center_raw_x - VP_W_RAW / 2
-        vt = zone_center_raw_y - VP_H_RAW / 2
+        vl = zone_center_raw_x - vp_w_raw / 2
+        vt = zone_center_raw_y - vp_h_raw / 2
 
         overlay.append(
             f'<rect x="{vl:.3f}" y="{vt:.3f}" '
-            f'width="{VP_W_RAW:.3f}" height="{VP_H_RAW:.3f}" '
+            f'width="{vp_w_raw:.3f}" height="{vp_h_raw:.3f}" '
             f'fill="{color}" stroke="{color}" stroke-opacity="0.95" />'
         )
 
@@ -131,10 +129,10 @@ def main():
                 f'stroke-dasharray="12 7" />'
             )
 
-        # Label in visual top-left corner of zone
+        # Label in visual top-left corner of zone (large raw_y = visual top under flip)
         label_pt = 70
         tx = vl + 14
-        ty = vt + VP_H_RAW - 14  # large raw_y = visual top under flip
+        ty = vt + vp_h_raw - 14
         overlay.append(
             f'<g transform="translate({tx:.3f} {ty:.3f}) scale(1 -1)">'
             f'<text x="0" y="0" font-size="{label_pt}" '

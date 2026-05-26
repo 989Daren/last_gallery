@@ -60,21 +60,17 @@ def select_landing_zone(now=None, conn=None):
     cur = conn.cursor()
 
     try:
-        # Clear any prior pick for the current week. A re-selection within the same
-        # week (admin re-shuffle, etc.) overwrites the previous pick so that exactly
-        # one zone ever holds the current week's marker.
+        # A re-selection within the same week (admin re-shuffle) overwrites the
+        # previous pick so exactly one zone ever holds the current week's marker.
         cur.execute(
             "UPDATE landing_zones SET last_used_week = NULL WHERE last_used_week = ?",
             (current_week,),
         )
 
-        # Most recent last_used_week among active zones (NULL if none used yet).
-        # After the clear above, this is necessarily a past week.
         most_recent = cur.execute(
             "SELECT MAX(last_used_week) FROM landing_zones WHERE active = 1"
         ).fetchone()[0]
 
-        # Candidate pool: active, not the most-recently-used (if any)
         if most_recent:
             candidates = cur.execute(
                 """SELECT * FROM landing_zones
@@ -82,8 +78,8 @@ def select_landing_zone(now=None, conn=None):
                      AND (last_used_week IS NULL OR last_used_week != ?)""",
                 (most_recent,),
             ).fetchall()
-            # Fallback: if exclusion left no options, allow all active zones
             if not candidates:
+                # Exclusion left no options (e.g., only one active zone) — allow it.
                 candidates = cur.execute(
                     "SELECT * FROM landing_zones WHERE active = 1"
                 ).fetchall()
@@ -111,8 +107,7 @@ def select_landing_zone(now=None, conn=None):
 
 
 def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
-                            asset_type_map, displayable_assets,
-                            min_zone_fill=MIN_ZONE_FILL):
+                            asset_type_map, displayable_assets):
     """Post-shuffle swap pass to satisfy landing-zone positioning rules.
 
     Operates on the size-respecting shuffle's output. Performs same-size swaps
@@ -120,7 +115,7 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
       1. The zone's anchor M tile holds an exhibit artwork. If no exhibit
          landed in any M tile during the shuffle, fall back to any M-sized
          artwork (random pick).
-      2. At least `min_zone_fill` *displayable artwork* tiles inside the zone
+      2. At least MIN_ZONE_FILL *displayable artwork* tiles inside the zone
          are occupied (matches the wall_state render filter — info tiles and
          assets with empty artist_name don't count). Fills by swapping in
          displayable artworks from outside-zone tiles of the same size.
@@ -137,7 +132,6 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
         asset_type_map: dict {asset_id: 'artwork'|'exhibit'|'info'}.
         displayable_assets: set of asset_ids that actually render on the wall
             (non-info AND artist_name not empty).
-        min_zone_fill: minimum zone tiles to occupy.
 
     Returns:
         Stats dict for logging: anchor_swap, fill_swaps, final_zone_count.
@@ -152,7 +146,6 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
     def tile_to_asset():
         return {tid: aid for aid, tid in assignments.items()}
 
-    # === Anchor swap: prefer exhibit at anchor, fall back to any M-sized artwork ===
     t2a = tile_to_asset()
     anchor_occupant = t2a.get(anchor_tile)
     needs_swap = (
@@ -161,7 +154,6 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
     )
 
     if needs_swap:
-        # Candidates: exhibits currently at non-anchor M tiles, respecting no-stay
         exhibit_candidates = []
         for aid, tid in assignments.items():
             if asset_type_map.get(aid) != "exhibit":
@@ -169,9 +161,9 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
             if tile_size_map.get(tid) != "m" or tid == anchor_tile:
                 continue
             if original_tile.get(aid) == anchor_tile:
-                continue  # would put exhibit back in its pre-shuffle tile
+                continue
             if anchor_occupant and original_tile.get(anchor_occupant) == tid:
-                continue  # would push current occupant into its pre-shuffle tile
+                continue
             exhibit_candidates.append((aid, tid))
 
         if exhibit_candidates:
@@ -186,7 +178,7 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
                 "displaced": anchor_occupant,
             }
         elif anchor_occupant is None:
-            # No exhibit at any M tile, and anchor is empty: use any M-sized artwork
+            # No exhibit at any M tile; fall back to any M-sized artwork.
             m_candidates = [
                 (aid, tid) for aid, tid in assignments.items()
                 if tile_size_map.get(tid) == "m" and tid != anchor_tile
@@ -201,11 +193,8 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
                     "from": pick_tid,
                     "displaced": None,
                 }
-        # else: non-exhibit M art is at anchor and no exhibit is at any M tile → fine
+        # else: anchor has non-exhibit M art and no exhibit elsewhere — leave it.
 
-    # === Fill zone to min_zone_fill ===
-    # "Filled" means an artwork tile (info tiles can land in the zone but
-    # don't count toward the 4+ minimum, and they're never used as fill).
     t2a = tile_to_asset()
 
     def zone_count():
@@ -215,9 +204,9 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
         )
 
     attempted_empty = set()
-    while zone_count() < min_zone_fill:
-        # Treat tiles that hold non-displayable assets as effectively empty
-        # — they don't render, so they don't satisfy the visible-4 rule.
+    while zone_count() < MIN_ZONE_FILL:
+        # A zone tile holding a non-displayable asset is "empty" for our
+        # purposes — it doesn't render, so it can be overwritten.
         empty_zone_tiles = [
             t for t in zone_tiles
             if t not in attempted_empty
@@ -229,7 +218,6 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
         attempted_empty.add(target_tile)
         target_size = tile_size_map.get(target_tile)
 
-        # Outside-zone displayable artwork at same-size tiles, respecting no-stay
         candidates = [
             (aid, tid) for aid, tid in assignments.items()
             if tid not in zone_tiles
@@ -238,11 +226,10 @@ def apply_zone_positioning(zone, assignments, original_tile, tile_size_map,
             and original_tile.get(aid) != target_tile
         ]
         if not candidates:
-            continue  # try a different empty zone tile next iteration
+            continue
 
-        # If target_tile currently holds a non-displayable asset, this is a swap
-        # (displaced asset moves to source tile). Reject candidates that would
-        # send the displaced asset to its pre-shuffle tile.
+        # If target_tile already holds a non-displayable asset, this becomes a
+        # swap — the displaced asset must not land back in its pre-shuffle tile.
         target_occupant = t2a.get(target_tile)
         if target_occupant is not None:
             candidates = [
