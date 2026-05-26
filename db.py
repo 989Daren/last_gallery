@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "gallery.db")
 
 # Current schema version (increment when adding migrations)
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 
 def get_db():
@@ -539,6 +539,21 @@ def init_db():
         """)
         _set_schema_version(cursor, 23)
         print("Migration 23 complete: landing_zones table created")
+
+    if current_version < 24:
+        print("Applying migration 24: replace landing_zones with landing_state...")
+        cursor.execute("DROP TABLE IF EXISTS landing_zones")
+        cursor.execute("""
+            CREATE TABLE landing_state (
+                week TEXT PRIMARY KEY,
+                anchor_tile_id TEXT NOT NULL,
+                offset_cell TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY(anchor_tile_id) REFERENCES tiles(tile_id)
+            )
+        """)
+        _set_schema_version(cursor, 24)
+        print("Migration 24 complete: landing_state table created")
 
     conn.commit()
     conn.close()

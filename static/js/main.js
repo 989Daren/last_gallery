@@ -2031,26 +2031,40 @@ document.addEventListener("DOMContentLoaded", () => {
         centerGalleryView();
         initZoom();
 
-        // Landing zone: scroll to (center_x, center_y) at scale=1.0 on default homepage visits.
-        // Skip when a deep link / specific mode owns the initial scroll target.
+        // Landing zone: scroll so anchor tile sits at the offset_cell position
+        // inside the viewport, at scale=1.0. Skip when a deep link / specific
+        // mode owns the initial scroll target. Browser clamps scrollX/Y to
+        // wall bounds, so edge anchors land safely on their own.
         const lz = window.LANDING_ZONE;
         const lzModes = new Set(["", "edit", "creator-of-the-month"]);
         const useLandingZone = lz && lzModes.has(window.PAGE_MODE || "");
         if (useLandingZone) {
-          const wrapper = zoomState._wrapper || document.querySelector('.gallery-wall-wrapper');
-          const vw = wrapper ? wrapper.clientWidth : window.innerWidth;
-          // Subtract the wrapper's top padding (fixed header + countdown/COTM bars)
-          // so center_y lands at the visual middle of the usable wall area, not
-          // the middle of the whole window.
-          const padTop = wrapper ? (parseInt(getComputedStyle(wrapper).paddingTop) || 0) : 0;
-          const vh = window.innerHeight - padTop;
-          const scrollX = Math.max(0, lz.center_x - vw / 2);
-          const scrollY = Math.max(0, lz.center_y - vh / 2);
-          zoomState.scale = 1.0;
-          zoomState.tx = 0;
-          zoomState.ty = 0;
-          if (zoomState._zoomWrapper) zoomState._zoomWrapper.style.transform = '';
-          unlockScrollTo(scrollX, scrollY);
+          const OFFSET_CELLS = {
+            ul: [0.17, 0.17], uc: [0.5, 0.17], ur: [0.83, 0.17],
+            ml: [0.17, 0.5],  mc: [0.5, 0.5],  mr: [0.83, 0.5],
+            ll: [0.17, 0.83], lc: [0.5, 0.83], lr: [0.83, 0.83],
+          };
+          const tile = wallState.tiles[lz.anchor_tile_id];
+          if (tile) {
+            const units = sizeToUnits(tile.size);
+            const side = units * BASE_UNIT;
+            const cx = tile.x + side / 2;
+            const cy = tile.y + side / 2;
+            const [fx, fy] = OFFSET_CELLS[lz.offset_cell] || OFFSET_CELLS.mc;
+            const wrapper = zoomState._wrapper || document.querySelector('.gallery-wall-wrapper');
+            const vw = wrapper ? wrapper.clientWidth : window.innerWidth;
+            // Subtract wrapper top padding (fixed header + countdown/COTM bars)
+            // so vh is the usable wall area, not the full window.
+            const padTop = wrapper ? (parseInt(getComputedStyle(wrapper).paddingTop) || 0) : 0;
+            const vh = window.innerHeight - padTop;
+            const scrollX = Math.max(0, cx - fx * vw);
+            const scrollY = Math.max(0, cy - fy * vh);
+            zoomState.scale = 1.0;
+            zoomState.tx = 0;
+            zoomState.ty = 0;
+            if (zoomState._zoomWrapper) zoomState._zoomWrapper.style.transform = '';
+            unlockScrollTo(scrollX, scrollY);
+          }
         } else if (window.matchMedia('(pointer: coarse)').matches && zoomState.initialized) {
           // No landing zone applicable: existing behavior — start zoomed out on touch devices
           // so the full wall is visible behind the welcome modal.

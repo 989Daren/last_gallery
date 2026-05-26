@@ -354,7 +354,14 @@ def _parse_svg_tiles(svg_path):
         t['norm_top'] = t['design_top'] - min_top
         t['size'] = classify(t['design_width'])
 
-    # Assign IDs
+    # Wall height in design space (pre-flip) — used to flip Y so coords match
+    # what the frontend renders via buildLayoutTiles().
+    units = {'s': 1, 'm': 2, 'lg': 3, 'xl': 4}
+    DESIGN_S = 85
+    valid = [t for t in raw_tiles if t['size'] != 'unknown']
+    wall_h = max(t['norm_top'] + units[t['size']] * DESIGN_S for t in valid) if valid else 0
+
+    # Assign IDs and emit rendered geometry (post-flip, scale=1.0)
     counters = {'s': 0, 'm': 0, 'lg': 0, 'xl': 0, 'unknown': 0}
     prefix = {'s': 'S', 'm': 'M', 'lg': 'L', 'xl': 'XL', 'unknown': 'U'}
     tiles = []
@@ -363,7 +370,18 @@ def _parse_svg_tiles(svg_path):
             continue
         counters[t['size']] += 1
         tid = prefix[t['size']] + str(counters[t['size']])
-        tiles.append({'id': tid, 'size': t['size']})
+        side = units[t['size']] * DESIGN_S
+        rendered_top = wall_h - side - t['norm_top']
+        tiles.append({
+            'id': tid,
+            'size': t['size'],
+            'x': t['norm_left'],
+            'y': rendered_top,
+            'w': side,
+            'h': side,
+            'cx': t['norm_left'] + side / 2,
+            'cy': rendered_top + side / 2,
+        })
 
     return tiles
 
@@ -931,11 +949,8 @@ def _landing_zone_template_json():
         app.logger.exception("[_landing_zone_template_json] lookup failed")
         return "null"
     payload = "null" if not zone else json.dumps({
-        "id": zone["id"],
-        "name": zone["name"],
         "anchor_tile_id": zone["anchor_tile_id"],
-        "center_x": zone["center_x"],
-        "center_y": zone["center_y"],
+        "offset_cell": zone["offset_cell"],
     })
     _LANDING_ZONE_CACHE.clear()
     _LANDING_ZONE_CACHE[week_key] = payload
@@ -1979,11 +1994,15 @@ def _run_shuffle():
         conn.close()
         return (True, "No tiles to shuffle")
 
+    # Build tile geometry (size + center) once for landing-zone selection,
+    # tile pools, and the post-shuffle positioning pass.
+    tile_geom = {t['id']: t for t in get_tiles_from_svg()}
+    tile_size_map = {tid: g['size'] for tid, g in tile_geom.items()}
+
     # Pick this week's landing zone (caller-managed conn so it commits atomically with the shuffle)
-    zone = select_landing_zone(conn=conn)
+    zone = select_landing_zone(tile_geom, conn=conn)
 
     # Build tile pools grouped by size, shuffle each
-    tile_size_map = get_tile_size_map()
     pools = {}  # size -> [tile_id, ...]
     for tid, sz in tile_size_map.items():
         pools.setdefault(sz, []).append(tid)
@@ -2101,9 +2120,12 @@ def _run_shuffle():
         }
         zone_stats = apply_zone_positioning(
             zone, assignments, original_tile, tile_size_map,
-            asset_type_map, displayable_assets,
+            asset_type_map, displayable_assets, tile_geom,
         )
-        app.logger.info("[SHUFFLE] Landing zone %s applied: %s", zone['name'], zone_stats)
+        app.logger.info(
+            "[SHUFFLE] Landing zone %s/%s applied: %s",
+            zone['anchor_tile_id'], zone['offset_cell'], zone_stats,
+        )
 
     # Write all assignments to database
     for asset_id, tid in assignments.items():
@@ -2113,6 +2135,10 @@ def _run_shuffle():
         )
 
     conn.commit()
+
+    # Invalidate the landing-zone template cache so same-week re-shuffles
+    # (admin testing) reflect the new anchor on the next page render.
+    _LANDING_ZONE_CACHE.clear()
 
     # Post-shuffle upgrade notifications: email artists whose artwork landed above their floor
     try:

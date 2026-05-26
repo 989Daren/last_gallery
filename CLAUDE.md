@@ -26,7 +26,7 @@ python app.py
 |------|---------|
 | `app.py` | Flask application, all API endpoints |
 | `db.py` | Database connection, schema initialization, versioned migrations |
-| `data/gallery.db` | SQLite database (schema v23) |
+| `data/gallery.db` | SQLite database (schema v24) |
 | `landing_zones.py` | Weekly landing zone selection + post-shuffle positioning pass |
 | `select_cotm.py` | Monthly COTM winner selection (runs via systemd timer) |
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
@@ -70,7 +70,7 @@ window.ADMIN_DEBUG    // Admin debug footer flag
 window.SEL            // DOM selector constants
 window.API            // API endpoint constants
 window.PAGE_MODE      // "edit" | "creator-of-the-month" | "purchase_success" | "upgrade" | "art" | ""
-window.LANDING_ZONE   // { id, name, anchor_tile_id, center_x, center_y } | null (set from index template)
+window.LANDING_ZONE   // { anchor_tile_id, offset_cell } | null (set from index template)
 window.refreshWallFromServer()    // Refresh wall from database
 window.refreshAdminOverlays()     // Refresh admin UI (from admin.js)
 window.isAdminActive()            // Check admin session (from admin.js)
@@ -112,34 +112,33 @@ All info popups (Shuffle, Human Centric, How it Works, About Exhibits) share a c
 
 ## Landing Zones
 
-A curated viewport-sized region of the wall that the gallery loads into on first visit. One zone is chosen per weekly shuffle; the same zone is used for everyone visiting that week.
+The viewport-sized region of the wall that the gallery loads into on first visit each week. Defined by `(anchor_tile_id, offset_cell)` — which M tile to frame around, and where in the viewport that anchor sits.
 
 ### Data Architecture
-- **`landing_zones`** table — 10 curated zone rows seeded once via `grid utilities/seed_landing_zones.py`. Columns: `id, name, anchor_tile_id (FK→tiles), center_x/y, ref_width/height, tile_ids (JSON snapshot), active, last_used_week, created_at`.
-- All coordinates are in **rendered design space** (post-flip DOM coords at scale=1.0), so the frontend can directly use `center_x/y` as scroll targets.
-- `tile_ids` is a snapshot of which tile IDs fall inside the zone's rectangle — used by the shuffle's fill pass. Brittle if the SVG grid is extended; re-seed if so.
+- **`landing_state`** table — one row per ISO week. Columns: `week (PK), anchor_tile_id (FK→tiles), offset_cell, created_at`.
+- `offset_cell` is one of nine keys (`ul, uc, ur, ml, mc, mr, ll, lc, lr`) mapping to the anchor's fractional position inside the viewport (e.g., `mc = (0.5, 0.5)` centers it). Magnitudes are ±0.33.
+- Viewport reference dimensions `REF_W=340, REF_H=510` (design px) — mirrors a typical mobile's usable wall area at scale=1.0.
 
 ### Selection (`landing_zones.py:select_landing_zone`)
-- Called from `_run_shuffle()` at the start (caller-managed conn so the zone update commits atomically with the shuffle).
-- Filters `active = 1`. Excludes the zone with the most recent `last_used_week` (no repeats two weeks in a row); falls back to allowing it if the exclusion empties the pool.
-- Clears any prior current-week marker before setting the new one — guarantees exactly one zone holds the current week's marker even after admin re-shuffles.
+- Called from `_run_shuffle()` with caller-managed conn so the zone update commits atomically with the shuffle.
+- **Candidates** are every `(M tile, offset cell)` pair — any M tile can anchor the zone. Info-tile visibility is enforced by the post-shuffle info-swap pass, not by selection (info tiles get reshuffled, so pre-shuffle positions can't be used to filter anchors).
+- Avoids repeating last week's anchor when alternatives exist.
 
 ### Positioning (`landing_zones.py:apply_zone_positioning`)
-- Runs **after** the existing size-respecting shuffle. Never alters tile-size odds — only swaps tiles within the same size class.
-- **Anchor swap:** ensures an exhibit artwork ends up in the zone's anchor M tile. Falls back to any M-sized artwork if no exhibit landed at an M tile during the shuffle.
-- **Fill swap:** ensures at least `MIN_ZONE_FILL = 4` *displayable artwork* tiles are inside the zone. "Displayable" mirrors `/api/wall_state`'s filter (non-info AND non-empty `artist_name`). Info tiles can land in-zone but don't count toward the minimum.
-- Every swap respects the existing no-stay-in-place rule.
+- Runs **after** the size-respecting shuffle. Never alters tile-size odds — only swaps within the same size class. Every swap respects the no-stay-in-place rule.
+- **Anchor swap:** ensures an exhibit lands at the anchor M tile. Falls back to any M-sized artwork if no exhibit is available.
+- **Info swap:** ensures at least one S info tile sits inside the viewport rectangle (S↔S swap with an outside-zone info tile, if needed). Info tiles are S-sized only.
+- **Fill swap:** ensures at least `MIN_ZONE_FILL = 4` *displayable artwork* tiles inside the viewport rectangle. "Displayable" mirrors `/api/wall_state`'s filter (non-info AND non-empty `artist_name`). Runs after the info swap so it can compensate if the info swap displaced a displayable.
 
 ### Frontend Load (`static/js/main.js` boot RAF)
-- `_landing_zone_template_json()` in app.py is cached by ISO week — one DB read per week, not per request. Embedded into `window.LANDING_ZONE` via the index template.
-- On default homepage / `/edit` / `/creator-of-the-month`, the boot RAF scrolls the wrapper so `(center_x, center_y)` is at the visual center of the usable wall area (`window.innerHeight − wrapper.paddingTop`), at scale=1.0. The fixed-header padding subtraction is critical — using raw `window.innerHeight` pushes the zone too high and cuts off the bottom.
+- `_landing_zone_template_json()` in app.py emits `{anchor_tile_id, offset_cell}`, cached by ISO week. Embedded into `window.LANDING_ZONE` via the index template.
+- On default homepage / `/edit` / `/creator-of-the-month`, the boot RAF looks up the anchor tile in `wallState.tiles`, computes its center from `size × BASE_UNIT`, and scrolls so the anchor sits at `(fx × vw, fy × vh)` inside the usable wall area (`window.innerHeight − wrapper.paddingTop`).
+- Edge clamping is handled by the pinch-zoom layer's progressive edge clamping (`docs/CLAUDE_FEATURES.md:129`) and native scroll bounds — anchors near the wall edge land safely without explicit checks.
 - Deep-link modes (`art`, `purchase_success`, `upgrade`) keep their own scroll targets.
-- After the welcome modal is dismissed, the modal's semi-transparent backdrop lingers behind the "PINCH TO ZOOM OUT" animation for contrast, then is dismissed when the animation completes (`pinch-hint-done` custom event).
 
 ### Open work (saved to memory)
 - See `project_admin_suppress_emails.md` — admin shuffle button should grow a "Suppress Emails" toggle so test shuffles don't notify artists.
 - See `project_upload_flow_restructure.md` — broader upload-flow fix to stop orphan rows + files.
-- **Candidate refactor:** the current 10-curated-zone approach may collapse to "pick any M tile, swap nearby art" with much less code surface. Discussed but not implemented.
 
 ## Creator of the Month (COTM)
 

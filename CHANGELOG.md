@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-05-26
+
+### Landing Zones — streamlined
+- **Replaced 10-curated-zone model** with on-the-fly anchor selection. The week's landing zone is now defined by just `(anchor_tile_id, offset_cell)`.
+- **Anchor candidates** are computed each shuffle from SVG geometry: any M tile whose viewport (at one of the 9 offset positions) contains the center of at least one info tile. Guarantees an info tile is visible without moving info tiles (which the shuffle still excludes).
+- **Offset cell** is one of 9 positions on a 3×3 grid with ±0.33 magnitudes — adds week-to-week framing variety beyond just changing the anchor.
+- **Edge safety** is delegated to the pinch-zoom layer's existing progressive edge clamping plus native scroll bounds — no explicit edge filter needed in selection.
+- **Schema migration 24**: dropped `landing_zones` (10 seeded rows + 7-column metadata). Added `landing_state(week, anchor_tile_id, offset_cell, created_at)` — one row per week.
+- **SVG parser extended**: `get_tiles_from_svg()` now returns `cx, cy, x, y, w, h` alongside `id, size` (post-flip, scale=1.0). Used by landing-zone selection and the positioning pass.
+- **Removed files**: `grid utilities/seed_landing_zones.py`, `grid utilities/preview_landing_zones.py`, `grid utilities/landing_zones_preview.svg`.
+- **Frontend**: `window.LANDING_ZONE` shape is now `{anchor_tile_id, offset_cell}`; boot RAF computes scroll target from `wallState.tiles[anchor_tile_id]` center + offset.
+
+---
+
 ## 2026-05-25
 
 ### Landing Zones
