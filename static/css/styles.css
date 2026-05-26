@@ -2943,6 +2943,16 @@ label {
   display: none !important;
 }
 
+/* "Dim only" state — card removed, semi-transparent backdrop lingers behind
+   the pinch-hint animation. Lowering z-index lets .pinch-hint (z:1000) layer
+   on top so the animation reads high-contrast against the dim. */
+.simpleWelcome.simpleWelcome--dim {
+  z-index: 999;
+}
+.simpleWelcome.simpleWelcome--dim .simpleWelcomeCard {
+  display: none;
+}
+
 .simpleWelcomeCard {
   /* Adjustable: modal container width */
   width: min(92vw, 550px);

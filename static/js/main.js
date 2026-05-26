@@ -50,8 +50,16 @@ function centerGalleryView() {
 // Shows two animated dots mimicking a pinch gesture after welcome dismisses
 // ============================
 window.showPinchHint = showPinchHint;
-function showPinchHint() {
-  if (!window.matchMedia('(pointer: coarse)').matches) return;
+function showPinchHint(onDone) {
+  const fireDone = () => {
+    document.dispatchEvent(new CustomEvent('pinch-hint-done'));
+    if (typeof onDone === 'function') onDone();
+  };
+
+  if (!window.matchMedia('(pointer: coarse)').matches) {
+    fireDone();
+    return;
+  }
 
   const hint = document.createElement('div');
   hint.className = 'pinch-hint';
@@ -74,6 +82,7 @@ function showPinchHint() {
   // Remove after the fade-out animation ends (2s)
   hint.addEventListener('animationend', () => {
     hint.remove();
+    fireDone();
   });
 }
 
@@ -100,9 +109,26 @@ function initSimpleWelcomeAlways() {
   };
 
   const close = () => {
-    overlay.classList.add("hidden");
     document.body.style.overflow = "";
-    // COTM auto-show inserts between welcome and pinch hint
+    // Hide the card but keep the semi-transparent backdrop visible. The
+    // pinch-hint animation layers above this dim for high contrast. When the
+    // hint completes (via the pinch-hint-done event), the dim is dismissed.
+    // If COTM auto-show opens a COTM card first, its own backdrop covers ours
+    // until it closes — at which point the chain ends in showPinchHint and the
+    // event fires as expected.
+    overlay.classList.add("simpleWelcome--dim");
+
+    const dismissDim = () => {
+      overlay.classList.add("hidden");
+      overlay.classList.remove("simpleWelcome--dim");
+    };
+    // Safety fallback in case the event never fires (e.g., user navigates away)
+    const safetyTimer = setTimeout(dismissDim, 12000);
+    document.addEventListener('pinch-hint-done', () => {
+      clearTimeout(safetyTimer);
+      dismissDim();
+    }, { once: true });
+
     if (typeof window.initCotmAutoShow === 'function') {
       setTimeout(window.initCotmAutoShow, 300);
     } else {
