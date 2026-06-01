@@ -307,8 +307,12 @@ document.addEventListener("DOMContentLoaded", () => {
   let _editOriginalUnlocked = false; // Track original value to detect changes
 
   // COTM opt-in refs
+  const cotmOptInSection = document.getElementById("cotmOptInSection");
   const cotmOptInBtn = document.getElementById("cotmOptInBtn");
   const cotmOptInLabel = document.getElementById("cotmOptInLabel");
+  if (cotmOptInSection && !window.COTM_ENABLED) {
+    cotmOptInSection.style.display = "none";
+  }
   const cotmProfileOverlay = document.getElementById("cotmProfileOverlay");
   const cotmProfileCloseBtn = document.getElementById("cotmProfileCloseBtn");
   const cotmProfileCancelBtn = document.getElementById("cotmProfileCancelBtn");
@@ -796,6 +800,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function fetchAndPrefillProfile(editCode) {
     if (!editCode) return;
+    if (!window.COTM_ENABLED) return;
     try {
       const res = await fetch("/api/artist_profile?code=" + encodeURIComponent(editCode));
       const data = await res.json();
@@ -1236,7 +1241,8 @@ document.addEventListener("DOMContentLoaded", () => {
     _editType = type;
     editTypePills.forEach(pill => {
       const isAdminPill = pill.dataset.type === "tile" || pill.dataset.type === "creator";
-      const visible = _adminEditMode ? isAdminPill : pill.dataset.type !== "tile";
+      let visible = _adminEditMode ? isAdminPill : pill.dataset.type !== "tile";
+      if (pill.dataset.type === "creator" && !window.COTM_ENABLED) visible = false;
       pill.style.display = visible ? "" : "none";
       pill.classList.toggle("active", pill.dataset.type === type);
     });

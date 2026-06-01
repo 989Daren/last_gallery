@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_from_directory, jsonify, request
+from flask import Flask, render_template, send_from_directory, jsonify, request, abort
 import os
 import time
 import json
@@ -242,6 +242,32 @@ def save_grid_color(color: str):
     color_path = os.path.join(DATA_DIR, "grid_color.json")
     with open(color_path, "w") as f:
         json.dump({"color": color}, f)
+
+
+def load_cotm_enabled():
+    """Read the COTM program on/off flag. Defaults to False (program disabled)."""
+    path = os.path.join(DATA_DIR, "cotm_enabled.json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                return bool(json.load(f).get("enabled", False))
+        except Exception:
+            return False
+    return False
+
+
+def save_cotm_enabled(enabled: bool):
+    """Persist the COTM program on/off flag."""
+    path = os.path.join(DATA_DIR, "cotm_enabled.json")
+    with open(path, "w") as f:
+        json.dump({"enabled": bool(enabled)}, f)
+
+
+def _cotm_gate():
+    """Return a 403 jsonify response if COTM is disabled, else None."""
+    if not load_cotm_enabled():
+        return jsonify({"ok": False, "error": "Creator of the Month is currently disabled."}), 403
+    return None
 
 
 def check_admin_pin():
@@ -625,7 +651,6 @@ def send_edit_code(email, code, artwork_title=""):
     safe_title = html_mod.escape(artwork_title) if artwork_title else ""
     title_param = f"?title={quote(artwork_title, safe='')}" if artwork_title else ""
     edit_link = f"{BASE_URL}/edit{title_param}"
-    cotm_link = f"{BASE_URL}/creator-of-the-month"
 
     if artwork_title:
         artwork_line_html = f'<p style="font-size:18px;"><strong>Artwork Title:</strong> {safe_title}</p>'
@@ -633,6 +658,23 @@ def send_edit_code(email, code, artwork_title=""):
     else:
         artwork_line_html = '<p style="font-size:18px;"><strong>Artwork:</strong> This edit code applies to all artwork associated with this email address.</p>'
         artwork_line_plain = "Artwork: This edit code applies to all artwork associated with this email address.\n"
+
+    if load_cotm_enabled():
+        cotm_link = f"{BASE_URL}/creator-of-the-month"
+        cotm_html = (
+            '<hr style="margin:24px 0;">'
+            '<p style="font-size:16px;"><strong>Unlocked artwork is eligible for '
+            "The Last Gallery's Creator of the Month!</strong></p>"
+            f'<p><a href="{html_mod.escape(cotm_link)}">{html_mod.escape(cotm_link)}</a></p>'
+        )
+        cotm_plain = (
+            "---\n\n"
+            "Unlocked artwork is eligible for The Last Gallery's Creator of the Month!\n"
+            f"{cotm_link}\n"
+        )
+    else:
+        cotm_html = ""
+        cotm_plain = ""
 
     html_body = (
         '<div style="font-family:sans-serif; max-width:520px; margin:0 auto; padding:20px;">'
@@ -645,10 +687,7 @@ def send_edit_code(email, code, artwork_title=""):
         'just click your new artwork tile and an "edit" button is available near the bottom &mdash; no code needed.</p>'
         "<p>If you need to edit from another device, copy and paste your Edit Code into the link below.</p>"
         f'<p><a href="{html_mod.escape(edit_link)}">{html_mod.escape(edit_link)}</a></p>'
-        '<hr style="margin:24px 0;">'
-        '<p style="font-size:16px;"><strong>Unlocked artwork is eligible for '
-        "The Last Gallery's Creator of the Month!</strong></p>"
-        f'<p><a href="{html_mod.escape(cotm_link)}">{html_mod.escape(cotm_link)}</a></p>'
+        f'{cotm_html}'
         '</div>'
     )
 
@@ -659,9 +698,7 @@ def send_edit_code(email, code, artwork_title=""):
         "and an \"edit\" button is available near the bottom -- no code needed.\n\n"
         "If you need to edit from another device, copy and paste your Edit Code into the link below.\n"
         f"{edit_link}\n\n"
-        "---\n\n"
-        "Unlocked artwork is eligible for The Last Gallery's Creator of the Month!\n"
-        f"{cotm_link}\n"
+        f"{cotm_plain}"
     )
 
     resend.api_key = api_key
@@ -933,28 +970,24 @@ def index():
     return _render_index_template(og=og)
 
 
-# Cached current-week landing zone JSON; key is the ISO week string. The active
-# zone only changes once per shuffle, so this avoids hitting the DB on every
-# page render.
-_LANDING_ZONE_CACHE = {}
-
 def _landing_zone_template_json():
-    from landing_zones import _iso_week
-    week_key = _iso_week(datetime.now(timezone.utc))
-    if week_key in _LANDING_ZONE_CACHE:
-        return _LANDING_ZONE_CACHE[week_key]
+    """Current landing zone as JSON for template embedding.
+
+    Read fresh each render — the systemd-driven auto-shuffle runs in a
+    separate process and can't invalidate an in-Flask cache. The lookup is
+    a single-row SELECT, so the cost of no caching is negligible.
+    """
     try:
         zone = get_current_landing_zone()
     except Exception:
         app.logger.exception("[_landing_zone_template_json] lookup failed")
         return "null"
-    payload = "null" if not zone else json.dumps({
+    if not zone:
+        return "null"
+    return json.dumps({
         "anchor_tile_id": zone["anchor_tile_id"],
         "offset_cell": zone["offset_cell"],
     })
-    _LANDING_ZONE_CACHE.clear()
-    _LANDING_ZONE_CACHE[week_key] = payload
-    return payload
 
 
 def _render_index_template(page_mode="", **extra):
@@ -968,6 +1001,7 @@ def _render_index_template(page_mode="", **extra):
         page_mode=page_mode,
         tier_config_json=json.dumps(TIER_CONFIG),
         landing_zone_json=_landing_zone_template_json(),
+        cotm_enabled=load_cotm_enabled(),
         **extra,
     )
 
@@ -981,6 +1015,8 @@ def edit_page():
 @app.route("/creator-of-the-month")
 def artist_of_the_month():
     """Creator of the Month page — opens COTM intro card (or edit form if code param present)."""
+    if not load_cotm_enabled():
+        abort(404)
     return _render_index_template(page_mode="creator-of-the-month")
 
 
@@ -1053,7 +1089,20 @@ def wall_state():
                 "upgradable": upgradable,
             })
         conn.close()
-        return jsonify({"ok": True, "assignments": assignments})
+        # Include the current landing zone so wall refreshes (e.g. after an
+        # admin shuffle) can re-frame the viewport on the new anchor without
+        # a full page reload.
+        try:
+            zone = get_current_landing_zone()
+        except Exception:
+            zone = None
+        landing_zone = None
+        if zone:
+            landing_zone = {
+                "anchor_tile_id": zone["anchor_tile_id"],
+                "offset_cell": zone["offset_cell"],
+            }
+        return jsonify({"ok": True, "assignments": assignments, "landing_zone": landing_zone})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "assignments": []}), 500
 
@@ -2136,10 +2185,6 @@ def _run_shuffle():
 
     conn.commit()
 
-    # Invalidate the landing-zone template cache so same-week re-shuffles
-    # (admin testing) reflect the new anchor on the next page render.
-    _LANDING_ZONE_CACHE.clear()
-
     # Post-shuffle upgrade notifications: email artists whose artwork landed above their floor
     try:
         tile_size_map = get_tile_size_map()
@@ -2451,24 +2496,10 @@ def get_countdown_state():
             )
             conn.commit()
 
-    # Auto-transition: active -> auto-reset (countdown expired) + trigger shuffle
-    if status == "active" and target_time:
-        target_dt = _parse_iso_utc(target_time)
-        if now >= target_dt:
-            # Run shuffle before resetting the countdown cycle
-            try:
-                _run_shuffle()
-                app.logger.info("Countdown expired: auto-shuffle completed")
-            except Exception as e:
-                app.logger.error(f"Countdown expired: auto-shuffle failed: {e}")
-
-            new_target = now + timedelta(seconds=duration_seconds)
-            target_time = new_target.strftime("%Y-%m-%dT%H:%M:%SZ")
-            cursor.execute(
-                "UPDATE countdown_schedule SET target_time = ?, updated_at = datetime('now') WHERE id = 1",
-                (target_time,)
-            )
-            conn.commit()
+    # NOTE: The expired -> auto-shuffle transition lives in shuffle_tick.py
+    # (run by tlg-shuffle-tick.timer every minute) so the shuffle fires on
+    # schedule even when no visitor is polling. This GET handler is a pure
+    # reader of countdown_schedule.
 
     conn.close()
     return jsonify({
@@ -3541,6 +3572,8 @@ def get_exhibit_image(image_id):
 @app.route("/api/cotm", methods=["GET"])
 def get_cotm():
     """Public: return current month's COTM data + artworks."""
+    if not load_cotm_enabled():
+        return jsonify({"ok": True, "active": False})
     month = datetime.now(timezone.utc).strftime('%Y-%m')
     conn = get_db()
     cursor = conn.cursor()
@@ -3607,12 +3640,29 @@ def get_cotm():
     })
 
 
+@app.route("/api/admin/cotm/enabled", methods=["POST"])
+def admin_cotm_enabled():
+    """Admin: enable or disable the Creator of the Month program."""
+    ok, err = check_admin_pin()
+    if not ok:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    enabled = bool(data.get("enabled"))
+    save_cotm_enabled(enabled)
+    return jsonify({"ok": True, "enabled": enabled})
+
+
 @app.route("/api/admin/cotm/select", methods=["POST"])
 def admin_cotm_select():
     """Admin: select a creator as COTM for the current month. Sends congratulations email."""
     ok, err = check_admin_pin()
     if not ok:
         return err
+
+    gate = _cotm_gate()
+    if gate:
+        return gate
 
     data = request.get_json(silent=True) or {}
     artist_name = (data.get("artist_name") or "").strip()
@@ -3660,6 +3710,9 @@ def admin_cotm_select():
 @app.route("/api/cotm/edit", methods=["GET"])
 def get_cotm_edit():
     """Authenticated: return COTM profile + all artworks with exclusion flags for editing."""
+    gate = _cotm_gate()
+    if gate:
+        return gate
     code = (request.args.get("code") or "").strip()
     conn = get_db()
     cursor = conn.cursor()
@@ -3714,6 +3767,9 @@ def get_cotm_edit():
 @app.route("/api/cotm/profile", methods=["POST"])
 def save_cotm_profile():
     """Authenticated: save COTM profile fields and artwork exclusions."""
+    gate = _cotm_gate()
+    if gate:
+        return gate
     data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip()
     conn = get_db()
@@ -3761,6 +3817,9 @@ def save_cotm_profile():
 @app.route("/api/cotm/photo", methods=["POST"])
 def upload_cotm_photo():
     """Authenticated: upload or replace COTM headshot photo."""
+    gate = _cotm_gate()
+    if gate:
+        return gate
     code = (request.form.get("code") or "").strip()
     conn = get_db()
     cursor = conn.cursor()
@@ -3866,6 +3925,9 @@ def get_artist_profile():
 @app.route("/api/artist_profile", methods=["POST"])
 def save_artist_profile():
     """Authenticated: save artist profile (COTM opt-in + bio fields)."""
+    gate = _cotm_gate()
+    if gate:
+        return gate
     data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip()
     if not code:

@@ -2,6 +2,27 @@
 
 ---
 
+## 2026-06-01
+
+### Weekly auto-shuffle — true scheduler
+- **`tlg-shuffle-tick.timer`** (user-level systemd, fires hourly via `OnCalendar=hourly`) replaces the previous request-driven auto-shuffle. Runs `shuffle_tick.py`, which checks `countdown_schedule`; if expired, takes `BEGIN IMMEDIATE`, rolls `target_time` forward by `duration_seconds`, then calls `_run_shuffle()` inside `app.app_context()`. Shuffle now fires at countdown zero whether or not any visitor is on the site.
+- **Removed** the in-handler auto-shuffle from `GET /api/countdown_state` (`app.py`). The GET handler is now a pure reader; the timer is the sole shuffle trigger. Eliminates the race between concurrent visitor pokes.
+- **Dropped `_LANDING_ZONE_CACHE`** — the systemd timer runs in a separate process and can't invalidate a Flask in-process cache, so visitors would otherwise see stale anchor data. The lookup is a 1-row SELECT.
+- **Reverted** the short-lived weekly-rollover landing-zone auto-heal (added earlier this session). With a real scheduler in place, every week's `landing_state` row is now created by the actual shuffle — landing zone only changes when the gallery state changes, matching the design intent.
+
+### Landing zone re-frame after admin shuffle
+- **`/api/wall_state`** response now includes `landing_zone: {anchor_tile_id, offset_cell}` so wall refreshes can read the current zone.
+- **`window.applyLandingZoneScroll(lz)`** extracted from the boot RAF in `main.js`. Reusable. The boot RAF and `refreshWallFromServer()` both go through it.
+- **Admin shuffle handler** in `admin.js` now calls `applyLandingZoneScroll(window.LANDING_ZONE)` after `refreshWallFromServer()` so admin sees the curated view re-frame without a full page reload.
+
+### Creator of the Month — admin on/off toggle
+- **`data/cotm_enabled.json`** flag (single boolean, default `false`). `load_cotm_enabled()` / `save_cotm_enabled()` mirror the `grid_color.json` persistence pattern.
+- **Admin checkbox** in the Creator of the Month admin section toggles the program via `POST /api/admin/cotm/enabled` (PIN-gated). When off, the rest of the COTM admin section is grayed out.
+- **All COTM surfaces honor the flag**: `/api/cotm` returns `active: false`; `/creator-of-the-month` returns 404; `/api/cotm/edit`, `/api/cotm/profile`, `/api/cotm/photo`, `/api/artist_profile` POST, and `/api/admin/cotm/select` all return 403. Edit-code email strips the COTM eligibility section. Upload modal hides the opt-in section, skips the returning-artist profile fetch, and hides the "Creator Profile" pill in the edit banner. `select_cotm.py` no-ops when the flag is off.
+- **`window.COTM_ENABLED`** exposed via the template so the JS modules can self-gate.
+
+---
+
 ## 2026-05-26
 
 ### Landing Zones — streamlined

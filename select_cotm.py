@@ -10,6 +10,7 @@ Skips if the current month already has a COTM selected less than 25 days ago
 """
 
 import html
+import json
 import os
 import random
 import sqlite3
@@ -22,8 +23,20 @@ from dotenv import load_dotenv
 # ---- Config ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "data", "gallery.db")
+COTM_ENABLED_PATH = os.path.join(BASE_DIR, "data", "cotm_enabled.json")
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+
+def is_cotm_enabled():
+    """Read the COTM program on/off flag. Defaults to False."""
+    if not os.path.exists(COTM_ENABLED_PATH):
+        return False
+    try:
+        with open(COTM_ENABLED_PATH, "r") as f:
+            return bool(json.load(f).get("enabled", False))
+    except Exception:
+        return False
 
 BASE_URL = os.environ.get("TLG_BASE_URL", "https://thelastgallery.com")
 ADMIN_ARTIST_NAME = "Daren Daniels"
@@ -90,6 +103,10 @@ def send_cotm_email(email, artist_name, edit_code):
 
 
 def select():
+    if not is_cotm_enabled():
+        print("[COTM] Program disabled — skipping monthly selection.")
+        return
+
     if not os.path.exists(DB_PATH):
         print("[COTM] Database not found, nothing to do.")
         return

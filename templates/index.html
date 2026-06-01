@@ -37,6 +37,7 @@
     window.PAGE_MODE = "{{ page_mode|default('') }}";
     window.TIER_CONFIG = {{ tier_config_json|default('{}')|safe }};
     window.LANDING_ZONE = {{ landing_zone_json|default('null')|safe }};
+    window.COTM_ENABLED = {{ 'true' if cotm_enabled else 'false' }};
   </script>
 
 </head>
@@ -501,8 +502,14 @@
           <button id="undoBtn" type="button" disabled>Undo</button>
         </div>
 
-        <div class="adminSection">
+        <div class="adminSection" id="cotmAdminSection">
           <h3 style="color:#D4A843; font-size:13px; margin:12px 0 8px; text-transform:uppercase; letter-spacing:0.05em;">Creator of the Month</h3>
+          <div class="adminRow" style="align-items:center; gap:8px;">
+            <label for="adminCotmEnabledToggle" style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; color:#ddd;">
+              <input type="checkbox" id="adminCotmEnabledToggle" style="width:16px; height:16px; cursor:pointer;">
+              <span>COTM program active</span>
+            </label>
+          </div>
           <div id="cotmAdminCurrentStatus" style="font-size:0.82rem; padding:4px 0 8px; color:#999;"></div>
           <div id="cotmAdminStatus" class="adminStatus" style="display:none; font-size:0.82rem; padding:4px 0; color:#ccc;"></div>
           <div class="adminRow">

@@ -896,6 +896,12 @@
         if (typeof window.refreshWallFromServer === 'function') {
           await window.refreshWallFromServer();
           refreshAdminOverlays(); // Re-apply tile labels after wall rebuild
+          // Re-frame viewport on the new landing-zone anchor so admin sees
+          // the curated arrangement after shuffle (refreshWallFromServer
+          // updated window.LANDING_ZONE from the API response).
+          if (typeof window.applyLandingZoneScroll === 'function') {
+            window.applyLandingZoneScroll(window.LANDING_ZONE);
+          }
         }
       } catch (err) {
         console.error("Shuffle error:", err);
@@ -1134,10 +1140,63 @@
   // Creator of the Month Admin
   // ========================================
   function initCotmAdmin() {
+    const cotmEnabledToggle = $("adminCotmEnabledToggle");
+    const cotmArtistInput = $("adminCotmArtistInput");
+    const cotmEmailInput = $("adminCotmEmailInput");
     const cotmSelectBtn = $("adminCotmSelectBtn");
     const cotmEditBtn = $("adminCotmEditBtn");
     const cotmStatus = $("cotmAdminStatus");
     const cotmCurrentStatus = $("cotmAdminCurrentStatus");
+
+    // Reflect enabled state visually: gray out the per-artist controls when off.
+    function applyEnabledState(enabled) {
+      [cotmArtistInput, cotmEmailInput, cotmSelectBtn, cotmEditBtn].forEach(el => {
+        if (!el) return;
+        el.disabled = !enabled;
+        el.style.opacity = enabled ? "" : "0.4";
+      });
+      if (cotmCurrentStatus && !enabled) {
+        cotmCurrentStatus.textContent = "COTM program is currently disabled.";
+        cotmCurrentStatus.style.color = "#999";
+      }
+    }
+
+    if (cotmEnabledToggle) {
+      cotmEnabledToggle.checked = !!window.COTM_ENABLED;
+      applyEnabledState(!!window.COTM_ENABLED);
+
+      cotmEnabledToggle.addEventListener("change", async () => {
+        if (!_adminPin) {
+          showCotmStatus("Admin session expired. Re-enter PIN.", true);
+          cotmEnabledToggle.checked = !cotmEnabledToggle.checked;
+          return;
+        }
+        const desired = cotmEnabledToggle.checked;
+        try {
+          const res = await fetch("/api/admin/cotm/enabled", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Admin-Pin": _adminPin,
+            },
+            body: JSON.stringify({ enabled: desired }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            window.COTM_ENABLED = data.enabled;
+            applyEnabledState(data.enabled);
+            showCotmStatus(data.enabled ? "COTM program enabled." : "COTM program disabled.");
+            if (data.enabled) refreshCotmStatus();
+          } else {
+            cotmEnabledToggle.checked = !desired;
+            showCotmStatus(data.error || "Failed to update setting.", true);
+          }
+        } catch (e) {
+          cotmEnabledToggle.checked = !desired;
+          showCotmStatus("Network error.", true);
+        }
+      });
+    }
 
     function showCotmStatus(msg, isError) {
       if (!cotmStatus) return;
@@ -1151,6 +1210,7 @@
 
     // Fetch and display current COTM status
     function refreshCotmStatus() {
+      if (!window.COTM_ENABLED) return;
       fetch("/api/cotm")
         .then(r => r.json())
         .then(data => {

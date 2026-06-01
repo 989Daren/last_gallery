@@ -506,6 +506,37 @@ function resetZoom() {
   unlockScrollTo(0, 0);
 }
 
+// Scroll viewport so the landing-zone anchor sits at its offset_cell position.
+// Same math as the boot RAF; reusable so admin shuffles can re-frame the
+// viewport without a full page reload.
+function applyLandingZoneScroll(lz) {
+  if (!lz || !lz.anchor_tile_id) return false;
+  const OFFSET_CELLS = {
+    ul: [0.17, 0.17], uc: [0.5, 0.17], ur: [0.83, 0.17],
+    ml: [0.17, 0.5],  mc: [0.5, 0.5],  mr: [0.83, 0.5],
+    ll: [0.17, 0.83], lc: [0.5, 0.83], lr: [0.83, 0.83],
+  };
+  const tile = wallState.tiles[lz.anchor_tile_id];
+  if (!tile) return false;
+  const units = sizeToUnits(tile.size);
+  const side = units * BASE_UNIT;
+  const cx = tile.x + side / 2;
+  const cy = tile.y + side / 2;
+  const [fx, fy] = OFFSET_CELLS[lz.offset_cell] || OFFSET_CELLS.mc;
+  const wrapper = zoomState._wrapper || document.querySelector('.gallery-wall-wrapper');
+  const vw = wrapper ? wrapper.clientWidth : window.innerWidth;
+  const padTop = wrapper ? (parseInt(getComputedStyle(wrapper).paddingTop) || 0) : 0;
+  const vh = window.innerHeight - padTop;
+  const scrollX = Math.max(0, cx - fx * vw);
+  const scrollY = Math.max(0, cy - fy * vh);
+  zoomState.scale = 1.0;
+  zoomState.tx = 0;
+  zoomState.ty = 0;
+  if (zoomState._zoomWrapper) zoomState._zoomWrapper.style.transform = '';
+  unlockScrollTo(scrollX, scrollY);
+  return true;
+}
+
 // Scroll viewport to center a tile (reset zoom, no sheen)
 function scrollToTile(tileId) {
   // Reset zoom to 1.0x (clear transform, restore native scroll)
@@ -556,6 +587,7 @@ window.resetZoom = resetZoom;
 window.highlightNewTile = highlightNewTile;
 window.scrollToTile = scrollToTile;
 window.playTileSheen = playTileSheen;
+window.applyLandingZoneScroll = applyLandingZoneScroll;
 
 // ==============================
 // ==============================
@@ -1728,6 +1760,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (response.ok) {
           const data = await response.json();
           assignments = data.assignments || [];
+          // Update the cached landing zone so callers (e.g. the admin shuffle
+          // handler) can re-frame the viewport on the new anchor.
+          if (data.landing_zone) {
+            window.LANDING_ZONE = data.landing_zone;
+          }
         } else {
           if (DEBUG) console.warn('[refreshWallFromServer] wall_state unavailable:', response.status);
         }
@@ -2039,32 +2076,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const lzModes = new Set(["", "edit", "creator-of-the-month"]);
         const useLandingZone = lz && lzModes.has(window.PAGE_MODE || "");
         if (useLandingZone) {
-          const OFFSET_CELLS = {
-            ul: [0.17, 0.17], uc: [0.5, 0.17], ur: [0.83, 0.17],
-            ml: [0.17, 0.5],  mc: [0.5, 0.5],  mr: [0.83, 0.5],
-            ll: [0.17, 0.83], lc: [0.5, 0.83], lr: [0.83, 0.83],
-          };
-          const tile = wallState.tiles[lz.anchor_tile_id];
-          if (tile) {
-            const units = sizeToUnits(tile.size);
-            const side = units * BASE_UNIT;
-            const cx = tile.x + side / 2;
-            const cy = tile.y + side / 2;
-            const [fx, fy] = OFFSET_CELLS[lz.offset_cell] || OFFSET_CELLS.mc;
-            const wrapper = zoomState._wrapper || document.querySelector('.gallery-wall-wrapper');
-            const vw = wrapper ? wrapper.clientWidth : window.innerWidth;
-            // Subtract wrapper top padding (fixed header + countdown/COTM bars)
-            // so vh is the usable wall area, not the full window.
-            const padTop = wrapper ? (parseInt(getComputedStyle(wrapper).paddingTop) || 0) : 0;
-            const vh = window.innerHeight - padTop;
-            const scrollX = Math.max(0, cx - fx * vw);
-            const scrollY = Math.max(0, cy - fy * vh);
-            zoomState.scale = 1.0;
-            zoomState.tx = 0;
-            zoomState.ty = 0;
-            if (zoomState._zoomWrapper) zoomState._zoomWrapper.style.transform = '';
-            unlockScrollTo(scrollX, scrollY);
-          }
+          applyLandingZoneScroll(lz);
         } else if (window.matchMedia('(pointer: coarse)').matches && zoomState.initialized) {
           // No landing zone applicable: existing behavior — start zoomed out on touch devices
           // so the full wall is visible behind the welcome modal.

@@ -3,6 +3,7 @@ __pycache__/
 
 # Local data files
 data/grid_color.json
+data/cotm_enabled.json
 data/gallery.db
 data/gallery.db.bak*
 data/backups/

@@ -31,6 +31,7 @@ python app.py
 | `select_cotm.py` | Monthly COTM winner selection (runs via systemd timer) |
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
 | `cleanup_expired.py` | Remove artwork past its 24-hour payment deadline (runs via systemd timer) |
+| `shuffle_tick.py` | Trigger weekly auto-shuffle when countdown expires (runs hourly via `tlg-shuffle-tick.timer`) |
 
 ### Frontend
 | File | Purpose |
