@@ -17,7 +17,7 @@ pip install -r requirements.txt
 python app.py
 ```
 - Local: http://127.0.0.1:5000
-- Network: http://192.168.1.191:5000 (for mobile testing)
+- The development server binds to `0.0.0.0:5000`; use the current host address for network testing.
 
 ## Key Files
 
@@ -32,6 +32,7 @@ python app.py
 | `grid utilities/repair_tiles.py` | Sync tiles table with SVG after grid extension |
 | `cleanup_expired.py` | Remove artwork past its 24-hour payment deadline (runs via systemd timer) |
 | `shuffle_tick.py` | Trigger weekly auto-shuffle when countdown expires (runs hourly via `tlg-shuffle-tick.timer`) |
+| `backup_db.sh` | Consistent SQLite backup, retention, and optional PC-share copy (runs every 6 hours) |
 
 ### Frontend
 | File | Purpose |
@@ -42,6 +43,10 @@ python app.py
 | `static/js/unlock_modal.js` | Upgrade modal: 3-step purchase flow (identify → select artwork → choose tier) |
 | `static/js/upload_modal.js` | Image upload flow with cropping, metadata entry, and COTM opt-in |
 | `static/js/cotm.js` | Creator of the Month popup, edit form, auto-show |
+| `static/js/exhibit.js` | Exhibit intro, scrolling gallery, image popups, sharing |
+| `static/js/exhibit_dashboard.js` | Artist exhibit profile/image management |
+| `static/js/owner_edit.js` | Browser-side ownership/edit-code state and helpers |
+| `static/js/success_banner.js` | Standard post-upload success banner |
 | `static/js/deadline_banner.js` | 24-hour unlock deadline banner shown after 2nd+ uploads |
 | `templates/index.html` | Main HTML template |
 | `static/css/styles.css` | All styling including popup animations |
@@ -79,7 +84,10 @@ window.getAdminPin()              // Get admin PIN for cross-module requests (fr
 window.initZoom()                 // Initialize pinch-to-zoom
 window.resetZoom()                // Reset zoom to 1.0x
 window.highlightNewTile(tileId)   // Scroll to tile + sheen animation
+window.scrollToTile(tileId)       // Scroll to a tile without opening it
+window.applyLandingZoneScroll(lz) // Frame the current landing-zone anchor
 window.showShareToast()           // Show "Link copied" toast notification
+window.openArtworkPopup(opts)     // Open the shared artwork/exhibit-image popup
 window.refreshCountdown()         // Re-fetch countdown state (from countdown.js)
 window.openUnlockModal(assetId, tileId)  // Open unlock modal (from unlock_modal.js)
 window.openFloorUpgrade(artwork, editCode)  // Direct floor upgrade (from unlock_modal.js)
@@ -87,8 +95,16 @@ window.closeUnlockModal()         // Close unlock modal (from unlock_modal.js)
 window.isUnlockModalOpen()        // Check if unlock modal is open (from unlock_modal.js)
 window.registerDismissible(overlayId, closeBtnId, hashName)  // Register overlay for unified dismiss
 window.closeAboutExhibits(silent)  // Close About Exhibits overlay (from exhibit.js)
+window.openExhibitIntro(assetId)   // Open an exhibit intro (from exhibit.js)
+window.openExhibitDashboard(assetId, code, pin) // Manage an exhibit
+window.openCotmCard()              // Open the COTM card (from cotm.js)
+window.openCotmEditAsAdmin(pin)    // Open COTM editor as admin
+window.getOwnedAssetInfo(assetId)  // Read locally known ownership (from owner_edit.js)
+window.getEditCodeForAsset(assetId)// Get locally stored edit code for an asset
+window.showSuccessBanner(opts)     // Show standard upload success
 window.showDeadlineBanner(opts)    // Show 24-hour deadline banner (from deadline_banner.js)
 window.dismissDeadlineBanner()     // Dismiss deadline banner (from deadline_banner.js)
+window.ConicalNav                  // Compound-hash modal/back-button coordinator
 ```
 
 ### Dismissible Overlay Registry (main.js)
@@ -132,16 +148,19 @@ The viewport-sized region of the wall that the gallery loads into on first visit
 - **Fill swap:** ensures at least `MIN_ZONE_FILL = 4` *displayable artwork* tiles inside the viewport rectangle. "Displayable" mirrors `/api/wall_state`'s filter (non-info AND non-empty `artist_name`). Runs after the info swap so it can compensate if the info swap displaced a displayable.
 
 ### Frontend Load (`static/js/main.js` boot RAF)
-- `_landing_zone_template_json()` in app.py emits `{anchor_tile_id, offset_cell}`, cached by ISO week. Embedded into `window.LANDING_ZONE` via the index template.
+- `_landing_zone_template_json()` in app.py emits `{anchor_tile_id, offset_cell}` and reads the current-week row on every render. It is intentionally not process-cached because timer-driven shuffles run outside the Flask process. The value is embedded into `window.LANDING_ZONE` by the index template.
+- `/api/wall_state` also returns `landing_zone`. After an admin shuffle, `admin.js` refreshes the wall and calls `applyLandingZoneScroll()` so the new framing appears without a page reload.
 - On default homepage / `/edit` / `/creator-of-the-month`, the boot RAF looks up the anchor tile in `wallState.tiles`, computes its center from `size × BASE_UNIT`, and scrolls so the anchor sits at `(fx × vw, fy × vh)` inside the usable wall area (`window.innerHeight − wrapper.paddingTop`).
-- Edge clamping is handled by the pinch-zoom layer's progressive edge clamping (`docs/CLAUDE_FEATURES.md:129`) and native scroll bounds — anchors near the wall edge land safely without explicit checks.
+- Edge clamping is handled by the pinch-zoom layer's progressive edge clamping (see `docs/CLAUDE_FEATURES.md`, “Pinch-to-Zoom”) and native scroll bounds — anchors near the wall edge land safely without explicit checks.
 - Deep-link modes (`art`, `purchase_success`, `upgrade`) keep their own scroll targets.
 
-### Open work (saved to memory)
-- See `project_admin_suppress_emails.md` — admin shuffle button should grow a "Suppress Emails" toggle so test shuffles don't notify artists.
-- See `project_upload_flow_restructure.md` — broader upload-flow fix to stop orphan rows + files.
-
 ## Creator of the Month (COTM)
+
+### Availability
+- A single runtime flag in ignored `data/cotm_enabled.json` controls the program; a missing or invalid file defaults to disabled.
+- The admin COTM checkbox updates the flag through `POST /api/admin/cotm/enabled`.
+- When disabled, the public page returns 404, `/api/cotm` reports inactive, COTM write/edit/select endpoints return 403, the menu/action bar/upload opt-in/edit pill are hidden, the monthly selector no-ops, and edit-code emails omit the COTM teaser.
+- Existing COTM/profile records remain intact while the program is disabled.
 
 ### Data Architecture
 - **`artist_profiles`** table — single source of truth for artist bio data (bio, location, medium, artistic focus, education, highlights, headshot URL, `cotm_opt_in` flag). Keyed by email.
@@ -175,6 +194,8 @@ The viewport-sized region of the wall that the gallery loads into on first visit
 - Images stored in `/uploads/` with UUID filenames; served with 1-year immutable cache
 - Schema migrations run automatically on startup
 - Environment variables loaded from `.env` via `python-dotenv` (`.env` is gitignored)
+- Runtime grid color is stored in ignored `data/grid_color.json`. The tracked root `grid_color.json` is not read by the current application.
+- Importing `app.py` is not read-only: module initialization runs migrations, ensures runtime directories exist, and may generate/seed info-tile state.
 - `buildContactLink()` in `main.js` infers missing contact type from value (`@` → email, URL patterns → website)
 
 ## Working with Claude (claude.ai)
@@ -191,8 +212,9 @@ For detailed docs on specific areas, read these files on demand:
 ## Maintenance Notes
 - When making significant changes, append a dated entry to `CHANGELOG.md`
 - Keep this file (`CLAUDE.md`) updated to reflect current state, not history
-- `CLAUDE_URL.txt` in project root contains a raw GitHub URL pinned to the latest commit hash that changed `CLAUDE.md` — auto-generated by the post-commit hook
-- Last reviewed: 2026-05-26
+- `CLAUDE_URL.txt` contains a raw GitHub URL pinned to the commit that changed `CLAUDE.md`.
+- The local post-commit hook has consequential behavior: a commit touching `CLAUDE.md` copies this file to `~/pc/` when mounted, rewrites `CLAUDE_URL.txt`, creates a second commit, and runs `git push`. Do not commit a `CLAUDE.md` change unless that automatic commit and push are intended.
+- Last reviewed against `master`, schema v24, and deployed services: 2026-09-10
 
 ---
 
