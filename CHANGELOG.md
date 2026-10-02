@@ -407,3 +407,11 @@
 - Double confirmation dialog bug: Added button disable during async operations + event.stopPropagation() to all admin action handlers. Clear browser cache to apply fix.
 - Metadata loss after admin actions: `refreshWallFromServer()` was only extracting 4 fields (tile_url, popup_url, artwork_name, artist_name) instead of all 14 metadata fields. Now matches `hydrateWallStateFromExistingData()`.
 - Hidden ribbon links capturing taps (mobile): Contact links had `pointer-events: auto` which overrode parent's `none` when ribbon was dismissed. Fixed with `!important` override on `.hide-info` state.
+
+
+## 2026-10-02 — Disable live Flask debugging
+
+- Disabled Flask debug mode, debugger, and automatic reloader for the live gallery. Code updates now require a controlled Flask service restart. The built-in server remains in use.
+- Verified that systemd automatic recovery remains enabled for Flask and the Cloudflare tunnel with a 5-second restart delay; this is independent of source-code reloading.
+- Future diagnosis uses server/application logs, browser console and network errors, code inspection, and safe reproduction; add targeted non-secret diagnostic logging when needed. Keep the public debugger disabled and do not test mutations against the production database.
+- Before changes are applied, explain whether a restart is needed. Announce any authorized restart before it happens and verify the site afterward; explicitly state when no restart is needed. The existing hosting setup is retained.

@@ -22,7 +22,7 @@ pip install -r requirements.txt
 python3 app.py
 ```
 
-`app.py` binds to `0.0.0.0:5000` with `debug=True`. Importing it also runs `init_db()`, ensures runtime directories exist, generates the info-tile image if missing, and seeds missing info-tile database rows. Avoid importing `app.py` during a supposedly read-only inspection.
+`app.py` binds to `0.0.0.0:5000` with `debug=False`, `use_debugger=False`, and `use_reloader=False`. Code changes require a controlled restart of `flask.service`; automatic reloading is disabled. Importing it also runs `init_db()`, ensures runtime directories exist, generates the info-tile image if missing, and seeds missing info-tile database rows. Avoid importing `app.py` during a supposedly read-only inspection.
 
 The repository currently has no automated test suite, lint configuration, or documented release-validation command.
 
@@ -76,6 +76,9 @@ Restart commands change live service state and should be used only when that ope
 - `flask.service` runs from `/home/daren/last_gallery` and invokes `/usr/bin/python3 app.py`.
 - `thelastgallery-tunnel.service` runs `/usr/local/bin/cloudflared tunnel --config /home/daren/.cloudflared/thelastgallery.yml run thelastgallery`.
 - The public site uses the Cloudflare tunnel and does not require inbound port forwarding.
+- Both services retain systemd `Restart=always` and `RestartSec=5`: process-exit recovery is independent of the disabled Flask code reloader. An intentional systemd stop stays stopped; recovery does not cover a running but hung process or unavailable Chromebook/Linux environment, power, or network.
+
+Troubleshoot with server/application logs (for example, `journalctl --user -u flask.service`), browser console/network errors, code inspection, and safe reproduction. If needed, add targeted diagnostic logging without secrets or private user data. Keep the public debugger disabled and never use production database mutations as diagnostic tests. Retain the current hosting setup unless a separate change is requested.
 
 ### Scheduled Shuffle
 

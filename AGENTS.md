@@ -95,7 +95,9 @@ Append a dated entry to `CHANGELOG.md` for significant user-visible, schema, ope
 
 ## Production and systemd cautions
 
-This checkout backs the deployed application. `flask.service` runs `python3 app.py` from this repository, and the application is configured with Flask debug mode. Code edits or process restarts can affect the live site, including through the development reloader. Treat deployment and restart actions as explicit operational work, check service status and logs, and coordinate changes that can affect active users.
+This checkout backs the deployed application. `flask.service` runs `python3 app.py` from this repository, and Flask debug mode, the debugger, and the automatic reloader are disabled. Code changes require a controlled restart of `flask.service` to take effect; process restarts can affect the live site.
+
+Explain whether a change requires a restart before applying it. Announce an authorized restart before performing it, restart only within the authorized scope, and verify local/public gallery responses afterward. Explicitly state when no restart is needed. Systemd process recovery remains enabled independently of the disabled code reloader. For diagnosis, use server/application logs, browser console/network errors, code inspection, safe reproduction, and targeted non-secret diagnostic logging when needed; keep the public debugger disabled and do not test mutations against the production database. Treat deployment and restart actions as explicit operational work, check service status and logs, and coordinate changes that can affect active users.
 
 Scheduled jobs can write concurrently with the web process:
 
